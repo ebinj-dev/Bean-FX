@@ -32,6 +32,24 @@ MIGRATIONS = [
         "expect_tables": ["TimelineVersion", "TimelineEdit"],
         "expect_columns": [("Project", "settingsJson")],
     },
+    {
+        "tag": "p7",
+        "ddl": Path(__file__).resolve().parent.parent / "migration" / "p7_media_pipeline.sql",
+        "forbidden_tables": ["UploadSession"],
+        "forbidden_columns": [
+            ("MediaAsset", "sha256"),
+            ("MediaAsset", "proxyStatus"),
+            ("Job", "attempts"),
+            ("Job", "claimedAt"),
+        ],
+        "expect_tables": ["UploadSession"],
+        "expect_columns": [
+            ("MediaAsset", "sha256"),
+            ("MediaAsset", "proxyStatus"),
+            ("Job", "attempts"),
+            ("Job", "claimedAt"),
+        ],
+    },
 ]
 
 

@@ -20,6 +20,7 @@ model User {
   exportFiles  ExportFile[]
   jobs         Job[]
   wordsToRemove WordsToRemove[]
+  uploadSessions UploadSession[]
   cutDecisions CutDecision[]
 }
 
@@ -85,6 +86,37 @@ model MediaAsset {
   notes        String?
   createdAt    DateTime     @default(now())
   exportFiles  ExportFile[]
+
+  // ── M3 media pipeline (all additive, backfilled to NULL for legacy rows) ──
+  /// Content hash of the original file (hex sha256) — dedup + integrity.
+  sha256          String?
+  /// PENDING | PROCESSING | READY | FAILED — deep ffprobe runs in the worker,
+  /// never in the upload request. NULL = legacy asset or SUBTITLE.
+  probeStatus     String?
+  probeError      String?
+  /// Full ffprobe format+streams summary (trimmed JSON) from the deep probe.
+  probeMetaJson   String?
+  /// True when r_frame_rate and avg_frame_rate diverge (variable frame rate).
+  isVfr           Boolean?
+  /// Display-matrix rotation in degrees (0 = unrotated).
+  rotation        Int?
+  /// ffprobe display_aspect_ratio (e.g. "16:9").
+  aspectRatio     String?
+  /// Video stream time_base (e.g. "1/90000").
+  timeBase        String?
+  /// ffprobe format_name (e.g. "mov,mp4,m4a,3gp,3g2,mj2").
+  formatName      String?
+  /// Overall bit rate in bits/s.
+  bitRate         Int?
+  /// NONE | QUEUED | PROCESSING | READY | FAILED | UNSUPPORTED — editing
+  /// proxies live in media-store/proxies; exports always use the original.
+  proxyStatus       String?
+  proxyPath         String?
+  proxySizeBytes    Int?
+  proxyDurationSec  Float?
+  proxyError        String?
+
+  @@index([userId, sha256])
 }
 
 model ExportFile {
@@ -107,13 +139,27 @@ model Job {
   id         String   @id @default(cuid())
   userId     String
   user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  type       String // AUDIO_PROCESS | AUTOCUT_APPLY | WATERMARK | BURN_CAPTIONS
+  type       String // AUDIO_PROCESS | AUTOCUT_APPLY | WATERMARK | BURN_CAPTIONS | MEDIA_PROBE | MEDIA_PROXY
   status     String // QUEUED | PROCESSING | COMPLETED | FAILED | CANCELLED
   progress   Int      @default(0)
   stage      String?
   message    String?
   paramsJson String?
   exportId   String?
+
+  // ── M3 worker fields (additive; legacy job types ignore them) ──
+  /// Completed claim attempts. One attempt = one claim; retries re-queue with backoff.
+  attempts        Int      @default(0)
+  /// Maximum claims before the job is FAILED permanently.
+  maxAttempts     Int      @default(3)
+  /// Earliest time the worker may claim this job (retry backoff).
+  runAfter        DateTime?
+  /// Worker liveness marker — stale heartbeats trigger recovery.
+  lastHeartbeatAt DateTime?
+  /// When the current claim started (lease start, for stale-claim detection).
+  claimedAt       DateTime?
+  /// Hard wall-clock limit for this job's handler (seconds).
+  timeoutSec      Int?
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
   cutDecisions CutDecision[]
@@ -181,4 +227,32 @@ model TimelineEdit {
   createdAt   DateTime        @default(now())
 
   @@index([versionId, opIndex])
+}
+
+/// Server-side bookkeeping for one resumable chunked upload (M3). Chunks land
+/// in media-store/tmp/up_{id}/ as per-index part files; the row tracks what
+/// arrived so a client can resume after any interruption. Abandoned sessions
+/// are swept (scratch removed) — assembled originals are never touched.
+model UploadSession {
+  id            String   @id // client-generated upload id (hex), shared by all chunks
+  userId        String
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  originalName  String
+  ext           String
+  kind          String // VIDEO | AUDIO | SUBTITLE (from extension allowlist)
+  declaredSize  BigInt // client-declared total byte count
+  chunkSize     Int
+  chunkTotal    Int
+  receivedCount Int      @default(0)
+  /// OPEN | COMPLETED | FAILED | CANCELLED
+  status        String   @default("OPEN")
+  /// Optional client-declared checksum, verified against the assembled bytes.
+  sha256        String?
+  mediaAssetId  String? // set when the session produced an asset
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  lastChunkAt   DateTime @default(now())
+
+  @@index([userId, status])
+  @@index([lastChunkAt])
 }

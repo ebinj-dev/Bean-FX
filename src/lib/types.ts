@@ -293,6 +293,14 @@ export interface MediaMeta {
   channels: number | null;
   role: string | null;
   createdAt: string;
+  // ── M3 pipeline state (additive, optional for backwards compatibility) ──
+  /** PENDING | PROCESSING | READY | FAILED — deep ffprobe runs in the worker. */
+  probeStatus?: string | null;
+  probeError?: string | null;
+  /** NONE | QUEUED | PROCESSING | READY | FAILED | UNSUPPORTED */
+  proxyStatus?: string | null;
+  /** True when the server recognized identical bytes and reused the stored original. */
+  deduplicated?: boolean;
 }
 
 /** A transcript segment with estimated or provider-provided timing. */

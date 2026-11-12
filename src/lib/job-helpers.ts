@@ -1,0 +1,129 @@
+import { db } from "@/lib/db";
+
+/**
+ * Shared, dependency-free plumbing for the M3 durable media worker.
+ * Both the worker loop and the job handlers import from here — keeping this
+ * module free of handler imports is what makes the dependency graph acyclic.
+ */
+
+export const JOB_TYPE_MEDIA_PROBE = "MEDIA_PROBE";
+export const JOB_TYPE_MEDIA_PROXY = "MEDIA_PROXY";
+/** Only these types are owned by the M3 worker; legacy job types keep their existing behavior. */
+export const MEDIA_JOB_TYPES = [JOB_TYPE_MEDIA_PROBE, JOB_TYPE_MEDIA_PROXY] as const;
+
+/** Default hard wall-clock limits per job type (seconds). */
+export const DEFAULT_TIMEOUT_SEC: Record<string, number> = {
+  [JOB_TYPE_MEDIA_PROBE]: 120,
+  [JOB_TYPE_MEDIA_PROXY]: 45 * 60,
+};
+
+export const MAX_ATTEMPTS_DEFAULT = 3;
+
+/** Error subclass for deterministic failures — retried attempts can never succeed. */
+export class PermanentJobError extends Error {}
+
+export interface EnqueueOpts {
+  maxAttempts?: number;
+  timeoutSec?: number;
+  runAfter?: Date;
+}
+
+/**
+ * Create a QUEUED job owned by the media worker. Starting the worker loop is
+ * an import-time side effect of media-worker; enqueueing through this helper
+ * keeps every producer honest (a queued job with no live worker would sit
+ * forever).
+ */
+export async function enqueueMediaJob(
+  userId: string,
+  type: string,
+  params: unknown,
+  opts: EnqueueOpts = {}
+): Promise<string> {
+  const job = await db.job.create({
+    data: {
+      userId,
+      type,
+      status: "QUEUED",
+      stage: "Queued",
+      paramsJson: JSON.stringify(params ?? {}),
+      maxAttempts: opts.maxAttempts ?? MAX_ATTEMPTS_DEFAULT,
+      timeoutSec: opts.timeoutSec ?? DEFAULT_TIMEOUT_SEC[type] ?? 600,
+      ...(opts.runAfter ? { runAfter: opts.runAfter } : {}),
+    },
+  });
+  return job.id;
+}
+
+/**
+ * Terminal status write guarded on status="PROCESSING": a job cancelled
+ * (CANCELLED) or recovered between our claim and its completion must never be
+ * resurrected by a late handler result.
+ */
+export async function finishJob(jobId: string, data: Record<string, unknown>): Promise<void> {
+  await db.job
+    .updateMany({ where: { id: jobId, status: "PROCESSING" }, data })
+    .catch(() => undefined);
+}
+
+export async function completeJob(jobId: string, message: string): Promise<void> {
+  await finishJob(jobId, {
+    status: "COMPLETED",
+    progress: 100,
+    stage: "Completed",
+    message,
+    lastHeartbeatAt: new Date(),
+  });
+}
+
+export async function failJob(jobId: string, message: string): Promise<void> {
+  await finishJob(jobId, {
+    status: "FAILED",
+    stage: "Failed",
+    message: message.slice(0, 500),
+    lastHeartbeatAt: new Date(),
+  });
+}
+
+/** Re-queue a PROCESSING job for another attempt after exponential backoff. */
+export async function requeueJob(jobId: string, attempts: number, message: string): Promise<void> {
+  const backoffMs = Math.min(30_000 * 2 ** Math.max(0, attempts - 1), 5 * 60_000);
+  await finishJob(jobId, {
+    status: "QUEUED",
+    stage: "Retrying",
+    message: message.slice(0, 500),
+    runAfter: new Date(Date.now() + backoffMs),
+    claimedAt: null,
+    lastHeartbeatAt: new Date(),
+  });
+}
+
+/**
+ * Route a handler failure: permanent errors (invalid media, missing file)
+ * fail immediately; transient errors retry until maxAttempts is exhausted.
+ * `attempts` is the claim attempt that just failed (already incremented).
+ * Returns what happened so callers can keep associated asset state in sync.
+ */
+export async function handleJobError(
+  jobId: string,
+  err: unknown,
+  attempts: number,
+  maxAttempts: number,
+  context: string
+): Promise<"requeued" | "failed"> {
+  const message = err instanceof Error ? err.message : String(err);
+  // name-based check works across module instances (bun/bundlers can load the
+  // same module under two specifiers, breaking instanceof for subclasses).
+  const permanent = err instanceof PermanentJobError || (err instanceof Error && err.name === PermanentJobError.name);
+  if (!permanent && attempts < maxAttempts) {
+    await requeueJob(jobId, attempts, `${context}: ${message} (attempt ${attempts}/${maxAttempts} failed, retrying)`);
+    return "requeued";
+  }
+  await failJob(jobId, permanent ? message : `${context}: ${message} (no attempts left)`);
+  return "failed";
+}
+
+/** Exponential-backoff timestamp for recovered stale claims. */
+export function retryBackoff(attempts: number): Date {
+  return new Date(Date.now() + Math.min(30_000 * 2 ** Math.max(0, attempts - 1), 5 * 60_000));
+}
