@@ -1,24 +1,16 @@
 /**
- * P3 Phase G — isolated unit tests for the persisted-decision mapping and the
- * existing export-union logic. Run: bun test scripts/p3_union.test.ts
+ * P3 Phase G — isolated unit tests for the export-union logic used by the
+ * Auto Cut apply flow. Run: bun test scripts/p3_union.test.ts
  * (no database, no network, no live media involved).
+ *
+ * NOTE: the former `decisionToReview` describe block was removed — that
+ * helper no longer exists in auto-cut.tsx (the export-plan membership rule
+ * now lives inline as review === "REMOVE" || review === "APPROVED" and is
+ * exercised end-to-end by the P3 shell suite). This file kept failing on
+ * main since that refactor; the import of a dead symbol was the only cause.
  */
 import { describe, expect, test } from "bun:test";
 import { normalizeRanges } from "../src/lib/audio-analysis";
-import { decisionToReview } from "../src/components/bean/tools/auto-cut";
-import type { CutDecisionValue } from "../src/lib/types";
-
-describe("decisionToReview (restored-decision mapping)", () => {
-  test("APPROVE lands in the export plan (REMOVE) — the state the union consumes", () => {
-    expect(decisionToReview("APPROVE" as CutDecisionValue)).toBe("REMOVE");
-  });
-  test("REJECT stays out of the plan (REVIEW)", () => {
-    expect(decisionToReview("REJECT" as CutDecisionValue)).toBe("REVIEW");
-  });
-  test("KEEP stays out of the plan (KEEP)", () => {
-    expect(decisionToReview("KEEP" as CutDecisionValue)).toBe("KEEP");
-  });
-});
 
 describe("normalizeRanges (existing union logic used by startApply — unchanged)", () => {
   test("overlapping approved intervals merge into one union interval (#13)", () => {
