@@ -1,0 +1,9 @@
+# BEAN FX ASR sidecar — service runtime (required)
+fastapi>=0.110
+uvicorn>=0.29
+python-multipart>=0.0.9
+
+# Local speech-to-text engine (OPTIONAL, CPU-first). Install ONLY if you want
+# this sidecar to run inference itself. The sidecar never downloads models —
+# see docs/ASR_SEMANTIC_SIDECARS.md for the manual model installation step.
+faster-whisper>=1.0 ; platform_machine != "aarch64"
