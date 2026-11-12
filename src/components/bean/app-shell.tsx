@@ -11,6 +11,7 @@ import { CaptionsTool } from "@/components/bean/tools/captions";
 import { WatermarkTool } from "@/components/bean/tools/watermark";
 import { AudioTool } from "@/components/bean/tools/audio-tool";
 import { BrollTool } from "@/components/bean/tools/broll";
+import { EditorTool } from "@/components/bean/tools/editor";
 import type { SessionUser } from "@/lib/types";
 
 function currentHashRoute(): string {
@@ -79,7 +80,7 @@ export function AppShell() {
     );
   }
 
-  const isWorkspaceRoute = ["/studio", "/autocut", "/captions", "/watermark", "/audio", "/broll"].includes(route) || /^\/(autocut|captions|watermark|audio|broll)(\/editor)?$/.test(route);
+  const isWorkspaceRoute = ["/studio", "/editor", "/autocut", "/captions", "/watermark", "/audio", "/broll"].includes(route) || /^\/(autocut|captions|watermark|audio|broll)(\/editor)?$/.test(route);
 
   // Protected workspace routes require authentication.
   if (isWorkspaceRoute && !user) {
@@ -101,6 +102,10 @@ export function AppShell() {
 
   if (route === "/studio") {
     return <StudioDashboard user={user!} onLogout={onLogout} />;
+  }
+
+  if (route === "/editor") {
+    return <EditorTool user={user!} onLogout={onLogout} />;
   }
 
   const toolSpecs: Record<string, ToolUploadSpec> = {

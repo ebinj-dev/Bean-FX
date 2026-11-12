@@ -1,4 +1,5 @@
 export const SITE_NAV_ITEMS = [
+  { label: "EDITOR", href: "#/editor" },
   { label: "AUTO CUT", href: "#/autocut" },
   { label: "CAPTIONS", href: "#/captions" },
   { label: "WATERMARK", href: "#/watermark" },

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Apply the additive-only P6 DDL (2 tables, 1 nullable column, 3 indexes).
 
-Same safety pattern as scripts/apply_p3_migration.py:
+Same safety pattern as the P3 applier:
   Preconditions checked here:
     - A verified backup exists under db/backup-p6-*/ (created by this script).
     - TimelineVersion / TimelineEdit do NOT exist yet.
@@ -72,9 +72,11 @@ def main() -> int:
 
     # ---- apply (single transaction, additive only) ----------------------
     ddl = DDL.read_text()
-    statements = [s.strip() for s in ddl.split(";") if s.strip() and not all(
-        line.strip().startswith("--") or not line.strip() for line in s.strip().splitlines()
-    )]
+    statements = []
+    for chunk in ddl.split(";"):
+        sql_lines = [line for line in chunk.splitlines() if line.strip() and not line.strip().startswith("--")]
+        if sql_lines:
+            statements.append("\n".join(sql_lines))
     try:
         conn.execute("BEGIN")
         for stmt in statements:
@@ -104,12 +106,11 @@ def main() -> int:
     if "settingsJson" not in cols:
         print("FAIL Project.settingsJson missing after apply")
         ok = False
-    expected_unchanged = {t: c for t, c in before_counts.items()}
     for t, c in after_counts.items():
         if t in ("TimelineVersion", "TimelineEdit"):
             continue
-        if expected_unchanged.get(t) != c:
-            print(f"FAIL pre-existing table {t} changed: {expected_unchanged.get(t)} -> {c}")
+        if before_counts.get(t) != c:
+            print(f"FAIL pre-existing table {t} changed: {before_counts.get(t)} -> {c}")
             ok = False
     conn.close()
 
