@@ -1,0 +1,147 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id           String       @id @default(cuid())
+  email        String       @unique
+  name         String?
+  passwordHash String
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
+  sessions     Session[]
+  projects     Project[]
+  mediaAssets  MediaAsset[]
+  exportFiles  ExportFile[]
+  jobs         Job[]
+  wordsToRemove WordsToRemove[]
+  cutDecisions CutDecision[]
+}
+
+/// User-defined words/phrases RIISHE should consider removing (context-aware —
+/// a preference, never an automatic cut). Unique per user, case preserved
+/// (matching is case-insensitive at analysis time).
+model WordsToRemove {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  phrase    String
+  note      String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([userId, phrase])
+}
+
+model Session {
+  id        String   @id @default(cuid())
+  token     String   @unique
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+}
+
+model Project {
+  id          String       @id @default(cuid())
+  userId      String
+  user        User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name        String
+  description String?
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+  mediaAssets MediaAsset[]
+}
+
+model MediaAsset {
+  id           String       @id @default(cuid())
+  userId       String
+  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  projectId    String?
+  project      Project?     @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  originalName String
+  storagePath  String
+  kind         String // AUDIO | VIDEO
+  mimeType     String
+  sizeBytes    Int
+  durationSec  Float?
+  width        Int?
+  height       Int?
+  fps          Float?
+  videoCodec   String?
+  audioCodec   String?
+  sampleRate   Int?
+  channels     Int?
+  role         String? // BROLL when used as b-roll library asset
+  notes        String?
+  createdAt    DateTime     @default(now())
+  exportFiles  ExportFile[]
+}
+
+model ExportFile {
+  id          String      @id @default(cuid())
+  userId      String
+  user        User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  mediaId     String?
+  media       MediaAsset? @relation(fields: [mediaId], references: [id], onDelete: SetNull)
+  kind        String // AUDIO | VIDEO | CAPTIONS | PLAN
+  format      String
+  filename    String
+  storagePath String
+  sizeBytes   Int
+  durationSec Float?
+  paramsJson  String?
+  createdAt   DateTime    @default(now())
+}
+
+model Job {
+  id         String   @id @default(cuid())
+  userId     String
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  type       String // AUDIO_PROCESS | AUTOCUT_APPLY | WATERMARK | BURN_CAPTIONS
+  status     String // QUEUED | PROCESSING | COMPLETED | FAILED | CANCELLED
+  progress   Int      @default(0)
+  stage      String?
+  message    String?
+  paramsJson String?
+  exportId   String?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+  cutDecisions CutDecision[]
+}
+
+/// Per-candidate decision (APPROVE | REJECT | KEEP) of one Auto Cut analysis.
+/// One row per (user, analysis job, candidate); re-deciding converges on the
+/// same row. Writes are validated against the immutable analysis result.
+model CutDecision {
+  id          String   @id @default(cuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  jobId       String
+  job         Job      @relation(fields: [jobId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  candidateId String
+  decision    String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([jobId])
+  @@unique([userId, jobId, candidateId])
+}
+
+/// Append-only history of every decision write, so previous decisions are
+/// preserved, never overwritten (no foreign keys, matching the migration DDL).
+model CutDecisionEvent {
+  id          String   @id @default(cuid())
+  userId      String
+  jobId       String
+  candidateId String
+  decision    String
+  createdAt   DateTime @default(now())
+
+  @@index([jobId, candidateId])
+}

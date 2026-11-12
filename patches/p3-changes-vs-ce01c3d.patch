@@ -1,0 +1,667 @@
+diff --git a/prisma/schema.prisma b/prisma/schema.prisma
+index e4098df..e2aa573 100755
+--- a/prisma/schema.prisma
++++ b/prisma/schema.prisma
+@@ -20,6 +20,7 @@ model User {
+   exportFiles  ExportFile[]
+   jobs         Job[]
+   wordsToRemove WordsToRemove[]
++  cutDecisions CutDecision[]
+ }
+ 
+ /// User-defined words/phrases RIISHE should consider removing (context-aware —
+@@ -111,4 +112,42 @@ model Job {
+   exportId   String?
+   createdAt  DateTime @default(now())
+   updatedAt  DateTime @updatedAt
++
++  cutDecisions CutDecision[]
++}
++
++/// Persisted user decision for ONE candidate of ONE completed RIISHE analysis.
++/// Identity: (userId, jobId, candidateId). `jobId` is the analysis Job id
++/// (type "autocut-analysis"); `candidateId` is the stable candidate id inside
++/// the immutable result file `media-store/analysis-results/<jobId>.json`
++/// (e.g. "sil-3", "word-12", "rep-2"). Candidate data is NOT duplicated here —
++/// the result file stays the single source of truth; this table stores only
++/// the user's decision, validated server-side against the result file.
++model CutDecision {
++  id          String   @id @default(cuid())
++  userId      String
++  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
++  jobId       String
++  job         Job      @relation(fields: [jobId], references: [id], onDelete: Cascade)
++  candidateId String
++  decision    String // APPROVE | REJECT | KEEP
++  createdAt   DateTime @default(now())
++  updatedAt   DateTime @updatedAt
++
++  @@unique([userId, jobId, candidateId])
++  @@index([jobId])
++}
++
++/// Append-only history of decision changes — a decision update adds a new
++/// event instead of overwriting history. Deliberately not FK-bound to Job:
++/// this is an audit log and survives even if a job row were ever removed.
++model CutDecisionEvent {
++  id          String   @id @default(cuid())
++  userId      String
++  jobId       String
++  candidateId String
++  decision    String
++  createdAt   DateTime @default(now())
++
++  @@index([jobId, candidateId])
+ }
+diff --git a/src/app/api/autocut/analyses/route.ts b/src/app/api/autocut/analyses/route.ts
+new file mode 100644
+index 0000000..be6c882
+--- /dev/null
++++ b/src/app/api/autocut/analyses/route.ts
+@@ -0,0 +1,55 @@
++import { NextRequest, NextResponse } from "next/server";
++import { z } from "zod";
++import { db } from "@/lib/db";
++import { getCurrentUser } from "@/lib/auth";
++
++export const runtime = "nodejs";
++
++const ANALYSIS_JOB_TYPE = "autocut-analysis";
++
++const querySchema = z.object({
++  mediaId: z.string().regex(/^[a-z0-9]{20,40}$/, "Invalid media id."),
++});
++
++/**
++ * GET /api/autocut/analyses?mediaId=<media id>
++ * Lists the current user's COMPLETED RIISHE analyses for one media asset,
++ * newest first. This is the reopen path: the client uses the newest jobId to
++ * fetch the immutable result payload plus its persisted decisions. Only owned
++ * jobs are ever listed — cross-user access returns the media as not found.
++ */
++export async function GET(req: NextRequest) {
++  const user = await getCurrentUser();
++  if (!user) return NextResponse.json({ error: "Authentication required." }, { status: 401 });
++
++  const parsed = querySchema.safeParse({ mediaId: req.nextUrl.searchParams.get("mediaId") ?? "" });
++  if (!parsed.success) {
++    return NextResponse.json({ error: "A valid media id is required (mediaId query parameter)." }, { status: 400 });
++  }
++  const mediaId = parsed.data.mediaId;
++
++  const media = await db.mediaAsset.findFirst({ where: { id: mediaId, userId: user.id }, select: { id: true } });
++  if (!media) return NextResponse.json({ error: "Media not found." }, { status: 404 });
++
++  // paramsJson is {"mediaId": "..."} — a plain JSON string in SQLite, so the
++  // mediaId filter runs in JS over this user's (small) set of analysis jobs.
++  const jobs = await db.job.findMany({
++    where: { userId: user.id, type: ANALYSIS_JOB_TYPE, status: "COMPLETED" },
++    orderBy: { createdAt: "desc" },
++    take: 200,
++  });
++
++  const analyses = jobs
++    .map((j) => {
++      try {
++        const params = JSON.parse(j.paramsJson ?? "{}") as { mediaId?: unknown };
++        return params.mediaId === mediaId ? { jobId: j.id, createdAt: j.createdAt } : null;
++      } catch {
++        return null;
++      }
++    })
++    .filter((a): a is { jobId: string; createdAt: Date } => a !== null)
++    .slice(0, 20);
++
++  return NextResponse.json({ ok: true, mediaId, analyses });
++}
+diff --git a/src/app/api/autocut/decisions/route.ts b/src/app/api/autocut/decisions/route.ts
+new file mode 100644
+index 0000000..9887c4e
+--- /dev/null
++++ b/src/app/api/autocut/decisions/route.ts
+@@ -0,0 +1,152 @@
++import { NextRequest, NextResponse } from "next/server";
++import { promises as fs } from "fs";
++import path from "path";
++import { z } from "zod";
++import { db } from "@/lib/db";
++import { getCurrentUser } from "@/lib/auth";
++import { MEDIA_ROOT } from "@/lib/media-storage";
++
++export const runtime = "nodejs";
++
++const RESULTS_DIR = path.join(MEDIA_ROOT, "analysis-results");
++/** Only completed RIISHE analysis jobs carry candidates that can be decided. */
++const ANALYSIS_JOB_TYPE = "autocut-analysis";
++
++const DECISION_VALUES = ["APPROVE", "REJECT", "KEEP"] as const;
++
++const jobIdSchema = z.string().regex(/^[a-z0-9]{20,40}$/, "Invalid analysis job id.");
++const saveSchema = z.object({
++  jobId: jobIdSchema,
++  candidateId: z.string().regex(/^[A-Za-z0-9-]{1,64}$/, "Invalid candidate id."),
++  decision: z.enum(DECISION_VALUES),
++});
++
++/**
++ * Load the immutable result payload for an analysis job and collect its
++ * candidate ids. The result file stays the single source of truth: decisions
++ * are never accepted for a candidate that is not in this exact payload, so a
++ * candidate id from a different analysis can never be smuggled through.
++ */
++async function loadResultCandidates(
++  jobId: string
++): Promise<{ ok: true; ids: Set<string> } | { ok: false; status: number; error: string }> {
++  let raw: string;
++  try {
++    raw = await fs.readFile(path.join(RESULTS_DIR, `${jobId}.json`), "utf8");
++  } catch {
++    return {
++      ok: false,
++      status: 410,
++      error:
++        "The analysis result is no longer available in storage — decisions cannot be validated against it. Re-run the analysis to create a new result.",
++    };
++  }
++  let payload: { candidates?: { id?: unknown }[] };
++  try {
++    payload = JSON.parse(raw);
++  } catch {
++    return { ok: false, status: 410, error: "The stored analysis result is malformed — decisions cannot be validated against it." };
++  }
++  if (!Array.isArray(payload.candidates)) {
++    return { ok: false, status: 410, error: "The stored analysis result is malformed — decisions cannot be validated against it." };
++  }
++  const ids = new Set<string>();
++  for (const c of payload.candidates) {
++    if (c && typeof c.id === "string") ids.add(c.id);
++  }
++  return { ok: true, ids };
++}
++
++/**
++ * GET /api/autocut/decisions?jobId=<analysis job id>
++ * Returns the persisted decisions of one specific analysis result for the
++ * current user. Used to restore decisions when an analysis is reopened.
++ */
++export async function GET(req: NextRequest) {
++  const user = await getCurrentUser();
++  if (!user) return NextResponse.json({ error: "Authentication required." }, { status: 401 });
++
++  const parsed = jobIdSchema.safeParse(req.nextUrl.searchParams.get("jobId") ?? "");
++  if (!parsed.success) {
++    return NextResponse.json({ error: "A valid analysis job id is required (jobId query parameter)." }, { status: 400 });
++  }
++
++  const job = await db.job.findUnique({ where: { id: parsed.data } });
++  if (!job || job.userId !== user.id || job.type !== ANALYSIS_JOB_TYPE) {
++    return NextResponse.json({ error: "Analysis job not found." }, { status: 404 });
++  }
++
++  const rows = await db.cutDecision.findMany({
++    where: { userId: user.id, jobId: job.id },
++    orderBy: { updatedAt: "asc" },
++  });
++  return NextResponse.json({
++    ok: true,
++    jobId: job.id,
++    decisions: rows.map((r) => ({ candidateId: r.candidateId, decision: r.decision, createdAt: r.createdAt, updatedAt: r.updatedAt })),
++  });
++}
++
++/**
++ * POST /api/autocut/decisions  { jobId, candidateId, decision }
++ * Saves or updates the user's decision (APPROVE | REJECT | KEEP) for one
++ * candidate of one completed analysis. Every write is validated against the
++ * immutable result payload (membership) and recorded as an append-only
++ * history event, so previous decisions are preserved, never overwritten.
++ * Duplicate requests converge on the same row — they cannot create
++ * inconsistent records.
++ */
++export async function POST(req: NextRequest) {
++  const user = await getCurrentUser();
++  if (!user) return NextResponse.json({ error: "Authentication required." }, { status: 401 });
++
++  let body: unknown;
++  try {
++    body = await req.json();
++  } catch {
++    return NextResponse.json({ error: "Invalid JSON body." }, { status: 400 });
++  }
++  const parsed = saveSchema.safeParse(body);
++  if (!parsed.success) {
++    return NextResponse.json({ error: "Invalid decision payload — expected jobId, candidateId and decision (APPROVE | REJECT | KEEP)." }, { status: 400 });
++  }
++  const { jobId, candidateId, decision } = parsed.data;
++
++  const job = await db.job.findUnique({ where: { id: jobId } });
++  if (!job || job.userId !== user.id || job.type !== ANALYSIS_JOB_TYPE) {
++    return NextResponse.json({ error: "Analysis job not found." }, { status: 404 });
++  }
++  if (job.status !== "COMPLETED") {
++    return NextResponse.json(
++      { error: `Analysis is not finished (status: ${job.status}) — decisions can only be saved for a completed analysis.` },
++      { status: 409 }
++    );
++  }
++
++  const result = await loadResultCandidates(jobId);
++  if (!result.ok) return NextResponse.json({ error: result.error }, { status: result.status });
++  if (!result.ids.has(candidateId)) {
++    return NextResponse.json({ error: "This candidate does not belong to the requested analysis." }, { status: 400 });
++  }
++
++  try {
++    const saved = await db.$transaction(async (tx) => {
++      const row = await tx.cutDecision.upsert({
++        where: { userId_jobId_candidateId: { userId: user.id, jobId, candidateId } },
++        create: { userId: user.id, jobId, candidateId, decision },
++        update: { decision },
++      });
++      await tx.cutDecisionEvent.create({
++        data: { userId: user.id, jobId, candidateId, decision },
++      });
++      return row;
++    });
++    return NextResponse.json({
++      ok: true,
++      decision: { candidateId: saved.candidateId, decision: saved.decision, createdAt: saved.createdAt, updatedAt: saved.updatedAt },
++    });
++  } catch (err) {
++    console.error("[autocut-decisions] failed to persist decision", { jobId, candidateId, err });
++    return NextResponse.json({ error: "The decision could not be saved. Nothing was changed." }, { status: 500 });
++  }
++}
+diff --git a/src/components/bean/tools/auto-cut.tsx b/src/components/bean/tools/auto-cut.tsx
+index 808aeba..aaa99bc 100755
+--- a/src/components/bean/tools/auto-cut.tsx
++++ b/src/components/bean/tools/auto-cut.tsx
+@@ -20,6 +20,7 @@ import {
+ } from "lucide-react";
+ import { ToolShell } from "@/components/bean/tool-shell";
+ import { readMediaRef } from "@/components/bean/upload-gate";
++import { api } from "@/lib/client-api";
+ import { JobProgressBar } from "@/components/bean/job-progress";
+ import { AnalysisJobProgress } from "@/components/bean/analysis-progress";
+ import { Waveform, type WaveCuts } from "@/components/bean/waveform";
+@@ -31,6 +32,7 @@ import type {
+   TranscriptSegment,
+   SensitivityProfile,
+   CutPlanSummary,
++  CutDecisionValue,
+   RiisheAnalyzeResult,
+ } from "@/lib/types";
+ import { normalizeRanges, round3 } from "@/lib/audio-analysis";
+@@ -170,6 +172,27 @@ export function AutoCutTool({ user, onLogout }: { user: SessionUser; onLogout: (
+   const [applyError, setApplyError] = useState<string | null>(null);
+   const [appliedResult, setAppliedResult] = useState<{ exportId: string; message: string; estimatedFinalSec: number } | null>(null);
+ 
++  /* --------------- persisted decisions (P3) --------------- */
++  // The analysis these decisions belong to: the jobId of the loaded result.
++  // Every decision is scoped to exactly this analysis — a new analysis gets a
++  // new jobId and starts with its own (empty) decision set.
++  const [analysisId, setAnalysisId] = useState<string | null>(null);
++  const [savedDecisions, setSavedDecisions] = useState<Record<string, CutDecisionValue>>({});
++  const [savingIds, setSavingIds] = useState<Set<string>>(new Set());
++  const [decisionError, setDecisionError] = useState<string | null>(null);
++  const [restoredNote, setRestoredNote] = useState<string | null>(null);
++  const [showKept, setShowKept] = useState(false);
++  // Candidate ids that belong to the loaded analysis — only these persist;
++  // manual (drag-created) ranges stay local exactly as before.
++  const candidateIdsRef = useRef<Set<string>>(new Set());
++  const analysisIdRef = useRef<string | null>(null);
++  // Latest-wins token for decision-restore requests (invalidated by media
++  // changes and by starting/completing a fresh analysis).
++  const restoreRequestRef = useRef(0);
++  // Latest handleAnalysisCompleted, callable from the restore effect without
++  // re-running the effect when settings change.
++  const handleAnalysisCompletedRef = useRef<(result: RiisheAnalyzeResult, jobId?: string) => void>(() => {});
++
+   // Playback clock — a ref (frame-accurate) + throttled state for readouts.
+   const playheadRef = useRef(0);
+   const audioCtxRef = useRef<AudioContext | null>(null);
+@@ -310,6 +333,16 @@ export function AutoCutTool({ user, onLogout }: { user: SessionUser; onLogout: (
+     }
+     stopPlaybackInternal();
+     videoRef.current?.pause();
++    // Decision state never survives a media change: decisions belong to one
++    // specific analysis of one specific media.
++    setAnalysisId(null);
++    analysisIdRef.current = null;
++    candidateIdsRef.current = new Set();
++    setSavedDecisions({});
++    setSavingIds(new Set());
++    setDecisionError(null);
++    setRestoredNote(null);
++    setShowKept(false);
+     playheadRef.current = 0;
+     setPlayheadDisplay(0);
+     setPlaying(false);
+@@ -366,6 +399,55 @@ export function AutoCutTool({ user, onLogout }: { user: SessionUser; onLogout: (
+     })();
+   }, [media, mediaKey]);
+ 
++  /* ------------------ restore a saved analysis + decisions ----------------- */
++  // Opening the tool with an already-analyzed media loads the newest completed
++  // analysis result and replays its persisted decisions — the decisions that
++  // belong to THAT analysis and no other. Best-effort: if the listing, the
++  // result or the decisions are unavailable the tool simply stays blank and a
++  // fresh analysis remains one click away. Starting or completing a new
++  // analysis invalidates any restore in flight (new analysis = new jobId =
++  // empty decision set, so old approvals never leak).
++  useEffect(() => {
++    if (!media) return;
++    const req = ++restoreRequestRef.current;
++    (async () => {
++      try {
++        const list = await api.analyses(media.id);
++        if (req !== restoreRequestRef.current) return;
++        const latest = list.analyses[0];
++        if (!latest) return;
++        const [res, dec] = await Promise.all([
++          fetch(`/api/autocut/analyze/result/${encodeURIComponent(latest.jobId)}`),
++          api.decisions(latest.jobId),
++        ]);
++        if (req !== restoreRequestRef.current) return;
++        if (!res.ok) return;
++        const result = (await res.json()) as RiisheAnalyzeResult;
++        if (!result?.ok || !Array.isArray(result.candidates)) return;
++        handleAnalysisCompletedRef.current(result, latest.jobId);
++        // Replay the persisted decisions onto the fresh proposals. The
++        // mapping lands each decision in the exact state the live click
++        // produces, so plan and export union are identical after a restore.
++        const saved = new Map(dec.decisions.map((d) => [d.candidateId, d.decision] as const));
++        if (saved.size) {
++          setCuts((prev) =>
++            prev.map((c) => {
++              const d = saved.get(c.id);
++              return d ? { ...c, review: decisionToReview(d) } : c;
++            })
++          );
++          setSavedDecisions(Object.fromEntries(saved));
++        }
++        setRestoredNote(
++          `Restored analysis from ${new Date(latest.createdAt).toLocaleString()}${saved.size ? ` with ${saved.size} saved decision(s).` : "."}`
++        );
++      } catch {
++        /* restore is best-effort; a fresh analysis is always available */
++      }
++    })();
++    // eslint-disable-next-line react-hooks/exhaustive-deps
++  }, [media, mediaKey]);
++
+   /** Stop playback and release scheduled sources (keeps the AudioContext). */
+   function stopPlaybackInternal() {
+     playSourcesRef.current.forEach((s) => {
+@@ -416,9 +498,18 @@ export function AutoCutTool({ user, onLogout }: { user: SessionUser; onLogout: (
+   // result endpoint on completion. A multi-minute analysis therefore survives
+   // client disconnects and gateway timeouts — the request that failed with a
+   // bare `Analysis failed (502)` on long recordings.
+-  const handleAnalysisCompleted = useCallback((result: RiisheAnalyzeResult) => {
++  const handleAnalysisCompleted = useCallback((result: RiisheAnalyzeResult, jobId?: string) => {
+       setAnalysisJobId(null);
+       setAnalyzing(false);
++      // This completed analysis owns the decision scope from now on: a fresh
++      // analysis carries no decisions and cannot inherit old approvals.
++      restoreRequestRef.current += 1;
++      setAnalysisId(jobId ?? null);
++      analysisIdRef.current = jobId ?? null;
++      candidateIdsRef.current = new Set(result.candidates.map((c) => c.id));
++      setSavedDecisions({});
++      setDecisionError(null);
++      setRestoredNote(null);
+       // The dedicated waveform endpoint already loaded higher-resolution
+       // peaks on media selection — only fall back to the analysis peaks when
+       // they are somehow missing.
+@@ -487,8 +578,14 @@ export function AutoCutTool({ user, onLogout }: { user: SessionUser; onLogout: (
+       );
+   }, [settings, windowMs]);
+ 
++  // Keep the restore path pointing at the current handler.
++  useEffect(() => {
++    handleAnalysisCompletedRef.current = handleAnalysisCompleted;
++  }, [handleAnalysisCompleted]);
++
+   const runAnalysis = useCallback(async () => {
+     if (!media) return;
++    restoreRequestRef.current += 1; // a new analysis invalidates any restore in flight
+     setAnalyzing(true);
+     setAnalysisError(null);
+     setAppliedResult(null);
+@@ -1101,6 +1198,9 @@ export function AutoCutTool({ user, onLogout }: { user: SessionUser; onLogout: (
+     };
+   }, [cuts, duration, appliedResult]);
+ 
++  // Kept (explicitly excluded) candidates — hidden by default, revealable.
++  const keptCount = cuts.filter((c) => c.review === "KEEP").length;
++
+   const waveCuts: WaveCuts[] = useMemo(
+     () =>
+       cuts.map((c) => ({
+@@ -1190,6 +1290,35 @@ export function AutoCutTool({ user, onLogout }: { user: SessionUser; onLogout: (
+   const setCutReview = (id: string, review: CutRange["review"]) =>
+     setCuts((prev) => prev.map((c) => (c.id === id ? { ...c, review } : c)));
+ 
++  /** Persisted decision change: the UI only reflects the decision after the
++   *  server confirms it — a failed write leaves the candidate unchanged and
++   *  surfaces the error. Manual (drag-created) ranges are local-only, exactly
++   *  as before P3. */
++  const changeCutReview = async (cut: CutRange, review: CutRange["review"]) => {
++    if (cut.review === review || savingIds.has(cut.id)) return;
++    const decision = DECISION_FOR_REVIEW[review];
++    const jobId = analysisIdRef.current;
++    if (!decision || !jobId || !candidateIdsRef.current.has(cut.id)) {
++      setCutReview(cut.id, review);
++      return;
++    }
++    setSavingIds((prev) => new Set(prev).add(cut.id));
++    setDecisionError(null);
++    try {
++      const res = await api.saveDecision(jobId, cut.id, decision);
++      setCutReview(cut.id, review);
++      setSavedDecisions((prev) => ({ ...prev, [cut.id]: res.decision.decision }));
++    } catch (err) {
++      setDecisionError(err instanceof Error ? err.message : "The decision could not be saved.");
++    } finally {
++      setSavingIds((prev) => {
++        const next = new Set(prev);
++        next.delete(cut.id);
++        return next;
++      });
++    }
++  };
++
+   const deleteCut = (id: string) => setCuts((prev) => prev.filter((c) => c.id !== id));
+ 
+   const updateCutBounds = (id: string, start: number, end: number) =>
+@@ -1372,7 +1501,7 @@ export function AutoCutTool({ user, onLogout }: { user: SessionUser; onLogout: (
+                 {analysisJobId && (
+                   <AnalysisJobProgress
+                     jobId={analysisJobId}
+-                    onComplete={(result) => handleAnalysisCompleted(result as RiisheAnalyzeResult)}
++                    onComplete={(result) => handleAnalysisCompleted(result as RiisheAnalyzeResult, analysisJobId ?? undefined)}
+                     onFail={handleAnalysisFailed}
+                   />
+                 )}
+@@ -1664,7 +1793,7 @@ export function AutoCutTool({ user, onLogout }: { user: SessionUser; onLogout: (
+           <section className="rounded-xl border border-[#1c1c1c] bg-[#0d0d0d] p-4">
+             <div className="flex items-center justify-between">
+               <h2 className="bean-label text-[10px] text-[#8f8f8a]">
+-                CUT CANDIDATES ({cuts.filter((c) => c.review !== "KEEP").length})
++                CUT CANDIDATES ({cuts.filter((c) => showKept || c.review !== "KEEP").length})
+               </h2>
+               {cuts.length > 0 && (
+                 <button
+@@ -1687,8 +1816,28 @@ export function AutoCutTool({ user, onLogout }: { user: SessionUser; onLogout: (
+                 proposed, and nothing will be cut. This is a valid result.
+               </p>
+             )}
++            {/* Persisted-decision state: restore note, save errors, kept reveal. */}
++            {keptCount > 0 && (
++              <button
++                type="button"
++                onClick={() => setShowKept((s) => !s)}
++                className="mt-2 inline-flex h-7 items-center rounded border border-[#2a2a2a] px-2.5 text-[10px] font-bold uppercase tracking-wider text-[#7a7a76] hover:border-[#3a3a3a] hover:text-white"
++              >
++                {showKept ? "Hide" : "Show"} {keptCount} kept candidate{keptCount === 1 ? "" : "s"}
++              </button>
++            )}
++            {restoredNote && (
++              <p className="mt-2 rounded-md border border-[#1f2a1a] bg-[#0c120a] px-3 py-2 text-[11px] leading-relaxed text-[#7fbf8e]">
++                {restoredNote}
++              </p>
++            )}
++            {decisionError && (
++              <p className="mt-2 rounded-md border border-[#3b1515] bg-[#1a0d0d] px-3 py-2 text-xs leading-relaxed text-[#f87171]">
++                Decision not saved: {decisionError} The candidate keeps its previous state.
++              </p>
++            )}
+             <div className="bean-panel-scroll mt-3 max-h-[420px] space-y-2.5 overflow-y-auto pr-1">
+-              {cuts.filter((c) => c.review !== "KEEP").map((c) => (
++              {cuts.filter((c) => showKept || c.review !== "KEEP").map((c) => (
+                 <div
+                   key={c.id}
+                   className={cn(
+@@ -1708,17 +1857,26 @@ export function AutoCutTool({ user, onLogout }: { user: SessionUser; onLogout: (
+                       <span className="ml-2 text-[#8f8f8a]">({c.duration.toFixed(2)}s)</span>
+                     </span>
+                     <div className="flex items-center gap-1.5">
+-                      {(["REMOVE", "REVIEW"] as const).map((st) => (
++                      {savingIds.has(c.id) && <Loader2 className="h-3 w-3 animate-spin text-[#d4a017]" aria-label="Saving decision" />}
++                      {!savingIds.has(c.id) && savedDecisions[c.id] && (
++                        <span className="rounded border border-[#1f2a1a] bg-[#0c120a] px-1.5 py-0.5 text-[9px] font-bold tracking-wider text-[#22c55e]">
++                          SAVED · {savedDecisions[c.id]}
++                        </span>
++                      )}
++                      {(["REMOVE", "REVIEW", "KEEP"] as const).map((st) => (
+                         <button
+                           key={st}
+                           type="button"
+-                          onClick={() => setCutReview(c.id, st)}
++                          disabled={savingIds.has(c.id)}
++                          onClick={() => void changeCutReview(c, st)}
+                           className={cn(
+-                            "rounded border px-2 py-1 text-[9px] font-extrabold tracking-wider transition-colors",
++                            "rounded border px-2 py-1 text-[9px] font-extrabold tracking-wider transition-colors disabled:opacity-50",
+                             c.review === st
+                               ? st === "REMOVE"
+                                 ? "border-[#ef4444] bg-[#2a1212] text-[#f87171]"
+-                                : "border-[#f97316] bg-[#2a1c08] text-[#fdba74]"
++                                : st === "KEEP"
++                                  ? "border-[#22c55e] bg-[#0f1a0e] text-[#22c55e]"
++                                  : "border-[#f97316] bg-[#2a1c08] text-[#fdba74]"
+                               : "border-[#2a2a2a] text-[#7a7a76] hover:border-[#3a3a3a]"
+                           )}
+                         >
+@@ -1924,6 +2082,35 @@ interface ApiErrorBody {
+   error?: string;
+ }
+ 
++/** Persisted decision for each UI review action: approving a candidate
++ *  (REMOVE) persists APPROVE, demoting one (REVIEW) persists REJECT, KEEP
++ *  persists KEEP. APPROVED (already applied) maps like REMOVE; PROPOSED is
++ *  not reachable from this UI and carries no decision. */
++const DECISION_FOR_REVIEW: Record<CutRange["review"], CutDecisionValue | null> = {
++  REMOVE: "APPROVE",
++  APPROVED: "APPROVE",
++  REVIEW: "REJECT",
++  REJECTED: "REJECT",
++  KEEP: "KEEP",
++  PROPOSED: null,
++};
++
++/** Map a persisted decision onto the review status the same user action
++ *  produces live: APPROVE → REMOVE (in the plan), REJECT → REVIEW (out of the
++ *  plan), KEEP → KEEP. The export union only ever consumes "REMOVE", so a
++ *  restored approval enters it and a rejected/kept candidate cannot — without
++ *  changing any union or ffmpeg logic. */
++export function decisionToReview(d: CutDecisionValue): CutRange["review"] {
++  switch (d) {
++    case "APPROVE":
++      return "REMOVE";
++    case "REJECT":
++      return "REVIEW";
++    case "KEEP":
++      return "KEEP";
++  }
++}
++
+ function SummaryTile({ label, value, sub, accent }: { label: string; value: string; sub?: string; accent?: boolean }) {
+   return (
+     <div className={cn("rounded-lg border px-3.5 py-3", accent ? "border-[#241f10] bg-[#120e05]" : "border-[#1c1c1c] bg-[#0d0d0d]")}>
+diff --git a/src/lib/client-api.ts b/src/lib/client-api.ts
+index 8835166..569c4f9 100755
+--- a/src/lib/client-api.ts
++++ b/src/lib/client-api.ts
+@@ -1,6 +1,6 @@
+ "use client";
+ 
+-import type { MediaMeta, JobView, ExportView } from "@/lib/types";
++import type { MediaMeta, JobView, ExportView, CutDecisionValue, SavedDecisionView } from "@/lib/types";
+ 
+ export class ApiError extends Error {
+   status: number;
+@@ -124,6 +124,27 @@ export const api = {
+ 
+   createProject: (name: string, description?: string) =>
+     fetch("/api/projects", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name, description }) }).then(handle),
++
++  /** Completed RIISHE analyses for a media, newest first — the reopen path. */
++  analyses: (mediaId: string) =>
++    fetch(`/api/autocut/analyses?mediaId=${encodeURIComponent(mediaId)}`).then((r) =>
++      handle<{ ok: boolean; mediaId: string; analyses: { jobId: string; createdAt: string }[] }>(r)
++    ),
++
++  /** Persisted decisions for one specific analysis result. */
++  decisions: (jobId: string) =>
++    fetch(`/api/autocut/decisions?jobId=${encodeURIComponent(jobId)}`).then((r) =>
++      handle<{ ok: boolean; jobId: string; decisions: SavedDecisionView[] }>(r)
++    ),
++
++  /** Save or update the user's decision for one candidate (server-validated:
++   *  ownership, completed analysis, candidate membership). */
++  saveDecision: (jobId: string, candidateId: string, decision: CutDecisionValue) =>
++    fetch("/api/autocut/decisions", {
++      method: "POST",
++      headers: { "Content-Type": "application/json" },
++      body: JSON.stringify({ jobId, candidateId, decision }),
++    }).then((r) => handle<{ ok: boolean; decision: SavedDecisionView }>(r)),
+ };
+ 
+ /** Client-side hard cap matching the server's MAX_UPLOAD_BYTES (250 MB). */
+diff --git a/src/lib/types.ts b/src/lib/types.ts
+index ff1ebb4..bab0596 100755
+--- a/src/lib/types.ts
++++ b/src/lib/types.ts
+@@ -276,6 +276,17 @@ export interface CutPlanSummary {
+   removedPercent: number;
+ }
+ 
++/** Persisted decision values for RIISHE cut candidates (server-validated). */
++export type CutDecisionValue = "APPROVE" | "REJECT" | "KEEP";
++
++/** One persisted decision row for a candidate of a specific analysis result. */
++export interface SavedDecisionView {
++  candidateId: string;
++  decision: CutDecisionValue;
++  createdAt: string;
++  updatedAt: string;
++}
++
+ export interface MediaMeta {
+   notes?: string | null;
+   id: string;
+diff --git a/tsconfig.json b/tsconfig.json
+index bf5960d..eb15aad 100755
+--- a/tsconfig.json
++++ b/tsconfig.json
+@@ -42,6 +42,8 @@
+     "skills",
+     "scripts",
+     "mini-services",
+-    "media-store"
++    "media-store",
++    "BEAN-FX-Source-Export",
++    "download"
+   ]
+ }
