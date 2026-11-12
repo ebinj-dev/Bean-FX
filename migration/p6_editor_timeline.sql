@@ -1,8 +1,8 @@
 -- P6 — Editor timeline persistence (Milestone 1, shared editing core).
 -- ADDITIVE ONLY: two new tables + one nullable column + indexes. No existing
--- table, row or column is touched (no DROP/DELETE/UPDATE; the single ALTER
+-- table, row or column is touched (no DROP/DELETE/UPDATE — the single ALTER
 -- adds a nullable column with no default rewrite).
--- Applied by scripts/apply_p6_migration.py (backup → verify → integrity check).
+-- Applied by scripts/apply_p6_migration.py (backup, verify, integrity check).
 
 -- CreateTable
 CREATE TABLE "TimelineVersion" (

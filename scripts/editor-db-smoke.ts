@@ -6,25 +6,20 @@
  * persistence path: versioned snapshots, optimistic-conflict detection,
  * autosave flag, append-only restore, and atomic audit rows.
  *
- * Usage: DATABASE_URL="file:/tmp/editor-smoke.db" bun scripts/editor-db-smoke.ts
+ * Usage: bun scripts/editor-db-smoke.ts
  */
 import { execSync } from "node:child_process";
 import { unlinkSync } from "node:fs";
 import path from "node:path";
+import os from "node:os";
 
-const DB_PATH = process.env.SMOKE_DB_PATH ?? "/tmp/beanfx-editor-smoke.db";
+const DB_PATH = path.join(os.tmpdir(), `beanfx-editor-smoke-${Date.now()}.db`);
 process.env.DATABASE_URL = `file:${DB_PATH}`;
 
 let failures = 0;
 function check(name: string, ok: boolean, detail = "") {
   if (!ok) failures++;
   console.log(`${ok ? "PASS" : "FAIL"} ${name}${detail ? ` — ${detail.slice(0, 140)}` : ""}`);
-}
-
-try {
-  unlinkSync(DB_PATH);
-} catch {
-  /* first run */
 }
 
 // Generate the client and push the schema to the throwaway DB (real tooling,
@@ -34,7 +29,6 @@ execSync("bunx prisma db push --skip-generate --accept-data-loss", {
   env: { ...process.env, DATABASE_URL: `file:${DB_PATH}` },
   stdio: "pipe",
 });
-execSync("bunx prisma generate", { cwd: path.resolve(import.meta.dir, ".."), stdio: "pipe" });
 
 const { PrismaClient } = await import("@prisma/client");
 const db = new PrismaClient();
@@ -88,7 +82,7 @@ async function main() {
   // Optimistic concurrency: stale base version must conflict and carry the head.
   let conflicted = false;
   try {
-    await applyTimelineEdits(project.id, user.id, 2, [clip("stale", 0)]);
+    await applyTimelineEdits(project.id, user.id, 2, [clip("stale", 0, 150, videoTrackId)]);
   } catch (e) {
     conflicted = e instanceof VersionConflictError && e.headVersion === 3;
   }
@@ -120,7 +114,7 @@ async function main() {
   // Server-side validation: a command that would corrupt the timeline is refused before any write.
   let refused = false;
   try {
-    await applyTimelineEdits(project.id, user.id, 5, [clip("bad", 0, 0)]); // empty source range
+    await applyTimelineEdits(project.id, user.id, 5, [clip("bad", 0, 0, videoTrackId)]); // empty source range
   } catch (e) {
     refused = e instanceof Error && /aborted|rejected|invalid/i.test(e.message);
   }
@@ -131,6 +125,11 @@ async function main() {
   await db.user.delete({ where: { id: user.id } });
   await db.user.delete({ where: { id: stranger.id } });
   await db.$disconnect();
+  try {
+    unlinkSync(DB_PATH);
+  } catch {
+    /* best effort cleanup */
+  }
   console.log(failures === 0 ? "\nRESULT: persistence smoke PASSED" : `\nRESULT: ${failures} failure(s)`);
   process.exit(failures === 0 ? 0 : 1);
 }

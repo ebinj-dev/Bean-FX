@@ -341,6 +341,40 @@ describe("editing commands — failure scenarios (directive §17)", () => {
   });
 });
 
+describe("editing commands — M2 extensions (track state + caption editing)", () => {
+  test("UpdateTrack toggles are reversible and validated", () => {
+    let seq = baseSequence();
+    const hidden = applyCommand(seq, { type: "UpdateTrack", trackId: "t-v1", visible: false });
+    expect(hidden.sequence.tracks[0].visible).toBe(false);
+    const undone = applyTransaction(hidden.sequence, [...hidden.inverse].reverse());
+    expect(undone.sequence.tracks[0].visible).toBe(true);
+    expect(() => applyCommand(seq, { type: "UpdateTrack", trackId: "ghost", visible: false })).toThrow(EditorError);
+    const renamed = applyCommand(seq, { type: "UpdateTrack", trackId: "t-v1", name: "Main Cam" });
+    expect(renamed.sequence.tracks[0].name).toBe("Main Cam");
+    expect(() => applyCommand(seq, { type: "UpdateTrack", trackId: "t-v1", name: "" })).toThrow(EditorError);
+  });
+
+  test("caption text and style are editable through UpdateClipProperties", () => {
+    let seq = baseSequence();
+    seq = applyCommand(seq, {
+      type: "AddCaption",
+      clip: clipPayload({ id: "cap1", trackId: "t-cap", captionText: "first draft", sourceOutFrame: 30 }),
+    }).sequence;
+    const edited = applyCommand(seq, { type: "UpdateClipProperties", clipId: "cap1", captionText: "final text" });
+    expect(edited.sequence.clips[0].captionText).toBe("final text");
+    const styled = applyCommand(edited.sequence, {
+      type: "UpdateClipProperties",
+      clipId: "cap1",
+      captionStyle: { fontSize: 64, color: "#FFD700", background: null, position: "CENTER" },
+    });
+    expect(styled.sequence.clips[0].captionStyle?.fontSize).toBe(64);
+    const undone = applyTransaction(styled.sequence, [...styled.inverse].reverse());
+    expect(undone.sequence.clips[0].captionStyle).toBeNull(); // pre-edit value restored
+    // empty caption text is refused on a CAPTION track
+    expect(() => applyCommand(seq, { type: "UpdateClipProperties", clipId: "cap1", captionText: "" })).toThrow(/caption clip|requires/i);
+  });
+});
+
 describe("EditHistory — undo/redo (directive §8)", () => {
   test("a full editing session round-trips through undo and redo", () => {
     const history = new EditHistory(baseSequence());

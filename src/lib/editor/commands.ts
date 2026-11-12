@@ -47,8 +47,6 @@ export class EditorError extends Error {
 
 const idSchema = z.string().min(1).max(64);
 
-const TrackPayload = TrackSchema;
-
 const ClipCore = z.object({
   id: idSchema,
   trackId: idSchema,
@@ -73,8 +71,17 @@ const ClipCore = z.object({
 });
 
 export const CommandSchema = z.discriminatedUnion("type", [
-  z.object({ type: z.literal("AddTrack"), track: TrackPayload }),
+  z.object({ type: z.literal("AddTrack"), track: TrackSchema }),
   z.object({ type: z.literal("RemoveTrack"), trackId: idSchema }),
+  z.object({
+    type: z.literal("UpdateTrack"),
+    trackId: idSchema,
+    visible: z.boolean().optional(),
+    muted: z.boolean().optional(),
+    solo: z.boolean().optional(),
+    locked: z.boolean().optional(),
+    name: z.string().min(1).max(80).optional(),
+  }),
   z.object({ type: z.literal("AddClip"), clip: ClipCore }),
   z.object({ type: z.literal("RemoveClip"), clipId: idSchema }),
   z.object({
@@ -141,6 +148,8 @@ export const CommandSchema = z.discriminatedUnion("type", [
     label: z.string().max(120).nullable().optional(),
     fadeInFrames: z.number().int().min(0).optional(),
     fadeOutFrames: z.number().int().min(0).optional(),
+    captionText: z.string().max(2000).nullable().optional(),
+    captionStyle: CaptionStyleSchema.nullable().optional(),
   }),
 ]);
 export type Command = z.infer<typeof CommandSchema>;
@@ -155,7 +164,8 @@ export function parseCommand(input: unknown): Command {
 
 export interface ApplyResult {
   sequence: Sequence;
-  /** Commands that undo this command, in application order. */
+  /** Commands that undo this command — the list is applied in REVERSE order
+   *  to undo, so composite inverses are ordered [restore-latest … first]. */
   inverse: Command[];
 }
 
@@ -269,14 +279,12 @@ function applySplitClip(seq: Sequence, cmd: Extract<Command, { type: "SplitClip"
   // Source split point: inverse-map the timeline cut, then snap ±2 so BOTH
   // sides recompute exactly to their timeline durations (integer timebases).
   let srcMid = original.sourceInFrame + srcFromTimeline(leftDur, original, seq, original.playbackSpeed);
-  let leftDurR = 0;
-  let rightDurR = 0;
   let ok = false;
   for (const offset of [0, 1, -1, 2, -2]) {
     const candidate = srcMid + offset;
     if (candidate <= original.sourceInFrame || candidate >= original.sourceOutFrame) continue;
-    leftDurR = clipTimelineDuration(candidate, original.sourceInFrame, rational(original.sourceFps), rational(seq.fps), original.playbackSpeed);
-    rightDurR = clipTimelineDuration(original.sourceOutFrame, candidate, rational(original.sourceFps), rational(seq.fps), original.playbackSpeed);
+    const leftDurR = clipTimelineDuration(candidate, original.sourceInFrame, rational(original.sourceFps), rational(seq.fps), original.playbackSpeed);
+    const rightDurR = clipTimelineDuration(original.sourceOutFrame, candidate, rational(original.sourceFps), rational(seq.fps), original.playbackSpeed);
     if (leftDurR === leftDur && rightDurR === rightDur) {
       srcMid = candidate;
       ok = true;
@@ -542,6 +550,32 @@ function applyChangePlaybackSpeed(seq: Sequence, cmd: Extract<Command, { type: "
   inverse.unshift({ type: "ChangePlaybackSpeed", clipId: clip.id, speed: before.speed });
 }
 
+function applyUpdateTrack(seq: Sequence, cmd: Extract<Command, { type: "UpdateTrack" }>, inverse: Command[]): void {
+  const track = findTrack(seq, cmd.trackId);
+  const restore: Extract<Command, { type: "UpdateTrack" }> = { type: "UpdateTrack", trackId: track.id };
+  if (cmd.visible !== undefined) {
+    restore.visible = track.visible;
+    track.visible = cmd.visible;
+  }
+  if (cmd.muted !== undefined) {
+    restore.muted = track.muted;
+    track.muted = cmd.muted;
+  }
+  if (cmd.solo !== undefined) {
+    restore.solo = track.solo;
+    track.solo = cmd.solo;
+  }
+  if (cmd.locked !== undefined) {
+    restore.locked = track.locked;
+    track.locked = cmd.locked;
+  }
+  if (cmd.name !== undefined) {
+    restore.name = track.name;
+    track.name = cmd.name;
+  }
+  inverse.unshift(restore);
+}
+
 function applyUpdateClipProperties(seq: Sequence, cmd: Extract<Command, { type: "UpdateClipProperties" }>, inverse: Command[]): void {
   const clip = findClip(seq, cmd.clipId);
   const restore: Extract<Command, { type: "UpdateClipProperties" }> = { type: "UpdateClipProperties", clipId: clip.id };
@@ -565,6 +599,20 @@ function applyUpdateClipProperties(seq: Sequence, cmd: Extract<Command, { type: 
     restore.fadeOutFrames = clip.fadeOutFrames;
     clip.fadeOutFrames = cmd.fadeOutFrames;
   }
+  if (cmd.captionText !== undefined) {
+    restore.captionText = clip.captionText;
+    clip.captionText = cmd.captionText;
+  }
+  if (cmd.captionStyle !== undefined) {
+    restore.captionStyle = clone(clip.captionStyle);
+    clip.captionStyle = cmd.captionStyle;
+  }
+  // A caption clip must keep its text — an empty caption is an invalid state,
+  // same rule as AddCaption.
+  const track = seq.tracks.find((t) => t.id === clip.trackId);
+  if (track?.kind === "CAPTION" && !clip.captionText) {
+    throw new EditorError("INVALID_COMMAND", `caption clip ${clip.id} requires captionText`);
+  }
   if (clip.fadeInFrames + clip.fadeOutFrames >= clip.timelineDurationFrames) {
     throw new EditorError("INVALID_RANGES", `fades (${clip.fadeInFrames}+${clip.fadeOutFrames}) cover the whole clip ${clip.id}`);
   }
@@ -584,6 +632,9 @@ export function applyCommand(inputSeq: Sequence, input: unknown): ApplyResult {
       break;
     case "RemoveTrack":
       applyRemoveTrack(seq, cmd, inverse);
+      break;
+    case "UpdateTrack":
+      applyUpdateTrack(seq, cmd, inverse);
       break;
     case "AddClip":
       applyAddClip(seq, cmd, inverse);

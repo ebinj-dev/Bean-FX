@@ -101,4 +101,18 @@ export class EditHistory {
   get canRedo(): boolean {
     return this.redoStack.length > 0;
   }
+
+  /** The forward commands redo() would replay, or null — lets the persistence
+   *  layer persist a redo as the same command batch. */
+  peekRedoForward(): Command[] | null {
+    return this.redoStack.length > 0 ? this.redoStack[this.redoStack.length - 1].forward : null;
+  }
+
+  /** The inverse commands undo() would apply (in undo's application order:
+   *  reversed), or null — lets the persistence layer persist an undo as the
+   *  same command batch. */
+  peekUndoInverses(): Command[] | null {
+    const entry = this.undoStack[this.undoStack.length - 1];
+    return entry ? [...entry.inverse].reverse() : null;
+  }
 }
