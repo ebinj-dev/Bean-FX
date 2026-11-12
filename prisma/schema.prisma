@@ -53,9 +53,13 @@ model Project {
   user        User         @relation(fields: [userId], references: [id], onDelete: Cascade)
   name        String
   description String?
+  /// Project settings for the editor (fps, resolution, sample rate …) —
+  /// additive JSON blob; absent = sensible defaults (30fps 1080p 48kHz).
+  settingsJson String?
   createdAt   DateTime     @default(now())
   updatedAt   DateTime     @updatedAt
-  mediaAssets MediaAsset[]
+  mediaAssets      MediaAsset[]
+  timelineVersions TimelineVersion[]
 }
 
 model MediaAsset {
@@ -144,4 +148,37 @@ model CutDecisionEvent {
   createdAt   DateTime @default(now())
 
   @@index([jobId, candidateId])
+}
+
+/// Immutable snapshot of the editor timeline at one point. Versions are
+/// append-only: an edit batch always creates the next version, never updates
+/// or deletes an existing one (rollback = a new version from an old snapshot).
+model TimelineVersion {
+  id            String   @id @default(cuid())
+  projectId     String
+  project       Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  versionNumber Int
+  sequenceJson  String
+  isAutosave    Boolean  @default(false)
+  createdById   String
+  createdAt     DateTime @default(now())
+  edits         TimelineEdit[]
+
+  @@unique([projectId, versionNumber])
+  @@index([projectId, createdAt])
+}
+
+/// Per-command audit trail for one version: what was applied and the exact
+/// inverse commands (undo evidence). Immutable, like the snapshot.
+model TimelineEdit {
+  id          String          @id @default(cuid())
+  versionId   String
+  version     TimelineVersion @relation(fields: [versionId], references: [id], onDelete: Cascade)
+  opIndex     Int
+  type        String
+  payloadJson String
+  inverseJson String
+  createdAt   DateTime        @default(now())
+
+  @@index([versionId, opIndex])
 }
