@@ -169,9 +169,11 @@ export function EditorTool({ user, onLogout }: { user: { id: string }; onLogout:
     ]);
   }, [sequence, session]);
 
-  /** Place a library asset on the first compatible, unlocked track at the playhead. */
+  /** Place a library asset on the first compatible, unlocked track at the playhead.
+   *  M3: freshly uploaded assets are analyzed by the background worker — the
+   *  import action waits for that probe (bounded) before placing the clip. */
   const addMediaAtPlayhead = useCallback(
-    (asset: MediaMeta) => {
+    async (asset: MediaMeta) => {
       if (!sequence) return;
       const wantVideo = asset.kind === "VIDEO";
       const kind = wantVideo ? "VIDEO" : "AUDIO";
@@ -180,24 +182,33 @@ export function EditorTool({ user, onLogout }: { user: { id: string }; onLogout:
         setNotice(`No unlocked ${kind.toLowerCase()} track available — add one first.`);
         return;
       }
-      if (asset.durationSec == null || asset.durationSec <= 0) {
+      let placed = asset;
+      if ((asset.durationSec == null || asset.durationSec <= 0) && asset.probeStatus && asset.probeStatus !== "READY" && asset.probeStatus !== "FAILED") {
+        setNotice("Analyzing media — placing it as soon as the probe finishes…");
+        placed = await api.waitForProbe(asset.id, 120_000);
+      }
+      if (placed.probeStatus === "FAILED") {
+        setNotice(`Media analysis failed: ${placed.probeError ?? "the file may be corrupt or unsupported."}`);
+        return;
+      }
+      if (placed.durationSec == null || placed.durationSec <= 0) {
         setNotice("This asset has no measurable duration — it cannot be placed.");
         return;
       }
-      const srcFps = asset.fps && asset.fps > 0 ? asset.fps : sequence.fps.num / sequence.fps.den;
-      const sourceDurationFrames = Math.round(asset.durationSec * srcFps);
+      const srcFps = placed.fps && placed.fps > 0 ? placed.fps : sequence.fps.num / sequence.fps.den;
+      const sourceDurationFrames = Math.round(placed.durationSec * srcFps);
       const ok = session.apply([
         {
           type: "AddClip",
           clip: {
             id: session.newId("clip"),
             trackId: track.id,
-            sourceAssetId: asset.id,
+            sourceAssetId: placed.id,
             sourceInFrame: 0,
             sourceOutFrame: sourceDurationFrames,
             sourceFps: { num: Math.round(srcFps * 1000), den: 1000 },
             timelineStartFrame: session.playheadFrame,
-            label: asset.originalName,
+            label: placed.originalName,
           },
         },
       ]);

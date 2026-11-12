@@ -113,14 +113,29 @@ async function main() {
       if (!res.ok) throw new Error(`upload failed ${res.status}: ${await res.text()}`);
       return (await res.json()) as { media: { id: string; durationSec: number | null; fps: number | null } };
     }
+    // M3: deep ffprobe runs in the background worker after the upload request
+    // returns, so metadata polls to READY here (the UI does the same via
+    // api.waitForProbe before placing a clip).
+    async function waitForProbeReady(mediaId: string): Promise<{ durationSec: number | null; fps: number | null; probeStatus: string | null }> {
+      for (let i = 0; i < 60; i++) {
+        const detail = (await (await fetch(`${BASE}/api/media/${mediaId}`, { headers: authHeaders })).json()) as {
+          media: { durationSec: number | null; fps: number | null; probeStatus: string | null };
+        };
+        if (detail.media.probeStatus === "READY" || detail.media.probeStatus === "FAILED") return detail.media;
+        await new Promise((r) => setTimeout(r, 500));
+      }
+      throw new Error("probe did not finish in 30 s");
+    }
     const videoAsset = await upload("beanfx-e2e-clip.mp4", videoPath);
     const audioAsset = await upload("beanfx-e2e-tone.wav", audioPath);
+    const videoProbe = await waitForProbeReady(videoAsset.media.id);
+    const audioProbe = await waitForProbeReady(audioAsset.media.id);
     check(
-      "real video uploaded and ffprobe-inspected (duration 3 s, fps 30)",
-      videoAsset.media.durationSec !== null && Math.abs(videoAsset.media.durationSec - 3) < 0.2 && videoAsset.media.fps !== null && Math.abs(videoAsset.media.fps - 30) < 0.5,
-      `dur=${videoAsset.media.durationSec} fps=${videoAsset.media.fps}`,
+      "real video uploaded and ffprobe-inspected by the worker (duration 3 s, fps 30)",
+      videoProbe.durationSec !== null && Math.abs(videoProbe.durationSec - 3) < 0.2 && videoProbe.fps !== null && Math.abs(videoProbe.fps - 30) < 0.5 && videoProbe.probeStatus === "READY",
+      `dur=${videoProbe.durationSec} fps=${videoProbe.fps} status=${videoProbe.probeStatus}`,
     );
-    check("real audio uploaded (duration 2 s)", audioAsset.media.durationSec !== null && Math.abs(audioAsset.media.durationSec - 2) < 0.2, `dur=${audioAsset.media.durationSec}`);
+    check("real audio uploaded (duration 2 s)", audioProbe.durationSec !== null && Math.abs(audioProbe.durationSec - 2) < 0.2 && audioProbe.probeStatus === "READY", `dur=${audioProbe.durationSec}`);
 
     // ---- 4. editing session through the real timeline API -----------------
     const head1 = (await (await fetch(`${BASE}/api/editor/projects/${proj.project.id}/timeline`, { headers: authHeaders })).json()) as {

@@ -5,6 +5,8 @@ import type { JobStatus } from "@/lib/types";
 interface ActiveJob {
   child: ChildProcess;
   cancelled: boolean;
+  /** Set by killChildForTimeout — the close handler must fail, not cancel. */
+  timedOut?: boolean;
 }
 
 /**
@@ -40,7 +42,9 @@ export class JobManager {
   async setProgress(jobId: string, progress: number, stage?: string) {
     const clamped = Math.max(0, Math.min(100, Math.round(progress)));
     await db.job
-      .update({ where: { id: jobId }, data: { progress: clamped, ...(stage ? { stage } : {}) } })
+      // lastHeartbeatAt doubles as the worker's liveness marker (M3): every
+      // real progress write proves a live process is behind the job.
+      .update({ where: { id: jobId }, data: { progress: clamped, lastHeartbeatAt: new Date(), ...(stage ? { stage } : {}) } })
       .catch(() => undefined);
   }
 
@@ -105,8 +109,14 @@ export class JobManager {
 
     child.on("close", async (code, signal) => {
       const entry = this.active.get(jobId);
-      const wasCancelled = entry?.cancelled || signal === "SIGTERM" || signal === "SIGKILL";
+      const timedOut = entry?.timedOut === true;
+      const wasCancelled = !timedOut && (entry?.cancelled || signal === "SIGTERM" || signal === "SIGKILL");
       this.active.delete(jobId);
+      if (timedOut) {
+        await this.fail(jobId, "Processing exceeded its time limit and was stopped.");
+        await opts.onSettled?.().catch(() => undefined);
+        return;
+      }
       if (wasCancelled) {
         await db.job
           .update({ where: { id: jobId }, data: { status: "CANCELLED", stage: "Cancelled", message: "Processing was cancelled. Original media is intact." } })
@@ -140,6 +150,23 @@ export class JobManager {
       await db.job
         .update({ where: { id: jobId }, data: { status: "CANCELLED", stage: "Cancelled", message: "Cancelled before processing started." } })
         .catch(() => undefined);
+    }
+    return true;
+  }
+
+  /**
+   * Kill a running child because its job exceeded its time limit (M3 worker).
+   * Unlike cancel() this writes no status itself — the close handler observes
+   * `timedOut` and fails the job, keeping timeout accounting in one place.
+   */
+  killChildForTimeout(jobId: string): boolean {
+    const entry = this.active.get(jobId);
+    if (!entry) return false;
+    entry.timedOut = true;
+    try {
+      entry.child.kill("SIGKILL");
+    } catch {
+      // already exited
     }
     return true;
   }

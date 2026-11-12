@@ -7,13 +7,18 @@ import { getCurrentUser } from "@/lib/auth";
 import {
   MEDIA_ROOT,
   MAX_UPLOAD_BYTES,
+  MAX_CHUNKED_BYTES,
   ensureMediaRoot,
   safeExt,
   classifyByExtension,
-  ffprobe,
   getFreeDiskBytes,
   removeFileQuiet,
+  sniffContainer,
+  sniffMatchesClass,
+  sha256File,
+  hasQuotaFor,
 } from "@/lib/media-storage";
+import { enqueueMediaJob, JOB_TYPE_MEDIA_PROBE } from "@/lib/job-helpers";
 import { parseSrt } from "@/lib/srt";
 import { pipeline, finished } from "stream/promises";
 
@@ -21,9 +26,15 @@ export const runtime = "nodejs";
 export const maxDuration = 300;
 
 const MB = 1024 * 1024;
-/** Orphaned chunk upload scratch is garbage-collected after this long. */
-const STALE_UPLOAD_TTL_MS = 60 * 60 * 1000;
+/**
+ * Orphaned chunk upload scratch TTLs. The parts of an OPEN session survive
+ * 24 h (the resume window — matches the worker's abandonment sweep); assembled
+ * scratch is transient and gets 6 h. Originals are never GC'd.
+ */
+const STALE_UPLOAD_TTL_MS = 24 * 60 * 60 * 1000;
+const STALE_ASSEMBLED_TTL_MS = 6 * 60 * 60 * 1000;
 const UPLOAD_ID_RE = /^[a-zA-Z0-9-]{8,64}$/;
+const SHA256_RE = /^[a-f0-9]{64}$/i;
 
 function jsonError(message: string, status: number) {
   return NextResponse.json({ error: message }, { status });
@@ -46,17 +57,27 @@ async function discardBody(req: NextRequest) {
 function errorStatus(message: string): number {
   const m = message.toLowerCase();
   if (m.includes("upload incomplete") || m.includes("empty request body") || m.includes("chunk incomplete")) return 400;
+  if (m.includes("quota") || m.includes("larger than the")) return 413;
   if (
-    m.includes("media inspection failed") ||
     m.includes("no audio or video") ||
     m.includes("invalid data") ||
     m.includes("could not be read") ||
-    m.includes("moov atom")
+    m.includes("moov atom") ||
+    m.includes("does not match its extension") ||
+    m.includes("unrecognized file content") ||
+    m.includes("cannot be used as audio")
   ) {
     return 415;
   }
   return 500;
 }
+
+/**
+ * Deterministic upload failures where retrying cannot succeed (bad content,
+ * quota). The session is marked FAILED and scratch is cleared; anything else
+ * keeps parts on disk so the client can resume.
+ */
+class PermanentUploadError extends Error {}
 
 type UploadIdentity = {
   originalName: string;
@@ -100,99 +121,36 @@ function parseIdentity(req: NextRequest): { identity: UploadIdentity } | { error
   return { identity: { originalName, ext, kind, role, notes } };
 }
 
-/** ffprobe validation + persistent storage + DB row. Shared by both upload paths. */
-async function finalizeUpload(userId: string, identity: UploadIdentity, tmpPath: string): Promise<NextResponse> {
-  // Subtitle references (SRT) are parsed, not probed: a valid cue list IS the
-  // validation. Original text and timestamps are preserved verbatim.
-  if (identity.kind === "SUBTITLE") {
-    const content = await fs.readFile(tmpPath, "utf8").catch(() => null);
-    if (content === null) throw new Error("Subtitle file could not be read.");
-    const parsed = parseSrt(content);
-    if (!parsed.cues.length) {
-      throw new Error(`Invalid SRT: ${parsed.errors[0] ?? "no valid cues found"}.`);
-    }
-    const stat = await fs.stat(tmpPath);
-    const finalName = `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}${identity.ext}`;
-    const finalPath = path.join(MEDIA_ROOT, "originals", finalName);
-    await fs.rename(tmpPath, finalPath);
+/** sha256 declared by the client, validated shape only (optional integrity hint). */
+function declaredSha256(req: NextRequest): string | null {
+  const declared = (req.headers.get("x-sha256") ?? "").trim().toLowerCase();
+  return SHA256_RE.test(declared) ? declared : null;
+}
 
-    const lastEnd = Math.max(...parsed.cues.map((c) => c.end));
-    const asset = await db.mediaAsset.create({
-      data: {
-        userId,
-        originalName: identity.originalName.slice(0, 200),
-        storagePath: finalPath,
-        kind: "SUBTITLE",
-        mimeType: "application/x-subrip",
-        sizeBytes: stat.size,
-        durationSec: lastEnd,
-        notes: identity.notes,
-      },
-    });
-    return NextResponse.json({
-      media: {
-        id: asset.id,
-        originalName: asset.originalName,
-        kind: asset.kind,
-        mimeType: asset.mimeType,
-        sizeBytes: asset.sizeBytes,
-        durationSec: asset.durationSec,
-        width: null,
-        height: null,
-        fps: null,
-        videoCodec: null,
-        audioCodec: null,
-        sampleRate: null,
-        channels: null,
-        role: null,
-        notes: asset.notes,
-        createdAt: asset.createdAt.toISOString(),
-      },
-      srt: { cueCount: parsed.cues.length, parseErrors: parsed.errors.slice(0, 10) },
-    });
-  }
-
-  // Validate the actual media — never trust the extension alone.
-  let meta;
-  try {
-    meta = await ffprobe(tmpPath);
-  } catch (err) {
-    throw new Error(err instanceof Error ? err.message : "Media could not be read.");
-  }
-  if (!meta.hasAudio && !meta.hasVideo) {
-    throw new Error("File contains no audio or video streams.");
-  }
-  if (identity.kind === "AUDIO" && !meta.hasAudio) {
-    throw new Error("This file has no audio stream and cannot be used as audio.");
-  }
-  const resolvedKind = meta.hasVideo ? "VIDEO" : "AUDIO";
-
-  const stat = await fs.stat(tmpPath);
-  const finalName = `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}${identity.ext}`;
-  const finalPath = path.join(MEDIA_ROOT, "originals", finalName);
-  await fs.rename(tmpPath, finalPath);
-
-  const asset = await db.mediaAsset.create({
-    data: {
-      userId,
-      originalName: identity.originalName.slice(0, 200),
-      storagePath: finalPath,
-      kind: resolvedKind,
-      mimeType: `application/octet-stream`,
-      sizeBytes: stat.size,
-      durationSec: meta.durationSec,
-      width: meta.width,
-      height: meta.height,
-      fps: meta.fps,
-      videoCodec: meta.videoCodec,
-      audioCodec: meta.audioCodec,
-      sampleRate: meta.sampleRate,
-      channels: meta.channels,
-      role: identity.role,
-      notes: identity.notes,
-    },
-  });
-
+/** Response shape for a finalized asset (probe results arrive async via the worker). */
+function mediaResponse(
+  asset: {
+    id: string;
+    originalName: string;
+    kind: string;
+    mimeType: string;
+    sizeBytes: number;
+    durationSec: number | null;
+    width: number | null;
+    height: number | null;
+    fps: number | null;
+    videoCodec: string | null;
+    audioCodec: string | null;
+    sampleRate: number | null;
+    channels: number | null;
+    probeStatus: string | null;
+    proxyStatus: string | null;
+    role: string | null;
+    notes: string | null;
+    createdAt: Date;
+  },
+  extra: Record<string, unknown> = {}
+) {
   return NextResponse.json({
     media: {
       id: asset.id,
@@ -208,14 +166,189 @@ async function finalizeUpload(userId: string, identity: UploadIdentity, tmpPath:
       audioCodec: asset.audioCodec,
       sampleRate: asset.sampleRate,
       channels: asset.channels,
+      probeStatus: asset.probeStatus,
+      proxyStatus: asset.proxyStatus,
       role: asset.role,
       notes: asset.notes,
       createdAt: asset.createdAt.toISOString(),
     },
+    ...extra,
   });
 }
 
-/** Remove orphaned upload scratch (files and dirs) older than the TTL. */
+/**
+ * Validate (content sniffing + checksum), store, dedup, and enqueue analysis.
+ * No ffprobe here — deep inspection runs in the background worker (M3.4), so
+ * the upload request only does cheap, bounded work regardless of file size.
+ */
+async function finalizeUpload(
+  userId: string,
+  identity: UploadIdentity,
+  tmpPath: string,
+  uploadId: string | null
+): Promise<NextResponse> {
+  // Subtitle references (SRT) are parsed, not probed: a valid cue list IS the
+  // validation. Original text and timestamps are preserved verbatim.
+  if (identity.kind === "SUBTITLE") {
+    const content = await fs.readFile(tmpPath, "utf8").catch(() => null);
+    if (content === null) throw new PermanentUploadError("Subtitle file could not be read.");
+    const parsed = parseSrt(content);
+    if (!parsed.cues.length) {
+      throw new PermanentUploadError(`Invalid SRT: ${parsed.errors[0] ?? "no valid cues found"}.`);
+    }
+    const stat = await fs.stat(tmpPath);
+    const sha = await sha256File(tmpPath);
+    const finalName = `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}${identity.ext}`;
+    const finalPath = path.join(MEDIA_ROOT, "originals", finalName);
+    await fs.rename(tmpPath, finalPath);
+
+    const lastEnd = Math.max(...parsed.cues.map((c) => c.end));
+    const asset = await db.mediaAsset.create({
+      data: {
+        userId,
+        originalName: identity.originalName.slice(0, 200),
+        storagePath: finalPath,
+        kind: "SUBTITLE",
+        mimeType: "application/x-subrip",
+        sizeBytes: stat.size,
+        durationSec: lastEnd,
+        sha256: sha,
+        probeStatus: "READY", // fully validated by the cue parse — nothing to probe
+        notes: identity.notes,
+      },
+    });
+    if (uploadId) {
+      await db.uploadSession
+        .updateMany({ where: { id: uploadId, userId, status: "OPEN" }, data: { status: "COMPLETED", mediaAssetId: asset.id } })
+        .catch(() => undefined);
+    }
+    return mediaResponse(asset, { srt: { cueCount: parsed.cues.length, parseErrors: parsed.errors.slice(0, 10) } });
+  }
+
+  const stat = await fs.stat(tmpPath);
+  if (stat.size <= 0) throw new PermanentUploadError("Empty request body.");
+
+  // Content identity from the file's own bytes — never the client's claims.
+  const head = Buffer.alloc(32);
+  const fh = await fs.open(tmpPath, "r");
+  try {
+    await fh.read(head, 0, head.length, 0);
+  } finally {
+    await fh.close();
+  }
+  const sniff = sniffContainer(head);
+  if (sniff.family === "unknown") {
+    throw new PermanentUploadError("Unrecognized file content — not a known media container.");
+  }
+  if (identity.kind !== "AUDIO" && identity.kind !== "VIDEO") {
+    throw new PermanentUploadError("Unsupported file class.");
+  }
+  if (!sniffMatchesClass(sniff, identity.kind)) {
+    throw new PermanentUploadError(
+      `File content (${sniff.family}) does not match its extension ("${identity.ext}").`
+    );
+  }
+
+  const sha = await sha256File(tmpPath);
+
+  // Duplicate upload: same user + same bytes → reuse the stored original.
+  // No second copy is written, and the original is never overwritten.
+  const existing = await db.mediaAsset.findFirst({
+    where: { userId, sha256: sha, kind: { in: ["AUDIO", "VIDEO"] } },
+    orderBy: { createdAt: "asc" },
+  });
+  if (existing && (await fs.stat(existing.storagePath).then(() => true).catch(() => false))) {
+    await removeFileQuiet(tmpPath);
+    const asset = await db.mediaAsset.create({
+      data: {
+        userId,
+        originalName: identity.originalName.slice(0, 200),
+        storagePath: existing.storagePath,
+        kind: existing.kind,
+        mimeType: existing.mimeType,
+        sizeBytes: stat.size,
+        durationSec: existing.durationSec,
+        width: existing.width,
+        height: existing.height,
+        fps: existing.fps,
+        videoCodec: existing.videoCodec,
+        audioCodec: existing.audioCodec,
+        sampleRate: existing.sampleRate,
+        channels: existing.channels,
+        sha256: sha,
+        probeStatus: existing.probeStatus, // same content → same analysis applies
+        probeMetaJson: existing.probeMetaJson,
+        probeError: existing.probeError,
+        isVfr: existing.isVfr,
+        rotation: existing.rotation,
+        aspectRatio: existing.aspectRatio,
+        timeBase: existing.timeBase,
+        formatName: existing.formatName,
+        bitRate: existing.bitRate,
+        proxyStatus: existing.proxyStatus,
+        proxyPath: existing.proxyPath,
+        proxySizeBytes: existing.proxySizeBytes,
+        proxyDurationSec: existing.proxyDurationSec,
+        role: identity.role,
+        notes: identity.notes,
+      },
+    });
+    if (uploadId) {
+      await db.uploadSession
+        .updateMany({ where: { id: uploadId, userId, status: "OPEN" }, data: { status: "COMPLETED", mediaAssetId: asset.id } })
+        .catch(() => undefined);
+    }
+    return mediaResponse(asset, { deduplicated: true, reusedAssetId: existing.id });
+  }
+
+  const quota = await hasQuotaFor(userId, stat.size);
+  if (!quota.ok) {
+    throw new PermanentUploadError(
+      `Storage quota exceeded: ${(quota.usedBytes / 1e9).toFixed(2)} GB used of ${(quota.quotaBytes / 1e9).toFixed(2)} GB, ` +
+        `this file needs ${(stat.size / 1e9).toFixed(2)} GB. Remove unused media and try again.`
+    );
+  }
+
+  const free = await getFreeDiskBytes();
+  // Peak usage: original + proxy + processing scratch (2x) — require 3x headroom.
+  if (free < stat.size * 3) {
+    throw new Error(
+      `Insufficient server storage. Need ~${((stat.size * 3) / 1e9).toFixed(2)} GB headroom, ${(free / 1e9).toFixed(2)} GB available.`
+    );
+  }
+
+  const finalName = `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}${identity.ext}`;
+  const finalPath = path.join(MEDIA_ROOT, "originals", finalName);
+  await fs.rename(tmpPath, finalPath);
+
+  const asset = await db.mediaAsset.create({
+    data: {
+      userId,
+      originalName: identity.originalName.slice(0, 200),
+      storagePath: finalPath,
+      kind: identity.kind,
+      mimeType: sniff.mime ?? "application/octet-stream",
+      sizeBytes: stat.size,
+      sha256: sha,
+      probeStatus: "PENDING",
+      proxyStatus: "NONE",
+      role: identity.role,
+      notes: identity.notes,
+    },
+  });
+
+  // Deep analysis + proxy decision run in the durable worker, never here.
+  await enqueueMediaJob(userId, JOB_TYPE_MEDIA_PROBE, { mediaId: asset.id });
+
+  if (uploadId) {
+    await db.uploadSession
+      .updateMany({ where: { id: uploadId, userId, status: "OPEN" }, data: { status: "COMPLETED", mediaAssetId: asset.id } })
+      .catch(() => undefined);
+  }
+  return mediaResponse(asset, { deduplicated: false });
+}
+
+/** Remove orphaned upload scratch (files and dirs) older than their TTLs. */
 async function gcStaleUploads() {
   const tmpDir = path.join(MEDIA_ROOT, "tmp");
   let entries: string[];
@@ -230,7 +363,8 @@ async function gcStaleUploads() {
     const p = path.join(tmpDir, entry);
     try {
       const st = await fs.stat(p);
-      if (now - st.mtimeMs > STALE_UPLOAD_TTL_MS) {
+      const ttl = entry.startsWith("up_") ? STALE_UPLOAD_TTL_MS : STALE_ASSEMBLED_TTL_MS;
+      if (now - st.mtimeMs > ttl) {
         await fs.rm(p, { recursive: true, force: true });
       }
     } catch {
@@ -239,11 +373,82 @@ async function gcStaleUploads() {
   }
 }
 
+/** Upsert the resumable-upload session row, enforcing ownership and parameters. */
+async function openUploadSession(
+  userId: string,
+  uploadId: string,
+  identity: UploadIdentity,
+  chunkTotal: number,
+  totalSize: number,
+  firstChunkSize: number,
+  sha: string | null
+): Promise<{ ok: true } | { ok: false; error: NextResponse }> {
+  const existing = await db.uploadSession.findUnique({ where: { id: uploadId } });
+  if (existing) {
+    if (existing.userId !== userId) {
+      return { ok: false, error: jsonError("Upload session not found.", 404) };
+    }
+    if (existing.status !== "OPEN") {
+      return {
+        ok: false,
+        error: NextResponse.json(
+          {
+            error:
+              existing.status === "COMPLETED" && existing.mediaAssetId
+                ? `Upload already completed (media ${existing.mediaAssetId}).`
+                : `Upload session is ${existing.status} and cannot accept chunks.`,
+            ...(existing.mediaAssetId ? { mediaAssetId: existing.mediaAssetId } : {}),
+          },
+          { status: 409 }
+        ),
+      };
+    }
+    if (existing.chunkTotal !== chunkTotal || Number(existing.declaredSize) !== totalSize || existing.ext !== identity.ext) {
+      return { ok: false, error: jsonError("Upload session parameters changed mid-upload — restart the upload.", 400) };
+    }
+    return { ok: true };
+  }
+  try {
+    await db.uploadSession.create({
+      data: {
+        id: uploadId,
+        userId,
+        originalName: identity.originalName.slice(0, 200),
+        ext: identity.ext,
+        kind: identity.kind,
+        declaredSize: BigInt(totalSize),
+        chunkSize: firstChunkSize,
+        chunkTotal,
+        status: "OPEN",
+        ...(sha ? { sha256: sha } : {}),
+      },
+    });
+    return { ok: true };
+  } catch (err) {
+    // Unique violation: another chunk of the same session won the race.
+    if ((err as { code?: string }).code === "P2002") return { ok: true };
+    throw err;
+  }
+}
+
+async function touchSession(uploadId: string, userId: string): Promise<void> {
+  await db.uploadSession.updateMany({
+    where: { id: uploadId, userId },
+    data: { lastChunkAt: new Date() },
+  });
+}
+
+async function countReceivedParts(partsDir: string): Promise<number> {
+  const entries = await fs.readdir(partsDir).catch(() => [] as string[]);
+  return entries.filter((f) => f.endsWith(".part")).length;
+}
+
 /**
- * Chunked upload path: the client splits large files so no single HTTP request
- * body has to cross the preview gateway at full size. Chunks land as per-index
- * part files (idempotent, order-tolerant) and are assembled on the last chunk;
- * validation and storage are identical to the single-shot path.
+ * Chunked upload path: resumable, per-index part files (idempotent,
+ * order-tolerant), server-tracked session state so the client can recover
+ * from any interruption. Validation and storage are identical to the
+ * single-shot path. Parts are kept on transient failures; deterministic
+ * content failures clear scratch and mark the session FAILED.
  */
 async function handleChunkedUpload(req: NextRequest, user: { id: string }): Promise<NextResponse> {
   const parsed = parseIdentity(req);
@@ -258,18 +463,20 @@ async function handleChunkedUpload(req: NextRequest, user: { id: string }): Prom
   const chunkTotal = Number(req.headers.get("x-chunk-total") ?? "0");
   const totalSize = Number(req.headers.get("x-upload-size") ?? "0");
   const contentLength = Number(req.headers.get("content-length") ?? "0");
+  const clientChunkSize = Number(req.headers.get("x-chunk-size") ?? "0");
+  const sha = declaredSha256(req);
 
   if (!UPLOAD_ID_RE.test(uploadId) || !Number.isInteger(chunkIndex) || !Number.isInteger(chunkTotal) || chunkTotal < 1 || chunkIndex < 0 || chunkIndex >= chunkTotal) {
     await discardBody(req);
     return jsonError(!UPLOAD_ID_RE.test(uploadId) ? "Invalid upload id." : "Invalid chunk index or total.", 400);
   }
-  if (!totalSize || totalSize <= 0) {
+  if (!totalSize || totalSize <= 0 || !Number.isSafeInteger(totalSize)) {
     await discardBody(req);
     return jsonError("Missing upload size (x-upload-size).", 400);
   }
-  if (totalSize > MAX_UPLOAD_BYTES) {
+  if (totalSize > MAX_CHUNKED_BYTES) {
     await discardBody(req);
-    return jsonError(`File is larger than the ${(MAX_UPLOAD_BYTES / MB).toFixed(0)} MB upload limit.`, 413);
+    return jsonError(`File is larger than the ${(MAX_CHUNKED_BYTES / MB / MB).toFixed(0)} GB chunked upload limit.`, 413);
   }
   if (!contentLength || contentLength <= 0) {
     await discardBody(req);
@@ -277,7 +484,13 @@ async function handleChunkedUpload(req: NextRequest, user: { id: string }): Prom
   }
   if (contentLength > MAX_UPLOAD_BYTES) {
     await discardBody(req);
-    return jsonError(`Chunk is larger than the ${(MAX_UPLOAD_BYTES / MB).toFixed(0)} MB upload limit.`, 413);
+    return jsonError(`Chunk is larger than the ${(MAX_UPLOAD_BYTES / MB).toFixed(0)} MB per-request limit.`, 413);
+  }
+
+  const session = await openUploadSession(user.id, uploadId, identity, chunkTotal, totalSize, contentLength, sha);
+  if (!session.ok) {
+    await discardBody(req);
+    return session.error;
   }
 
   await ensureMediaRoot();
@@ -287,7 +500,17 @@ async function handleChunkedUpload(req: NextRequest, user: { id: string }): Prom
 
   try {
     await fs.mkdir(partsDir, { recursive: true });
-    await gcStaleUploads();
+    void gcStaleUploads();
+
+    // Quota is checked against the declared size once per session and
+    // re-checked at assembly — reservations stay honest without per-chunk scans.
+    const quota = await hasQuotaFor(user.id, totalSize);
+    if (!quota.ok) {
+      throw new PermanentUploadError(
+        `Storage quota exceeded: ${(quota.usedBytes / 1e9).toFixed(2)} GB used of ${(quota.quotaBytes / 1e9).toFixed(2)} GB, ` +
+          `this upload needs ${(totalSize / 1e9).toFixed(2)} GB.`
+      );
+    }
 
     if (!req.body) throw new Error("Empty request body.");
     await pipeline(Readable.fromWeb(req.body as import("stream/web").ReadableStream), createWriteStream(partPath));
@@ -296,9 +519,20 @@ async function handleChunkedUpload(req: NextRequest, user: { id: string }): Prom
       await removeFileQuiet(partPath);
       throw new Error(`Chunk incomplete: received ${partStat.size} of ${contentLength} bytes.`);
     }
+    // Optional strict integrity: the client declares its chunk size, so every
+    // part except the final one must be exactly that size.
+    if (clientChunkSize > 0 && chunkIndex < chunkTotal - 1 && partStat.size !== clientChunkSize) {
+      await removeFileQuiet(partPath);
+      throw new Error(`Chunk size mismatch: expected ${clientChunkSize} bytes, received ${partStat.size}.`);
+    }
+
+    await touchSession(uploadId, user.id);
+    const receivedCount = await countReceivedParts(partsDir);
+    await db.uploadSession.updateMany({ where: { id: uploadId, userId: user.id }, data: { receivedCount } });
+
 
     if (chunkIndex < chunkTotal - 1) {
-      return NextResponse.json({ partial: true, received: chunkIndex + 1, total: chunkTotal });
+      return NextResponse.json({ partial: true, received: receivedCount, total: chunkTotal });
     }
 
     // Final chunk: verify the complete set, then assemble in index order.
@@ -311,15 +545,15 @@ async function handleChunkedUpload(req: NextRequest, user: { id: string }): Prom
       }
     }
     if (missing.length > 0) {
-      throw new Error(`Upload incomplete: ${missing.length} of ${chunkTotal} chunk(s) missing.`);
+      // Keep parts — the client resumes with exactly the missing indexes.
+      throw new Error(`Upload incomplete: ${missing.length} of ${chunkTotal} chunk(s) missing (indexes: ${missing.slice(0, 20).join(", ")}).`);
     }
 
     const free = await getFreeDiskBytes();
     // Peak usage: parts + assembled copy + final original — require 3x headroom.
     if (free < totalSize * 3) {
-      return jsonError(
-        `Insufficient server storage. Need ~${((totalSize * 3) / 1e9).toFixed(2)} GB headroom, ${(free / 1e9).toFixed(2)} GB available.`,
-        507
+      throw new Error(
+        `Insufficient server storage. Need ~${((totalSize * 3) / 1e9).toFixed(2)} GB headroom, ${(free / 1e9).toFixed(2)} GB available.`
       );
     }
 
@@ -337,18 +571,34 @@ async function handleChunkedUpload(req: NextRequest, user: { id: string }): Prom
 
     const asmStat = await fs.stat(assembledPath);
     if (asmStat.size !== totalSize) {
+      // Keep parts: the client checks per-part sizes via the status endpoint,
+      // re-sends any damaged chunk, then re-sends the final chunk.
       throw new Error(`Upload incomplete: received ${asmStat.size} of ${totalSize} bytes.`);
     }
+    if (sha) {
+      const actualSha = await sha256File(assembledPath);
+      if (actualSha !== sha) {
+        throw new PermanentUploadError("Checksum mismatch: the assembled file does not match the declared sha256.");
+      }
+    }
 
-    const response = await finalizeUpload(user.id, identity, assembledPath);
+    const response = await finalizeUpload(user.id, identity, assembledPath, uploadId);
     await fs.rm(partsDir, { recursive: true, force: true }).catch(() => undefined);
     return response;
   } catch (err) {
-    // No resume protocol exists — a failed upload never leaves scratch behind.
-    await removeFileQuiet(assembledPath);
-    await fs.rm(partsDir, { recursive: true, force: true }).catch(() => undefined);
     const message = err instanceof Error ? err.message : "Upload failed.";
     console.error("[media/upload-chunked]", message);
+    if (err instanceof PermanentUploadError) {
+      // Nothing resumable here — clear scratch and close the session.
+      await removeFileQuiet(assembledPath);
+      await fs.rm(partsDir, { recursive: true, force: true }).catch(() => undefined);
+      await db.uploadSession
+        .updateMany({ where: { id: uploadId, userId: user.id, status: "OPEN" }, data: { status: "FAILED" } })
+        .catch(() => undefined);
+      return jsonError(message, errorStatus(message));
+    }
+    // Transient (missing chunks, disk headroom, network): keep parts for resume.
+    await removeFileQuiet(assembledPath);
     return jsonError(message, errorStatus(message));
   }
 }
@@ -378,6 +628,8 @@ export async function GET() {
       audioCodec: a.audioCodec,
       sampleRate: a.sampleRate,
       channels: a.channels,
+      probeStatus: a.probeStatus,
+      proxyStatus: a.proxyStatus,
       role: a.role,
       notes: a.notes,
       createdAt: a.createdAt.toISOString(),
@@ -411,7 +663,17 @@ export async function POST(req: NextRequest) {
   }
   if (contentLength > MAX_UPLOAD_BYTES) {
     await discardBody(req);
-    return jsonError(`File is larger than the ${(MAX_UPLOAD_BYTES / MB).toFixed(0)} MB upload limit.`, 413);
+    return jsonError(`File is larger than the ${(MAX_UPLOAD_BYTES / MB).toFixed(0)} MB single-request limit. Use chunked upload for larger files.`, 413);
+  }
+
+  const quota = await hasQuotaFor(user.id, contentLength);
+  if (!quota.ok) {
+    await discardBody(req);
+    return jsonError(
+      `Storage quota exceeded: ${(quota.usedBytes / 1e9).toFixed(2)} GB used of ${(quota.quotaBytes / 1e9).toFixed(2)} GB, ` +
+        `this file needs ${(contentLength / 1e9).toFixed(2)} GB.`,
+      413
+    );
   }
 
   await ensureMediaRoot();
@@ -435,7 +697,7 @@ export async function POST(req: NextRequest) {
       throw new Error(`Upload incomplete: received ${stat.size} of ${contentLength} bytes.`);
     }
 
-    return await finalizeUpload(user.id, identity, tmpPath);
+    return await finalizeUpload(user.id, identity, tmpPath, null);
   } catch (err) {
     await removeFileQuiet(tmpPath);
     const message = err instanceof Error ? err.message : "Upload failed.";

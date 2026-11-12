@@ -54,7 +54,45 @@ export const api = {
       body: JSON.stringify(data),
     }).then(handle),
 
-  mediaUrl: (id: string) => `/api/media/${id}/file`,
+  mediaUrl: (id: string, variant?: "proxy" | "original") =>
+    `/api/media/${id}/file${variant ? `?variant=${variant}` : ""}`,
+
+  /** Full asset detail incl. M3 probe/proxy state (owner only). */
+  mediaDetail: (id: string) =>
+    fetch(`/api/media/${id}`).then((r) => handle<{ media: MediaMeta & { probeError?: string | null } }>(r)),
+
+  /** Resumable-upload session state (missing/mismatched chunk indexes). */
+  uploadStatus: (uploadId: string) =>
+    fetch(`/api/media/upload/${uploadId}`).then((r) =>
+      handle<{
+        uploadId: string;
+        status: string;
+        chunkTotal: number;
+        chunkSize: number;
+        missing: number[];
+        mismatched: number[];
+        mediaAssetId: string | null;
+      }>(r)
+    ),
+
+  /** Explicitly cancel a resumable upload session (best-effort, keepalive). */
+  cancelUpload: (uploadId: string) =>
+    fetch(`/api/media/upload/${uploadId}`, { method: "DELETE", keepalive: true }).then(handle).catch(() => undefined),
+
+  /**
+   * Wait until the background probe finishes for a freshly uploaded asset.
+   * Returns the latest metadata; on timeout the last seen state is returned
+   * (probeStatus PROCESSING) so callers can decide what to do.
+   */
+  waitForProbe: async (id: string, timeoutMs = 120_000, signal?: AbortSignal): Promise<MediaMeta> => {
+    const deadline = Date.now() + timeoutMs;
+    for (;;) {
+      const media = await api.mediaDetail(id).then((r) => r.media as MediaMeta);
+      if (media.probeStatus === "READY" || media.probeStatus === "FAILED") return media;
+      if (signal?.aborted || Date.now() >= deadline) return media;
+      await new Promise((resolve) => setTimeout(resolve, 1000));
+    }
+  },
 
   transcribe: (mediaId: string) =>
     fetch("/api/transcribe", {
@@ -126,8 +164,11 @@ export const api = {
     fetch("/api/projects", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name, description }) }).then(handle),
 };
 
-/** Client-side hard cap matching the server's MAX_UPLOAD_BYTES (250 MB). */
-export const MAX_CLIENT_UPLOAD_BYTES = 250 * 1024 * 1024;
+/**
+ * Client-side hard cap matching the server's chunked-upload limit (2 GB).
+ * Single-shot requests are capped much lower by the server (250 MB).
+ */
+export const MAX_CLIENT_UPLOAD_BYTES = 2 * 1024 * 1024 * 1024;
 
 /** Files up to this size go out as one request; larger files are chunked. */
 const SINGLE_SHOT_LIMIT = 5 * 1024 * 1024;
@@ -220,40 +261,114 @@ async function uploadSingleShot(file: File, opts: UploadOpts): Promise<{ media: 
   return JSON.parse(res.text) as { media: MediaMeta };
 }
 
-/** Sequential chunk upload; the server assembles and validates on the last chunk. */
+/** Sequential chunk upload with the full resume protocol (M3):
+ *  - every request carries x-chunk-size so the server can verify part integrity;
+ *  - transient chunk failures are retried in place, then recovered through the
+ *    session status endpoint (only missing/mismatched parts are re-sent);
+ *  - the final chunk is re-sent to re-trigger assembly when needed;
+ *  - a completed session answered with 409 + mediaAssetId counts as success;
+ *  - aborting cancels the session server-side. */
 async function uploadChunked(file: File, opts: UploadOpts, chunkSize: number): Promise<{ media: MediaMeta }> {
   const uploadId = newUploadId();
   const chunkTotal = Math.ceil(file.size / chunkSize);
   let uploadedBytes = 0;
-  let finalRes: RawUploadResult | null = null;
+  let cancelled = false;
 
-  for (let index = 0; index < chunkTotal; index++) {
-    if (opts.signal?.aborted) throw new ApiError("Upload cancelled.", 0);
-    const start = index * chunkSize;
-    const blob = file.slice(start, Math.min(start + chunkSize, file.size));
+  const headersFor = (index: number): Record<string, string> => {
     const headers: Record<string, string> = {
       "x-filename": filenameHeader(file),
       "x-upload-id": uploadId,
       "x-chunk-index": String(index),
       "x-chunk-total": String(chunkTotal),
+      "x-chunk-size": String(chunkSize),
       "x-upload-size": String(file.size),
       "Content-Type": "application/octet-stream",
     };
     if (opts.role) headers["x-role"] = opts.role;
     if (opts.notes) headers["x-notes"] = encodeURIComponent(opts.notes);
+    return headers;
+  };
+  const sliceOf = (index: number) => file.slice(index * chunkSize, Math.min((index + 1) * chunkSize, file.size));
+  const progressOf = (index: number, f: number) =>
+    opts.onProgress?.(Math.round(((index * chunkSize + Math.min(chunkSize, file.size - index * chunkSize) * f) / file.size) * 100));
 
-    const res = await xhrUpload(
-      blob,
-      headers,
-      (f) => opts.onProgress?.(Math.round(((uploadedBytes + blob.size * f) / file.size) * 100)),
-      opts.signal
-    );
-    if (!res.ok) throw interpretFailure(res);
-    uploadedBytes += blob.size;
-    finalRes = res;
+  const sendChunk = async (index: number): Promise<RawUploadResult> => {
+    if (opts.signal?.aborted) throw new ApiError("Upload cancelled.", 0);
+    // In-place retry for transient (network/gateway) failures before the
+    // heavier resume protocol kicks in.
+    for (let attempt = 0; ; attempt++) {
+      try {
+        return await xhrUpload(sliceOf(index), headersFor(index), (f) => progressOf(index, f), opts.signal);
+      } catch (err) {
+        if (opts.signal?.aborted || attempt >= 2 || !(err instanceof ApiError) || err.status !== 0) throw err;
+        await new Promise((resolve) => setTimeout(resolve, 500 * (attempt + 1)));
+      }
+    }
+  };
+
+  const finishFromSession = async (res: RawUploadResult): Promise<{ media: MediaMeta } | null> => {
+    if (!res.ok) return null;
+    const parsed = JSON.parse(res.text) as { media?: MediaMeta; partial?: boolean };
+    return parsed.media ? { media: parsed.media } : null;
+  };
+
+  /** Fetch session state, re-send only the broken parts, then re-kick assembly. */
+  const resumeAndFinish = async (): Promise<{ media: MediaMeta } | null> => {
+    if (opts.signal?.aborted) return null;
+    const status = await api.uploadStatus(uploadId).catch(() => null);
+    if (!status || status.status !== "OPEN") return null;
+    const toSend = [...new Set([...(status.missing ?? []), ...(status.mismatched ?? [])])].sort((a, b) => a - b);
+    if (toSend.length > 0) {
+      uploadedBytes = Math.max(0, file.size - toSend.length * chunkSize);
+      for (const index of toSend) {
+        const res = await sendChunk(index);
+        if (!res.ok) return null;
+        uploadedBytes += sliceOf(index).size;
+        opts.onProgress?.(Math.round((uploadedBytes / file.size) * 100));
+      }
+    }
+    const kick = await sendChunk(chunkTotal - 1);
+    return finishFromSession(kick);
+  };
+
+  try {
+    for (let index = 0; index < chunkTotal; index++) {
+      const res = await sendChunk(index);
+      if (!res.ok) {
+        // Completed sessions answered with 409 + mediaAssetId are a success.
+        if (res.status === 409) {
+          try {
+            const body = JSON.parse(res.text) as { mediaAssetId?: string };
+            if (body.mediaAssetId) {
+              const detail = await api.mediaDetail(body.mediaAssetId);
+              return { media: detail.media };
+            }
+          } catch { /* fall through to error */ }
+        }
+        const viaResume = await resumeAndFinish();
+        if (viaResume) return viaResume;
+        throw interpretFailure(res);
+      }
+      uploadedBytes += sliceOf(index).size;
+      if (index === chunkTotal - 1) {
+        const finished = await finishFromSession(res);
+        if (finished) return finished;
+        // The final request answered 2xx without a media payload (e.g. a
+        // stale gateway). Try the resume protocol once before failing.
+        const viaResume = await resumeAndFinish();
+        if (viaResume) return viaResume;
+        throw interpretFailure(res);
+      }
+    }
+  } catch (err) {
+    if (opts.signal?.aborted || (err instanceof ApiError && err.message === "Upload cancelled.")) {
+      cancelled = true;
+    }
+    throw err;
+  } finally {
+    if (cancelled) void api.cancelUpload(uploadId);
   }
-  // The final chunk's response carries the completed media record.
-  return JSON.parse(finalRes!.text) as { media: MediaMeta };
+  throw new ApiError("Upload failed.", 0);
 }
 
 /** XHR upload with REAL progress events (fetch cannot report upload progress).

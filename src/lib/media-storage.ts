@@ -1,14 +1,22 @@
 import { execFile } from "child_process";
-import { promises as fs } from "fs";
+import { createHash } from "crypto";
+import { createReadStream, promises as fs } from "fs";
 import path from "path";
+import { db } from "@/lib/db";
 
 export const MEDIA_ROOT = "/home/z/my-project/media-store";
 export const MAX_UPLOAD_BYTES = 250 * 1024 * 1024; // 250 MB per file (declared limit)
+/** Resumable chunked uploads may go beyond the single-shot cap (M3). */
+export const MAX_CHUNKED_BYTES = 2 * 1024 * 1024 * 1024; // 2 GB
+/** Per-user storage quota (originals + proxies + exports). Env-overridable for tests. */
+export const USER_QUOTA_BYTES = Number(process.env.BEANFX_USER_QUOTA_BYTES ?? 5 * 1024 * 1024 * 1024);
+export const PROXIES_DIR = path.join(MEDIA_ROOT, "proxies");
 
 export async function ensureMediaRoot() {
   await fs.mkdir(path.join(MEDIA_ROOT, "originals"), { recursive: true });
   await fs.mkdir(path.join(MEDIA_ROOT, "exports"), { recursive: true });
   await fs.mkdir(path.join(MEDIA_ROOT, "tmp"), { recursive: true });
+  await fs.mkdir(PROXIES_DIR, { recursive: true });
 }
 
 export function safeExt(name: string): string {
@@ -127,3 +135,115 @@ export function exportFileName(base: string, format: string): string {
   const stem = base.replace(/\.[^.]+$/, "").replace(/[^a-zA-Z0-9_-]+/g, "_").slice(0, 60) || "export";
   return `${stem}_${Date.now()}.${format}`;
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// M3 media pipeline primitives (additive — nothing above changed behavior).
+// ─────────────────────────────────────────────────────────────────────────────
+
+export interface SniffResult {
+  /** Container family detected from magic bytes ("unknown" when unrecognized). */
+  family: string;
+  /** Best-effort MIME type for the container, or null when unknown. */
+  mime: string | null;
+}
+
+/**
+ * Identify the container from the file's leading bytes — the client's declared
+ * type is never trusted. Reads only what it is given (first 32 bytes suffice).
+ */
+export function sniffContainer(head: Buffer): SniffResult {
+  if (head.length >= 12 && head.subarray(4, 8).toString("latin1") === "ftyp") {
+    const brand = head.subarray(8, 12).toString("latin1");
+    return { family: "ftyp", mime: brand === "qt  " ? "video/quicktime" : "video/mp4" };
+  }
+  if (head.length >= 4 && head[0] === 0x1a && head[1] === 0x45 && head[2] === 0xdf && head[3] === 0xa3) {
+    return { family: "matroska", mime: "video/webm" };
+  }
+  if (head.length >= 4 && head.subarray(0, 4).toString("latin1") === "OggS") {
+    return { family: "ogg", mime: "audio/ogg" };
+  }
+  if (head.length >= 12 && head.subarray(0, 4).toString("latin1") === "RIFF" && head.subarray(8, 12).toString("latin1") === "WAVE") {
+    return { family: "wav", mime: "audio/wav" };
+  }
+  if (head.length >= 4 && head.subarray(0, 4).toString("latin1") === "fLaC") {
+    return { family: "flac", mime: "audio/flac" };
+  }
+  if (head.length >= 3 && head.subarray(0, 3).toString("latin1") === "ID3") {
+    return { family: "mp3", mime: "audio/mpeg" };
+  }
+  if (head.length >= 2 && head[0] === 0xff && (head[1] & 0xe0) === 0xe0) {
+    // MPEG audio frame sync (bare MP3) or ADTS AAC (0xFFF1/0xFFF9 syncword).
+    return { family: head[1] === 0xf1 || head[1] === 0xf9 ? "aac-adts" : "mp3", mime: head[1] === 0xf1 || head[1] === 0xf9 ? "audio/aac" : "audio/mpeg" };
+  }
+  if (head.length >= 4 && head[0] === 0x89 && head.subarray(1, 4).toString("latin1") === "PNG") {
+    return { family: "png", mime: "image/png" };
+  }
+  if (head.length >= 3 && head[0] === 0xff && head[1] === 0xd8 && head[2] === 0xff) {
+    return { family: "jpeg", mime: "image/jpeg" };
+  }
+  return { family: "unknown", mime: null };
+}
+
+/** Container families an A/V upload may claim, by extension class. */
+const MAGIC_FAMILIES_BY_CLASS: Record<"AUDIO" | "VIDEO", Set<string>> = {
+  VIDEO: new Set(["ftyp", "matroska"]),
+  AUDIO: new Set(["ftyp", "matroska", "ogg", "wav", "flac", "mp3", "aac-adts"]),
+};
+
+/** True when the sniffed container is plausible for the declared class. */
+export function sniffMatchesClass(sniff: SniffResult, kind: "AUDIO" | "VIDEO"): boolean {
+  const families = MAGIC_FAMILIES_BY_CLASS[kind];
+  return families.has(sniff.family);
+}
+
+/** Streamed sha256 of a file (hex) — used for dedup and integrity. */
+export function sha256File(filePath: string): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const hash = createHash("sha256");
+    const stream = createReadStream(filePath);
+    stream.on("data", (chunk: Buffer) => hash.update(chunk));
+    stream.on("error", reject);
+    stream.on("end", () => resolve(hash.digest("hex")));
+  });
+}
+
+export interface QuotaStatus {
+  usedBytes: number;
+  quotaBytes: number;
+  remainingBytes: number;
+}
+
+/** Current storage usage for one user: originals + proxies + exports. */
+export async function computeUserUsage(userId: string): Promise<QuotaStatus> {
+  const [mediaSum, proxySum, exportSum] = await Promise.all([
+    db.mediaAsset.aggregate({ _sum: { sizeBytes: true }, where: { userId } }),
+    db.mediaAsset.aggregate({ _sum: { proxySizeBytes: true }, where: { userId } }),
+    db.exportFile.aggregate({ _sum: { sizeBytes: true }, where: { userId } }),
+  ]);
+  const usedBytes = (mediaSum._sum.sizeBytes ?? 0) + (proxySum._sum.proxySizeBytes ?? 0) + (exportSum._sum.sizeBytes ?? 0);
+  const quotaBytes = USER_QUOTA_BYTES;
+  return { usedBytes, quotaBytes, remainingBytes: Math.max(0, quotaBytes - usedBytes) };
+}
+
+/** True when `incomingBytes` more bytes would still fit the user's quota. */
+export async function hasQuotaFor(userId: string, incomingBytes: number): Promise<QuotaStatus & { ok: boolean }> {
+  const status = await computeUserUsage(userId);
+  return { ...status, ok: status.usedBytes + incomingBytes <= status.quotaBytes };
+}
+
+/** Round to an even integer — H.264 requires even dimensions. */
+export function evenDim(n: number): number {
+  return Math.max(2, Math.round(n / 2) * 2);
+}
+
+/**
+ * Delete a media file only when no other MediaAsset row references the same
+ * content-addressed path (dedup makes several rows share one file).
+ */
+export async function deleteMediaFileIfLastReference(storagePath: string, deletedAssetId: string): Promise<boolean> {
+  const others = await db.mediaAsset.count({ where: { storagePath, id: { not: deletedAssetId } } });
+  if (others > 0) return false;
+  await removeFileQuiet(storagePath);
+  return true;
+}
+

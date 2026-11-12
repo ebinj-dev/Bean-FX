@@ -33,9 +33,25 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ id: string 
     return NextResponse.json({ error: "Media file is missing from storage." }, { status: 410 });
   }
 
-  const ext = path.extname(asset.storagePath).toLowerCase();
-  const mime = MIME_BY_EXT[ext] ?? "application/octet-stream";
-  const stat = statSync(asset.storagePath);
+  // M3: editing proxies. Preview playback prefers the low-resolution copy so
+  // scrubbing large sources stays smooth; explicit ?variant=original forces
+  // the source bytes (integrity checks, byte-exact verifications). Exports
+  // never go through this route — they read originals from disk. Same auth +
+  // ownership checks apply to every variant.
+  let storagePath = asset.storagePath;
+  const variant = new URL(req.url).searchParams.get("variant");
+  if (variant === "proxy") {
+    if (asset.proxyStatus !== "READY" || !asset.proxyPath || !existsSync(asset.proxyPath)) {
+      return NextResponse.json({ error: "Proxy is not available for this media.", proxyStatus: asset.proxyStatus }, { status: 409 });
+    }
+    storagePath = asset.proxyPath;
+  } else if (!variant && asset.proxyStatus === "READY" && asset.proxyPath && existsSync(asset.proxyPath)) {
+    storagePath = asset.proxyPath;
+  }
+
+  const ext = path.extname(storagePath).toLowerCase();
+  const mime = storagePath === asset.proxyPath ? "video/mp4" : (MIME_BY_EXT[ext] ?? "application/octet-stream");
+  const stat = statSync(storagePath);
   const size = stat.size;
 
   // Range support (single range): browsers issue these when seeking in
@@ -61,7 +77,7 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ id: string 
         headers: { "Content-Range": `bytes */${size}` },
       });
     }
-    const stream = createReadStream(asset.storagePath, { start, end });
+    const stream = createReadStream(storagePath, { start, end });
     return new NextResponse(stream as unknown as ReadableStream, {
       status: 206,
       headers: {
@@ -75,7 +91,7 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ id: string 
     });
   }
 
-  const stream = createReadStream(asset.storagePath);
+  const stream = createReadStream(storagePath);
   return new NextResponse(stream as unknown as ReadableStream, {
     headers: {
       "Content-Type": mime,
