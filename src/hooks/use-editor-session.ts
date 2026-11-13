@@ -35,6 +35,9 @@ export interface EditorSessionState {
 }
 
 const AUTOSAVE_DEBOUNCE_MS = 600;
+/** Transient save failures (network/5xx) are retried with backoff before the
+ *  authoritative reload is used as the honest last resort. */
+const MAX_SAVE_RETRIES = 3;
 
 export interface EditorSession extends EditorSessionState {
   /** Apply a batch of commands (atomic). Returns false if the engine refused them. */
@@ -68,6 +71,8 @@ export function useEditorSession(projectId: string | null): EditorSession {
   const queueRef = useRef<Command[]>([]);
   const persistingRef = useRef(false);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const saveAttemptsRef = useRef(0);
+  const retryScheduledRef = useRef(false);
   const idCounterRef = useRef(0);
 
   const publish = useCallback((patch: Partial<EditorSessionState>) => {
@@ -147,13 +152,35 @@ export function useEditorSession(projectId: string | null): EditorSession {
         return;
       }
       if (!res.ok) {
-        // The server refused the batch (e.g. a trim that raced a move).
-        // Reload the authoritative head instead of guessing a revert.
+        if (res.status >= 500) {
+          // Transient server failure: keep the batch and retry with backoff —
+          // discarding user edits because a POST hiccupped would lose work.
+          saveAttemptsRef.current += 1;
+          if (saveAttemptsRef.current <= MAX_SAVE_RETRIES) {
+            queueRef.current = [...batch, ...queueRef.current];
+            retryScheduledRef.current = true;
+            publish({
+              saveState: "error",
+              error: `Save failed (${res.status}) — retrying (attempt ${saveAttemptsRef.current}/${MAX_SAVE_RETRIES})…`,
+            });
+            setTimeout(() => {
+              retryScheduledRef.current = false;
+              void flushNow();
+            }, 800 * saveAttemptsRef.current);
+            return;
+          }
+        }
+        // 4xx (the server validated and refused the batch, or access was
+        // lost): retrying cannot help — reload the authoritative head instead
+        // of guessing a revert. Edits made after the failure are NOT lost:
+        // they stay in the engine/history until the reload replaces it.
+        saveAttemptsRef.current = 0;
         queueRef.current = [];
         publish({ saveState: "error", error: data?.error ?? `Save failed (${res.status})` });
         await reload();
         return;
       }
+      saveAttemptsRef.current = 0;
       versionRef.current = data.version as number;
       const serverSequence: Sequence = data.sequence;
       if (historyRef.current) historyRef.current.current = serverSequence;
@@ -165,10 +192,33 @@ export function useEditorSession(projectId: string | null): EditorSession {
         conflictMessage: null,
       });
     } catch (err) {
-      publish({ saveState: "error", error: err instanceof Error ? err.message : "Save failed." });
+      // Network-level failure: same retry-with-backoff contract as 5xx.
+      saveAttemptsRef.current += 1;
+      if (saveAttemptsRef.current <= MAX_SAVE_RETRIES) {
+        queueRef.current = [...batch, ...queueRef.current];
+        retryScheduledRef.current = true;
+        publish({
+          saveState: "error",
+          error: `Save failed (${err instanceof Error ? err.message : "network"}) — retrying (attempt ${saveAttemptsRef.current}/${MAX_SAVE_RETRIES})…`,
+        });
+        setTimeout(() => {
+          retryScheduledRef.current = false;
+          void flushNow();
+        }, 800 * saveAttemptsRef.current);
+        return;
+      }
+      saveAttemptsRef.current = 0;
+      queueRef.current = [];
+      publish({
+        saveState: "error",
+        error: "Save failed repeatedly — reload will restore the server's authoritative version.",
+      });
+      void reload();
     } finally {
       persistingRef.current = false;
-      if (queueRef.current.length > 0) void flushNow();
+      // A scheduled retry owns the next flush — the chained flush here would
+      // fire immediately and defeat the backoff.
+      if (!retryScheduledRef.current && queueRef.current.length > 0) void flushNow();
     }
   }, [projectId, publish, reload]);
 
@@ -183,7 +233,28 @@ export function useEditorSession(projectId: string | null): EditorSession {
       if (timerRef.current) clearTimeout(timerRef.current);
     };
     // Reload only when the project changes.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+     
+  }, [projectId]);
+
+  // Durability: flush queued edits when the tab closes — the 600 ms debounce
+  // would otherwise silently drop the last batch. keepalive lets the POST
+  // outlive the page; a persisted-then-dropped duplicate is impossible here
+  // because the queue is cleared and the batch is atomic on the server.
+  useEffect(() => {
+    const flushOnUnload = () => {
+      if (persistingRef.current || retryScheduledRef.current || queueRef.current.length === 0 || !projectId) return;
+      if (timerRef.current) clearTimeout(timerRef.current);
+      const batch = queueRef.current;
+      queueRef.current = [];
+      void fetch(`/api/editor/projects/${projectId}/timeline`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ baseVersion: versionRef.current, edits: batch, isAutosave: true }),
+        keepalive: true,
+      }).catch(() => undefined);
+    };
+    window.addEventListener("beforeunload", flushOnUnload);
+    return () => window.removeEventListener("beforeunload", flushOnUnload);
   }, [projectId]);
 
   const apply = useCallback(

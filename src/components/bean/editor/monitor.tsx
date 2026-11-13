@@ -16,7 +16,7 @@
  * documented preview limitations, never silently mixed wrong — the export
  * path renders the full mix (M9).
  */
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { Sequence } from "@/lib/editor/model";
 import { activeAudioAt, activeCaptionAt, activeVideoClipAt, fadeMultiplierAt, sequenceEndFrame, sourceSecondsAt } from "@/lib/editor/preview";
 import { formatTimecode } from "@/lib/editor/time";
@@ -43,11 +43,17 @@ export function ProgramMonitor({
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const audioRefs = useRef<Array<HTMLAudioElement | null>>([]);
   const playheadRef = useRef(playhead);
-  playheadRef.current = playhead;
   const seqRef = useRef(sequence);
-  seqRef.current = sequence;
   const rafRef = useRef<number | null>(null);
   const lastTickRef = useRef<number | null>(null);
+
+  // Mirror the latest props into refs for the playback clock callbacks.
+  // (Assignment happens after render, never during render — the clock only
+  // reads these from rAF/event callbacks, which always run post-render.)
+  useEffect(() => {
+    playheadRef.current = playhead;
+    seqRef.current = sequence;
+  }, [playhead, sequence]);
 
   // ---- playback clock: rAF advances the integer-frame playhead ----------
   useEffect(() => {
@@ -88,13 +94,35 @@ export function ProgramMonitor({
   const activeVideo = sequence ? activeVideoClipAt(sequence, playhead) : null;
   const videoAssetId = activeVideo && !activeVideo.clip.missingMedia && activeVideo.clip.sourceAssetId ? activeVideo.clip.sourceAssetId : null;
   const videoSrc = videoAssetId ? api.mediaUrl(videoAssetId) : null;
+  // IMAGE assets render as stills, not through the <video> decoder: the kind
+  // comes from the owner-scoped asset detail (fetched once per asset id).
+  const [imageAssetIds, setImageAssetIds] = useState<Set<string>>(() => new Set());
+  useEffect(() => {
+    if (!videoAssetId) return;
+    void api
+      .mediaDetail(videoAssetId)
+      .then((r) => {
+        if ((r.media as { kind?: string }).kind === "IMAGE") {
+          setImageAssetIds((prev) => {
+            if (prev.has(videoAssetId)) return prev;
+            const next = new Set(prev);
+            next.add(videoAssetId);
+            return next;
+          });
+        }
+      })
+      .catch(() => undefined);
+  }, [videoAssetId]);
+  const isImageAsset = videoAssetId !== null && imageAssetIds.has(videoAssetId);
   const loadedAssetRef = useRef<string | null>(null);
   const pendingSeekRef = useRef<number | null>(null);
 
   useEffect(() => {
     const video = videoRef.current;
-    if (!video || !sequence || !activeVideo || !videoSrc) {
-      if (video && !videoSrc) {
+    if (!video || !sequence || !activeVideo || !videoSrc || isImageAsset) {
+      if (video && (!videoSrc || isImageAsset)) {
+        // Also stop a previously-playing clip when an image still takes over —
+        // the <img> covers the picture but would leave its audio running.
         video.pause();
         video.removeAttribute("src");
         video.load();
@@ -198,6 +226,12 @@ export function ProgramMonitor({
           className="max-h-full max-w-full"
           onEnded={() => onPlayingChange(false)}
         />
+        {/* IMAGE assets are stills on VIDEO tracks — rendered as an <img>,
+            never fed to the <video> decoder. */}
+        {isImageAsset && videoSrc && (
+           
+          <img src={videoSrc} alt="" className="max-h-full max-w-full object-contain" />
+        )}
         {/* Audio pool (audio tracks only — video clips' audio rides the video element) */}
         {Array.from({ length: AUDIO_POOL_SIZE }).map((_, i) => (
           <audio key={i} ref={(el) => { audioRefs.current[i] = el; }} preload="auto" className="hidden" />
@@ -214,7 +248,10 @@ export function ProgramMonitor({
             </span>
           </div>
         )}
-        {videoSrc && caption?.captionText && (
+        {/* Captions render whenever one is active at the playhead — a
+            caption-only timeline (no video clip) is still a valid composition
+            and must not silently show nothing. */}
+        {caption?.captionText && (
           <div
             className="pointer-events-none absolute inset-x-0 flex justify-center px-6 text-center"
             style={{

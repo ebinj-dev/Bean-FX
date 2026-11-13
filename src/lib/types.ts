@@ -18,6 +18,23 @@ export interface SessionUser {
 
 export type CutReviewStatus = "PROPOSED" | "KEEP" | "REMOVE" | "REVIEW" | "APPROVED" | "REJECTED";
 
+/** Persisted per-candidate decision values (P3 decision persistence). */
+export type CutDecisionValue = "APPROVE" | "REJECT" | "KEEP";
+
+/** One persisted decision as returned by /api/autocut/decisions. */
+export interface SavedDecisionView {
+  candidateId: string;
+  decision: CutDecisionValue;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/** One completed analysis of a media asset (reopen list entry). */
+export interface AnalysisListItem {
+  jobId: string;
+  createdAt: string;
+}
+
 /** Where a cut suggestion came from. */
 export type CutSource = "SILENCE_ANALYSIS" | "RIISHE_INFERENCE" | "WORDS_TO_REMOVE" | "MANUAL";
 
@@ -280,7 +297,7 @@ export interface MediaMeta {
   notes?: string | null;
   id: string;
   originalName: string;
-  kind: "AUDIO" | "VIDEO" | "SUBTITLE";
+  kind: "AUDIO" | "VIDEO" | "SUBTITLE" | "IMAGE";
   mimeType: string;
   sizeBytes: number;
   durationSec: number | null;

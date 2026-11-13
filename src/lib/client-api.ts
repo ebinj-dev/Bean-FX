@@ -1,6 +1,6 @@
 "use client";
 
-import type { MediaMeta, JobView, ExportView } from "@/lib/types";
+import type { AnalysisListItem, CutDecisionValue, MediaMeta, JobView, ExportView, SavedDecisionView } from "@/lib/types";
 
 export class ApiError extends Error {
   status: number;
@@ -123,6 +123,26 @@ export const api = {
         candidatesClassified: number;
       }>(r)
     ),
+
+  /** Completed RIISHE analyses for a media asset (reopen path, newest first). */
+  analyses: (mediaId: string) =>
+    fetch(`/api/autocut/analyses?mediaId=${encodeURIComponent(mediaId)}`).then((r) =>
+      handle<{ ok: boolean; mediaId: string; analyses: AnalysisListItem[] }>(r)
+    ),
+
+  /** Persisted decisions of one analysis (restore on reopen). */
+  decisions: (jobId: string) =>
+    fetch(`/api/autocut/decisions?jobId=${encodeURIComponent(jobId)}`).then((r) =>
+      handle<{ ok: boolean; jobId: string; decisions: SavedDecisionView[] }>(r)
+    ),
+
+  /** Save or update the decision for one candidate of one completed analysis. */
+  saveDecision: (payload: { jobId: string; candidateId: string; decision: CutDecisionValue }) =>
+    fetch("/api/autocut/decisions", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    }).then((r) => handle<{ ok: boolean; decision: SavedDecisionView }>(r)),
 
   startAudio: (payload: unknown) =>
     fetch("/api/process/audio", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) }).then(

@@ -83,7 +83,7 @@ export function EditorTimeline({
     const el = scrollRef.current;
     if (!el) return;
     setScrollFrames(clampScroll(Math.round((el.scrollLeft) / ppf)));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+     
   }, [ppf, clampScroll]);
 
   /** Ruler pointer → playhead (scrub while dragging). */

@@ -28,12 +28,17 @@ import {
   CloudUpload,
   Check,
   Plus,
+  Sparkles,
 } from "lucide-react";
-import type { MediaMeta } from "@/lib/types";
+import type { MediaMeta, RiisheAnalyzeResult, SavedDecisionView } from "@/lib/types";
 import type { Sequence } from "@/lib/editor/model";
-import { formatTimecode } from "@/lib/editor/time";
+import { formatTimecode, rationalFromFps } from "@/lib/editor/time";
+
+/** How long a newly placed image still stays on the timeline (seconds). */
+const DEFAULT_IMAGE_TIMELINE_SEC = 5;
 import { sequenceEndFrame } from "@/lib/editor/preview";
 import { api } from "@/lib/client-api";
+import { effectiveRemovalSec, planRiisheTimelineApply } from "@/lib/riishe-timeline";
 import { useEditorSession } from "@/hooks/use-editor-session";
 import { ProgramMonitor } from "@/components/bean/editor/monitor";
 import { EditorTimeline } from "@/components/bean/editor/timeline";
@@ -57,6 +62,87 @@ export function EditorTool({ user, onLogout }: { user: { id: string }; onLogout:
 
   const session = useEditorSession(projectId);
   const sequence = session.sequence;
+  const [riisheBusy, setRiisheBusy] = useState(false);
+
+  /**
+   * M4 — RIISHE → timeline: apply approved cut proposals as validated
+   * commands. Finds the newest completed analysis per media asset used in
+   * the sequence, replays its persisted decisions through the SAME
+   * membership rule as the export path (effectiveRemovalSec), maps the
+   * removals to one atomic SplitClip/RippleDelete batch and applies it as a
+   * single undoable step. Honest surfaces: assets without analyses, locked
+   * tracks, sub-frame cuts, and full refusal by the command engine.
+   */
+  const applyRiisheCuts = useCallback(async () => {
+    const seq = session.sequence;
+    if (!seq || riisheBusy) return;
+    setRiisheBusy(true);
+    setNotice(null);
+    try {
+      const assetIds = [
+        ...new Set(seq.clips.filter((c) => c.sourceAssetId && !c.missingMedia).map((c) => c.sourceAssetId)),
+      ];
+      const commands: unknown[] = [];
+      const reserved: string[] = [];
+      const lines: string[] = [];
+      let assetsWithAnalysis = 0;
+      for (const assetId of assetIds) {
+        const list = await api.analyses(assetId).catch(() => null);
+        if (!list?.ok || list.analyses.length === 0) continue;
+        assetsWithAnalysis += 1;
+        const jobId = list.analyses[0].jobId; // newest first
+        const result = (await fetch(`/api/autocut/analyze/result/${encodeURIComponent(jobId)}`).then((r) =>
+          r.json(),
+        )) as RiisheAnalyzeResult;
+        const decisionRes = await api.decisions(jobId).catch(() => null);
+        const decisions: SavedDecisionView[] = decisionRes?.decisions ?? [];
+        const removals = effectiveRemovalSec(result.candidates, decisions, result.durationSec);
+        const plan = planRiisheTimelineApply({
+          sequence: seq,
+          removalsSec: removals,
+          sourceAssetId: assetId,
+          reservedIds: reserved,
+        });
+        reserved.push(
+          ...plan.commands
+            .filter((c): c is Extract<(typeof plan.commands)[number], { type: "SplitClip" }> => c.type === "SplitClip")
+            .map((c) => c.newRightId),
+        );
+        if (plan.commands.length > 0) {
+          commands.push(...plan.commands);
+          lines.push(
+            `${result.originalName}: ${plan.stats.cutsPlanned} cut(s) across ${plan.stats.clipsCut} clip(s)` +
+              (plan.stats.clipsRemoved > 0 ? `, ${plan.stats.clipsRemoved} clip(s) fully removed` : "") +
+              (plan.warnings.length > 0 ? ` — ${plan.warnings.length} proposal(s) skipped honestly` : ""),
+          );
+        } else if (plan.warnings.length > 0) {
+          lines.push(`${result.originalName}: nothing applied — ${plan.warnings[0]}`);
+        }
+      }
+      if (commands.length === 0) {
+        setNotice(
+          assetsWithAnalysis === 0
+            ? "No completed RIISHE analysis found for the media used in this sequence — analyze the media in the Auto Cut tool first."
+            : "RIISHE analyses found, but no approved cuts to apply (everything kept, rejected, too small for this timebase, or already applied).",
+        );
+        return;
+      }
+      const ok = window.confirm(
+        `Apply RIISHE cuts to the timeline?\n\n${lines.join("\n")}\n\n${commands.length} validated commands, applied atomically as one undoable step.`,
+      );
+      if (!ok) return;
+      const applied = session.apply(commands);
+      setNotice(
+        applied
+          ? `RIISHE cuts applied — ${lines.join(" · ")} — undo with Ctrl+Z.`
+          : "RIISHE apply was refused by the validated command engine (see the error above). Nothing was changed.",
+      );
+    } catch (err) {
+      setNotice(err instanceof Error ? err.message : "RIISHE apply failed.");
+    } finally {
+      setRiisheBusy(false);
+    }
+  }, [session, riisheBusy]);
 
   // ---- data loading ------------------------------------------------------
   useEffect(() => {
@@ -175,7 +261,7 @@ export function EditorTool({ user, onLogout }: { user: { id: string }; onLogout:
   const addMediaAtPlayhead = useCallback(
     async (asset: MediaMeta) => {
       if (!sequence) return;
-      const wantVideo = asset.kind === "VIDEO";
+      const wantVideo = asset.kind === "VIDEO" || asset.kind === "IMAGE";
       const kind = wantVideo ? "VIDEO" : "AUDIO";
       const track = sequence.tracks.find((t) => t.kind === kind && !t.locked);
       if (!track) {
@@ -183,7 +269,7 @@ export function EditorTool({ user, onLogout }: { user: { id: string }; onLogout:
         return;
       }
       let placed = asset;
-      if ((asset.durationSec == null || asset.durationSec <= 0) && asset.probeStatus && asset.probeStatus !== "READY" && asset.probeStatus !== "FAILED") {
+      if ((asset.durationSec == null || asset.durationSec <= 0) && asset.kind !== "IMAGE" && asset.probeStatus && asset.probeStatus !== "READY" && asset.probeStatus !== "FAILED") {
         setNotice("Analyzing media — placing it as soon as the probe finishes…");
         placed = await api.waitForProbe(asset.id, 120_000);
       }
@@ -191,12 +277,18 @@ export function EditorTool({ user, onLogout }: { user: { id: string }; onLogout:
         setNotice(`Media analysis failed: ${placed.probeError ?? "the file may be corrupt or unsupported."}`);
         return;
       }
-      if (placed.durationSec == null || placed.durationSec <= 0) {
+      // Images are stills: no intrinsic duration — they take a fixed 5 s slot
+      // on a VIDEO track (trim to taste), timebased 1:1 with the sequence.
+      const isImage = placed.kind === "IMAGE";
+      if (!isImage && (placed.durationSec == null || placed.durationSec <= 0)) {
         setNotice("This asset has no measurable duration — it cannot be placed.");
         return;
       }
-      const srcFps = placed.fps && placed.fps > 0 ? placed.fps : sequence.fps.num / sequence.fps.den;
-      const sourceDurationFrames = Math.round(placed.durationSec * srcFps);
+      const seqFps = sequence.fps.num / sequence.fps.den;
+      const srcFps = isImage ? seqFps : placed.fps && placed.fps > 0 ? placed.fps : seqFps;
+      const sourceDurationFrames = isImage
+        ? Math.round(DEFAULT_IMAGE_TIMELINE_SEC * seqFps)
+        : Math.round((placed.durationSec as number) * srcFps);
       const ok = session.apply([
         {
           type: "AddClip",
@@ -206,7 +298,10 @@ export function EditorTool({ user, onLogout }: { user: { id: string }; onLogout:
             sourceAssetId: placed.id,
             sourceInFrame: 0,
             sourceOutFrame: sourceDurationFrames,
-            sourceFps: { num: Math.round(srcFps * 1000), den: 1000 },
+            // Broadcast-exact rationals for the SMPTE families (29.97 →
+            // 30000/1001 …) instead of a 1000-based approximation; stills use
+            // the sequence timebase 1:1.
+            sourceFps: isImage ? sequence.fps : rationalFromFps(srcFps),
             timelineStartFrame: session.playheadFrame,
             label: placed.originalName,
           },
@@ -327,6 +422,15 @@ export function EditorTool({ user, onLogout }: { user: { id: string }; onLogout:
         </button>
         <button type="button" onClick={addCaptionAtPlayhead} disabled={!sequence} className={toolButton} title="Add caption at playhead">
           <Type className="h-4 w-4" />
+        </button>
+        <button
+          type="button"
+          onClick={() => void applyRiisheCuts()}
+          disabled={!sequence || riisheBusy}
+          className={toolButton}
+          title="Apply RIISHE cuts as validated timeline commands (M4)"
+        >
+          {riisheBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
         </button>
 
         <span className="mx-1 h-5 w-px bg-[#2a2a2a]" />

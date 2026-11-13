@@ -110,6 +110,12 @@ def apply(conn: sqlite3.Connection, mig: dict, before_tables: set[str], before_c
 
 
 def main() -> int:
+    # Optional argv[1]: run against a COPY for migration testing (§6) —
+    # "python3 apply_missing_migrations.py /tmp/copy.db". The backup-before-
+    # apply safety net still runs; only the target path differs.
+    global LIVE
+    if len(sys.argv) > 1:
+        LIVE = Path(sys.argv[1])
     if not LIVE.exists():
         print(f"FAIL live database not found: {LIVE}")
         return 1

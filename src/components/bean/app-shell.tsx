@@ -36,16 +36,24 @@ export function AppShell() {
 
   useEffect(() => {
     let cancelled = false;
-    fetch("/api/auth/me")
+    // 8 s timeout: a hung /api/auth/me (DB lock, dead upstream) must not hold
+    // the shell on the spinner forever — treat it like signed-out and render
+    // the landing page. Real failures were already treated the same way.
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 8000);
+    fetch("/api/auth/me", { signal: controller.signal })
       .then((r) => r.json())
       .then((res) => {
         if (!cancelled) setUser(res?.user ?? null);
       })
       .catch(() => {
         if (!cancelled) setUser(null);
-      });
+      })
+      .finally(() => clearTimeout(timeout));
     return () => {
       cancelled = true;
+      clearTimeout(timeout);
+      controller.abort();
     };
   }, []);
 
@@ -112,7 +120,7 @@ export function AppShell() {
     autocut: {
       key: "autocut", label: "AUTO CUT", title: "Auto Cut",
       description: "Import a recording, get evidence-backed KEEP / REMOVE / REVIEW proposals, correct any wrong mark, and approve every cut before it is applied.",
-      extensions: [".mp3", ".wav", ".m4a", ".aac", ".flac", ".ogg", ".mp4", ".mov", ".webm", ".mkv", ".m4v"],
+      extensions: [".mp3", ".wav", ".m4a", ".aac", ".flac", ".ogg", ".mp4", ".mov", ".webm", ".mkv", ".m4v", ".jpg", ".jpeg", ".png", ".webp"],
       formatsLabel: "MP4, MOV, WebM, MKV, MP3, WAV, M4A, AAC, FLAC",
       streamNote: "Audio is required; video files are supported and their audio stream is used.",
       oneStep: true,
@@ -120,14 +128,14 @@ export function AppShell() {
     captions: {
       key: "captions", label: "CAPTIONS", title: "Captions",
       description: "Import media, transcribe or import subtitles, edit them against the real waveform, and export SRT/VTT.",
-      extensions: [".mp3", ".wav", ".m4a", ".aac", ".flac", ".ogg", ".mp4", ".mov", ".webm", ".mkv", ".m4v"],
+      extensions: [".mp3", ".wav", ".m4a", ".aac", ".flac", ".ogg", ".mp4", ".mov", ".webm", ".mkv", ".m4v", ".jpg", ".jpeg", ".png", ".webp"],
       formatsLabel: "MP4, MOV, WebM, MKV, MP3, WAV, M4A, AAC, FLAC",
       streamNote: "An audio stream is required for transcription; video files are supported.",
     },
     watermark: {
       key: "watermark", label: "WATERMARK", title: "Watermark Removal",
       description: "Import a video, mark the watermark region on the real preview, and export a cleaned copy.",
-      extensions: [".mp4", ".mov", ".webm", ".mkv", ".m4v"],
+      extensions: [".mp4", ".mov", ".webm", ".mkv", ".m4v", ".jpg", ".jpeg", ".png", ".webp"],
       formatsLabel: "MP4, MOV, WebM, MKV, M4V (video only)",
       streamNote: "A video stream with known dimensions is required.",
     },
@@ -141,7 +149,7 @@ export function AppShell() {
     broll: {
       key: "broll", label: "B-ROLL", title: "B-Roll Library",
       description: "Import your main footage, build the B-roll library with notes, and get transcript-linked insertion suggestions.",
-      extensions: [".mp3", ".wav", ".m4a", ".aac", ".flac", ".ogg", ".mp4", ".mov", ".webm", ".mkv", ".m4v"],
+      extensions: [".mp3", ".wav", ".m4a", ".aac", ".flac", ".ogg", ".mp4", ".mov", ".webm", ".mkv", ".m4v", ".jpg", ".jpeg", ".png", ".webp"],
       formatsLabel: "MP4, MOV, WebM, MKV, MP3, WAV, M4A, AAC, FLAC",
       streamNote: "Main footage: video or audio. B-roll library items are uploaded inside the editor.",
     },

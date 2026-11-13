@@ -364,8 +364,11 @@ function applyTrimClip(seq: Sequence, cmd: Extract<Command, { type: "TrimClip" }
 function applyMoveClip(seq: Sequence, cmd: Extract<Command, { type: "MoveClip" }>, inverse: Command[]): void {
   const clip = findClip(seq, cmd.clipId);
   const before = { start: clip.timelineStartFrame, trackId: clip.trackId };
+  // A locked track refuses ALL edits of its clips — including in-place moves
+  // (the engine enforces this even where the UI already blocks it).
+  const from = findTrack(seq, clip.trackId);
+  if (from.locked) throw new EditorError("INVALID_TIMELINE", `track ${from.id} is locked — edit refused`);
   if (cmd.newTrackId !== undefined && cmd.newTrackId !== clip.trackId) {
-    const from = findTrack(seq, clip.trackId);
     const to = findTrack(seq, cmd.newTrackId);
     if (from.kind !== to.kind) {
       throw new EditorError("INVALID_TIMELINE", `cannot move clip between different track kinds (${from.kind} → ${to.kind})`);
@@ -407,7 +410,10 @@ function applyReplaceClip(seq: Sequence, cmd: Extract<Command, { type: "ReplaceC
   clip.sourceInFrame = cmd.newSourceInFrame;
   clip.sourceOutFrame = cmd.newSourceOutFrame;
   clip.sourceFps = cmd.newSourceFps ?? clip.sourceFps;
-  clip.missingMedia = false;
+  // An empty source id means a caption/missing-media clip — a ReplaceClip
+  // inverse (trim undo) restoring "" must keep missingMedia, or the restored
+  // sequence fails validation and the undo throws mid-stack.
+  clip.missingMedia = cmd.newSourceAssetId === "";
   clip.timelineDurationFrames = clipTimelineDuration(clip.sourceOutFrame, clip.sourceInFrame, rational(clip.sourceFps), rational(seq.fps), clip.playbackSpeed);
   inverse.unshift({
     type: "ReplaceClip",

@@ -74,10 +74,10 @@ export function ClipInspector({
       <input
         type="range"
         min={0}
-        max={2}
+        max={4}
         step={0.05}
         value={clip.volume}
-        onChange={(e) => applyProps({ volume: Number(e.target.value) })}
+        onChange={(e) => session.apply([{ type: "ChangeVolume", clipId: clip.id, volume: Number(e.target.value) }])}
         className={sliderClass}
         aria-label="Clip volume"
       />
