@@ -48,7 +48,9 @@ export class JobManager {
       .catch(() => undefined);
   }
 
-  async complete(jobId: string, exportId: string, message: string) {
+  /** exportId is null for job types whose result is not an ExportFile row
+   *  (e.g. GANGZII — the result lives on its own process row). */
+  async complete(jobId: string, exportId: string | null, message: string) {
     await db.job
       .update({
         where: { id: jobId },
