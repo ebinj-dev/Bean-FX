@@ -28,6 +28,9 @@ model User {
   automationTokens AutomationToken[] @relation("AutomationToken")
   automationAudits AutomationAudit[] @relation("AutomationAudit")
   aiUsage       AIUsage[]      @relation("AIUsage")
+  studioPlans   StudioPlan[]   @relation("StudioPlans")
+  studioScenes  StudioScene[]  @relation("StudioScenes")
+  studioBatches StudioBatch[]  @relation("StudioBatches")
 }
 
 /// User-defined words/phrases RIISHE should consider removing (context-aware —
@@ -69,6 +72,7 @@ model Project {
   timelineVersions TimelineVersion[]
   conversations Conversation[] @relation("Conversations")
   aiPlans       AIPlan[]       @relation("AIPlans")
+  studioPlans StudioPlan[] @relation("StudioPlan")
 }
 
 model MediaAsset {
@@ -440,6 +444,80 @@ model AIUsage {
   latencyMs        Int?
   ok               Boolean  @default(true)
   createdAt        DateTime @default(now())
+
+  @@index([userId, createdAt])
+}
+
+/// ── M8.1 Social Video Studio ───────────────────────────────────────────────
+/// A topic-to-video production plan (M8.1 §3). briefJson holds the validated
+/// Brief; planJson the typed ProductionPlan (scenes, script, hook, CTA…).
+/// status: DRAFT | PLANNING | SCENES_READY | ASSEMBLED | FAILED | CANCELLED.
+model StudioPlan {
+  id             String   @id @default(cuid())
+  userId         String
+  user           User     @relation("StudioPlans", fields: [userId], references: [id], onDelete: Cascade)
+  projectId      String?
+  project        Project? @relation("StudioPlan", fields: [projectId], references: [id], onDelete: SetNull)
+  /// DRAFT (brief saved) | PLANNING | SCENES_READY | ASSEMBLED | FAILED | CANCELLED
+  status         String   @default("DRAFT")
+  briefJson      String
+  planJson       String?
+  plannerMode    String   @default("deterministic-fallback")
+  sceneCount     Int      @default(0)
+  /// Assembly metadata: per-scene clip ids, caption provenance, notes.
+  assemblyJson   String?
+  error          String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  scenes         StudioScene[]
+
+  @@index([userId, updatedAt])
+  @@index([projectId])
+}
+
+/// One scene of a production plan — individually editable/regenerable (§4).
+/// assetSource: none | jazmii | laxii | upload | narration-image
+/// status: EMPTY | ASSET_PENDING | ASSET_READY | NARRATION_READY | READY
+model StudioScene {
+  id                String   @id @default(cuid())
+  planId            String
+  plan              StudioPlan @relation(fields: [planId], references: [id], onDelete: Cascade)
+  userId            String
+  user              User     @relation("StudioScenes", fields: [userId], references: [id], onDelete: Cascade)
+  sceneNumber       Int
+  durationSec       Int
+  narration         String   @default("")
+  visualDescription String   @default("")
+  footageNeed       String   @default("")
+  brollNote         String   @default("")
+  onScreenText      String   @default("")
+  captionText       String   @default("")
+  audioNote         String   @default("")
+  transition        String   @default("CUT")
+  assetId           String?
+  assetKind         String? // VIDEO | IMAGE
+  assetSource       String   @default("none")
+  attributionJson   String?
+  narrationAssetId  String?
+  status            String   @default("EMPTY")
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  @@unique([planId, sceneNumber])
+  @@index([planId, sceneNumber])
+}
+
+/// Batch topic production (§11) — dispatches per-topic STUDIO_TOPIC durable
+/// jobs through the EXISTING job infrastructure (no new queue).
+model StudioBatch {
+  id                String   @id @default(cuid())
+  userId            String
+  user              User     @relation("StudioBatches", fields: [userId], references: [id], onDelete: Cascade)
+  status            String   @default("RUNNING") // RUNNING | COMPLETED | CANCELLED
+  briefJson         String
+  topicsJson        String
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
 
   @@index([userId, createdAt])
 }

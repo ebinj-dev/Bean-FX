@@ -428,10 +428,31 @@ export function buildNikkiRenderPlan(
   // M6 baseline (distinct assets share inputs via separate trim chains).
   // The full-timeline export (audio mix, streaming sources) is M9 scope.
   const chains: string[] = [];
+  // M8.1 fix: an input shared by N segments must be SPLIT first — ffmpeg
+  // consumes [N:v] once, so direct reuse of the same stream label in several
+  // chains is an invalid graph (previously broke multi-scene renders that
+  // reused one asset). Distinct-asset renders are unaffected (split=1 path).
+  const usageCount = new Map<number, number>();
+  for (const seg of segmentPlan) usageCount.set(seg.inputIndex, (usageCount.get(seg.inputIndex) ?? 0) + 1);
+  const splitNext = new Map<number, number>();
+  for (const [input, n] of usageCount) {
+    if (n > 1) {
+      const outs = Array.from({ length: n }, (_, k) => `s${input}_${k}`).join("][");
+      chains.push(`[${input}:v]split=${n}[${outs}]`);
+    }
+  }
   segmentPlan.forEach((seg, i) => {
     const relStart = Math.max(0, seg.clip.timelineStartFrame - startFrame) / fps;
     const relDur = (Math.min(endFrame, clipEndFrame(seq, seg.clip)) - Math.max(startFrame, seg.clip.timelineStartFrame)) / fps;
-    chains.push(`[${seg.inputIndex}:v]trim=start=${q(seg.inSec)}:duration=${q(relDur)},setpts=PTS-STARTPTS,fps=${q(fps)},scale=${seq.width}:${seq.height}:force_original_aspect_ratio=decrease,pad=${seq.width}:${seq.height}:(ow-iw)/2:(oh-ih)/2,setsar=1,format=yuv420p[v${i}]`);
+    let srcLabel: string;
+    if ((usageCount.get(seg.inputIndex) ?? 1) > 1) {
+      const k = splitNext.get(seg.inputIndex) ?? 0;
+      splitNext.set(seg.inputIndex, k + 1);
+      srcLabel = `s${seg.inputIndex}_${k}`;
+    } else {
+      srcLabel = `${seg.inputIndex}:v`;
+    }
+    chains.push(`[${srcLabel}]trim=start=${q(seg.inSec)}:duration=${q(relDur)},setpts=PTS-STARTPTS,fps=${q(fps)},scale=${seq.width}:${seq.height}:force_original_aspect_ratio=decrease,pad=${seq.width}:${seq.height}:(ow-iw)/2:(oh-ih)/2,setsar=1,format=yuv420p[v${i}]`);
   });
   // xfade chain across consecutive segments where a transition exists; hard
   // join (concat) where none.
