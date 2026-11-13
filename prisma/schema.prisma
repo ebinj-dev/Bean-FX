@@ -22,6 +22,7 @@ model User {
   wordsToRemove WordsToRemove[]
   uploadSessions UploadSession[]
   cutDecisions CutDecision[]
+  gangziiProcesses GangziiProcess[]
 }
 
 /// User-defined words/phrases RIISHE should consider removing (context-aware —
@@ -116,7 +117,51 @@ model MediaAsset {
   proxyDurationSec  Float?
   proxyError        String?
 
+  // ── M5 GANGZII (additive; NULL = original or legacy asset) ──
+  /// Set when this asset is a GANGZII-processed DERIVED copy of another
+  /// asset. Originals are never modified; reprocessing always starts from
+  /// the referenced original.
+  derivedFromId String?
+  /// GANGZII operations whose source is this asset.
+  gangziiSource GangziiProcess[] @relation("GangziiSource")
+
   @@index([userId, sha256])
+  @@index([derivedFromId])
+}
+
+/// GANGZII audio operation (M5): a persisted processing profile (params as
+/// structured data) with its status and, on success, the DERIVED asset it
+/// produced plus the structured inspection of the source. Original media is
+/// never modified; bypass/comparison keeps referencing the original asset.
+model GangziiProcess {
+  id             String     @id @default(cuid())
+  userId         String
+  user           User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  sourceAssetId  String
+  sourceAsset    MediaAsset @relation("GangziiSource", fields: [sourceAssetId], references: [id], onDelete: Cascade)
+  /// User-facing label (e.g. preset name) — optional.
+  name           String?
+  /// ANALYSIS | PROCESS
+  kind           String
+  /// QUEUED | PROCESSING | COMPLETED | FAILED | CANCELLED
+  status         String
+  /// Validated GangziiParams JSON (PROCESS rows).
+  paramsJson     String?
+  /// Validated GangziiInspection JSON (ANALYSIS rows, or the inspection
+  /// backing a PROCESS decision).
+  analysisJson   String?
+  /// Derived MediaAsset id on PROCESS success.
+  resultAssetId  String?
+  /// ffprobe summary of the derived file + processing notes/warnings JSON.
+  resultMetaJson String?
+  error          String?
+  /// Durable Job row driving the work (polling + cancellation entry point).
+  jobId          String?
+  createdAt      DateTime   @default(now())
+  updatedAt      DateTime   @updatedAt
+
+  @@index([userId, sourceAssetId])
+  @@index([status])
 }
 
 model ExportFile {

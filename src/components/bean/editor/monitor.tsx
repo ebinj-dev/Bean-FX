@@ -19,6 +19,8 @@
 import { useEffect, useRef, useState } from "react";
 import type { Sequence } from "@/lib/editor/model";
 import { activeAudioAt, activeCaptionAt, activeVideoClipAt, fadeMultiplierAt, sequenceEndFrame, sourceSecondsAt } from "@/lib/editor/preview";
+import { activeGraphicsAt } from "@/lib/nikki/state";
+import { drawGraphicsLayer, ensureNikkiFonts } from "@/lib/nikki/canvas";
 import { formatTimecode } from "@/lib/editor/time";
 import { api } from "@/lib/client-api";
 import type { Rational } from "@/lib/editor/time";
@@ -212,6 +214,34 @@ export function ProgramMonitor({
   const caption = sequence ? activeCaptionAt(sequence, playhead) : null;
   const fpsRational = sequence?.fps ?? { num: 30, den: 1 };
 
+  // ---- NIIKI motion graphics layer (real canvas preview) ------------------
+  const nikkiCanvasRef = useRef<HTMLCanvasElement | null>(null);
+  useEffect(() => {
+    void ensureNikkiFonts().then(() => {
+      if (nikkiCanvasRef.current) {
+        // Redraw once fonts arrive (first frames may render with fallback).
+        const seq = seqRef.current;
+        if (!seq) return;
+        const ctx = nikkiCanvasRef.current.getContext("2d");
+        if (!ctx) return;
+        drawGraphicsLayer(ctx, seq, playheadRef.current, activeGraphicsAt(seq, playheadRef.current));
+      }
+    });
+  }, []);
+  useEffect(() => {
+    const canvas = nikkiCanvasRef.current;
+    if (!canvas || !sequence) return;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+    const graphics = activeGraphicsAt(sequence, playhead);
+    if (graphics.length === 0) {
+      // Clear a previously drawn layer so stale graphics never linger.
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      return;
+    }
+    drawGraphicsLayer(ctx, sequence, playhead, graphics);
+  }, [playhead, sequence]);
+
   return (
     <div className="relative flex min-h-0 flex-1 flex-col rounded-lg border border-[#2a2a2a] bg-black">
       <div className="flex items-center justify-between border-b border-[#2a2a2a] px-3 py-1.5">
@@ -226,6 +256,17 @@ export function ProgramMonitor({
           className="max-h-full max-w-full"
           onEnded={() => onPlayingChange(false)}
         />
+        {/* NIIKI motion graphics: a transparent canvas sized to the sequence,
+            CSS-scaled over the video — redrawn per playhead frame from the
+            SAME state the FFmpeg render path evaluates. */}
+        {sequence && (
+          <canvas
+            ref={nikkiCanvasRef}
+            width={sequence.width}
+            height={sequence.height}
+            className="pointer-events-none absolute inset-0 h-full w-full object-contain"
+          />
+        )}
         {/* IMAGE assets are stills on VIDEO tracks — rendered as an <img>,
             never fed to the <video> decoder. */}
         {isImageAsset && videoSrc && (

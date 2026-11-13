@@ -22,11 +22,13 @@ import {
   KeyframeSchema,
   TransformSchema,
   TrackSchema,
+  TransitionKind,
   type Clip,
   type Sequence,
   type Track,
 } from "./model";
 import { assertValidRange, makeRational, type Rational } from "./time";
+import { NikkiGraphicStyleSchema } from "@/lib/nikki/types";
 
 export class EditorError extends Error {
   constructor(
@@ -64,6 +66,7 @@ const ClipCore = z.object({
   captionText: z.string().max(2000).nullable().default(null),
   captionStyle: CaptionStyleSchema.nullable().default(null),
   graphicTemplateId: z.string().max(64).nullable().default(null),
+  graphicStyle: NikkiGraphicStyleSchema.nullable().default(null),
   label: z.string().max(120).nullable().default(null),
   missingMedia: z.boolean().default(false),
   effects: z.array(EffectSchema).max(32).default([]),
@@ -118,7 +121,7 @@ export const CommandSchema = z.discriminatedUnion("type", [
     type: z.literal("AddTransition"),
     transitionId: idSchema,
     trackId: idSchema,
-    kind: z.enum(["CUT", "CROSS_DISSOLVE", "FADE_TO_BLACK", "FADE_FROM_BLACK", "WIPE_LEFT", "WIPE_RIGHT"]),
+    kind: TransitionKind,
     startFrame: z.number().int().min(0),
     durationFrames: z.number().int().min(1),
     params: z.record(z.string(), z.number()).default({}),
@@ -150,6 +153,8 @@ export const CommandSchema = z.discriminatedUnion("type", [
     fadeOutFrames: z.number().int().min(0).optional(),
     captionText: z.string().max(2000).nullable().optional(),
     captionStyle: CaptionStyleSchema.nullable().optional(),
+    graphicTemplateId: z.string().max(64).nullable().optional(),
+    graphicStyle: NikkiGraphicStyleSchema.nullable().optional(),
   }),
 ]);
 export type Command = z.infer<typeof CommandSchema>;
@@ -611,7 +616,21 @@ function applyUpdateClipProperties(seq: Sequence, cmd: Extract<Command, { type: 
   }
   if (cmd.captionStyle !== undefined) {
     restore.captionStyle = clone(clip.captionStyle);
-    clip.captionStyle = cmd.captionStyle;
+    clip.captionStyle = clone(cmd.captionStyle);
+  }
+  if (cmd.graphicTemplateId !== undefined) {
+    restore.graphicTemplateId = clip.graphicTemplateId;
+    clip.graphicTemplateId = cmd.graphicTemplateId;
+  }
+  if (cmd.graphicStyle !== undefined) {
+    restore.graphicStyle = clone(clip.graphicStyle);
+    clip.graphicStyle = clone(cmd.graphicStyle);
+    // A graphic clip must keep a template id — an emptied one is an invalid
+    // state, same rule as AddGraphic.
+    const gTrack = seq.tracks.find((t) => t.id === clip.trackId);
+    if (gTrack?.kind === "GRAPHIC" && !clip.graphicTemplateId) {
+      throw new EditorError("INVALID_COMMAND", `graphic clip ${clip.id} requires graphicTemplateId`);
+    }
   }
   // A caption clip must keep its text — an empty caption is an invalid state,
   // same rule as AddCaption.

@@ -15,6 +15,7 @@
  */
 import { z } from "zod";
 import { makeRational, type Rational, assertValidRange } from "./time";
+import { NikkiGraphicStyleSchema, type NikkiGraphicStyle } from "@/lib/nikki/types";
 
 export const TrackKind = z.enum(["VIDEO", "AUDIO", "CAPTION", "GRAPHIC", "OVERLAY"]);
 export type TrackKind = z.infer<typeof TrackKind>;
@@ -32,11 +33,21 @@ export const EffectSchema = z.object({
 });
 export type Effect = z.infer<typeof EffectSchema>;
 
-export const KeyframeProperty = z.enum(["opacity", "scale", "x", "y", "volume", "rotation"]);
+// M6 NIIKI: added scaleX/scaleY/blur/letterSpacing (additive — old sequences
+// with the original six properties keep parsing unchanged).
+export const KeyframeProperty = z.enum(["opacity", "scale", "x", "y", "volume", "rotation", "scaleX", "scaleY", "blur", "letterSpacing"]);
 export type KeyframeProperty = z.infer<typeof KeyframeProperty>;
 
-export const Interpolation = z.enum(["LINEAR", "HOLD", "EASE"]);
+// M6 NIIKI: standard easing family + cubic-Bézier (HOLD/LINEAR/EASE unchanged).
+export const Interpolation = z.enum(["LINEAR", "HOLD", "EASE", "EASE_IN", "EASE_OUT", "EASE_IN_OUT", "BEZIER"]);
 export type Interpolation = z.infer<typeof Interpolation>;
+
+export const BezierSchema = z.object({
+  x1: z.number().min(0).max(1),
+  y1: z.number().min(-2).max(2),
+  x2: z.number().min(0).max(1),
+  y2: z.number().min(-2).max(2),
+});
 
 export const KeyframeSchema = z.object({
   id: z.string().min(1).max(64),
@@ -45,6 +56,8 @@ export const KeyframeSchema = z.object({
   frame: z.number().int().min(0),
   value: z.number(),
   interpolation: Interpolation.default("LINEAR"),
+  /** Controls for BEZIER interpolation (M6 NIIKI, additive optional). */
+  bezier: BezierSchema.nullable().default(null),
 });
 export type Keyframe = z.infer<typeof KeyframeSchema>;
 
@@ -89,6 +102,9 @@ export const ClipSchema = z.object({
   captionText: z.string().max(2000).nullable().default(null),
   captionStyle: CaptionStyleSchema.nullable().default(null),
   graphicTemplateId: z.string().max(64).nullable().default(null),
+  /** M6 NIIKI: the graphic clip's editable content/look/animation. Null for
+   *  non-graphic clips and for legacy graphic placeholders. */
+  graphicStyle: NikkiGraphicStyleSchema.nullable().default(null),
   label: z.string().max(120).nullable().default(null),
   missingMedia: z.boolean().default(false),
   effects: z.array(EffectSchema).max(32).default([]),
@@ -107,6 +123,8 @@ export const TrackSchema = z.object({
 });
 export type Track = z.infer<typeof TrackSchema>;
 
+// M6 NIIKI: added slide/push/zoom kinds (mapped 1:1 onto FFmpeg xfade in the
+// render path; the original six kinds are unchanged).
 export const TransitionKind = z.enum([
   "CUT",
   "CROSS_DISSOLVE",
@@ -114,6 +132,12 @@ export const TransitionKind = z.enum([
   "FADE_FROM_BLACK",
   "WIPE_LEFT",
   "WIPE_RIGHT",
+  "SLIDE_LEFT",
+  "SLIDE_RIGHT",
+  "PUSH_LEFT",
+  "PUSH_RIGHT",
+  "ZOOM_IN",
+  "ZOOM_OUT",
 ]);
 export type TransitionKind = z.infer<typeof TransitionKind>;
 
@@ -213,7 +237,12 @@ export function validateSequence(seq: Sequence): ValidationReport {
       );
     }
     if (!c.missingMedia && !c.sourceAssetId) {
-      errors.push(`clip ${c.id} has no source asset and is not flagged missingMedia — refusing fake media`);
+      // M6 NIIKI: graphic/overlay clips are legitimately media-less when they
+      // carry a template id — their content IS the graphic, not an asset.
+      const gTrack = track && (track.kind === "GRAPHIC" || track.kind === "OVERLAY");
+      if (!(gTrack && c.graphicTemplateId)) {
+        errors.push(`clip ${c.id} has no source asset and is not flagged missingMedia — refusing fake media`);
+      }
     }
     for (let i = 1; i < c.keyframes.length; i++) {
       if (c.keyframes[i].frame < c.keyframes[i - 1].frame) {

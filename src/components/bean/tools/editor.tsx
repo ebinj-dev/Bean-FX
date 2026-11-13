@@ -43,6 +43,8 @@ import { useEditorSession } from "@/hooks/use-editor-session";
 import { ProgramMonitor } from "@/components/bean/editor/monitor";
 import { EditorTimeline } from "@/components/bean/editor/timeline";
 import { ClipInspector } from "@/components/bean/editor/inspector";
+import { GangziiPanel } from "@/components/bean/editor/gangzii-panel";
+import { NikkiPanel } from "@/components/bean/editor/nikki-panel";
 
 interface ProjectSummary {
   id: string;
@@ -516,9 +518,11 @@ export function EditorTool({ user, onLogout }: { user: { id: string }; onLogout:
           onPlayingChange={setPlaying}
         />
 
-        {/* Inspector */}
-        <div className="w-72 shrink-0">
+        {/* Inspector + GANGZII audio intelligence */}
+        <div className="w-72 shrink-0 space-y-2 overflow-y-auto">
           {sequence && <ClipInspector sequence={sequence} session={session} />}
+          {sequence && <GangziiPanel sequence={sequence} session={session} />}
+          {sequence && <NikkiPanel sequence={sequence} session={session} />}
         </div>
       </div>
 

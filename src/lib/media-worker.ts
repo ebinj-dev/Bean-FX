@@ -7,6 +7,9 @@ import {
   MEDIA_JOB_TYPES,
   JOB_TYPE_MEDIA_PROBE,
   JOB_TYPE_MEDIA_PROXY,
+  JOB_TYPE_GANGZII_ANALYZE,
+  JOB_TYPE_GANGZII_PROCESS,
+  JOB_TYPE_NIKKI_RENDER,
   PermanentJobError,
   handleJobError,
   requeueJob,
@@ -16,6 +19,8 @@ import {
 import { MEDIA_ROOT, PROXIES_DIR, removeFileQuiet } from "@/lib/media-storage";
 import { runProbeJob } from "@/lib/media-analysis";
 import { runProxyJob } from "@/lib/media-proxy";
+import { runGangziiAnalyzeJob, runGangziiProcessJob } from "@/lib/gangzii/jobs";
+import { runNikkiRenderJob } from "@/lib/nikki/jobs";
 
 /**
  * M3.4 — durable background worker for media processing.
@@ -33,8 +38,10 @@ import { runProxyJob } from "@/lib/media-proxy";
  *   saturates a core) plus per-user caps so one user cannot starve others.
  * - Idempotency: probe re-reads the file; proxy short-circuits when a READY
  *   proxy file already exists. A recovered job can therefore safely re-run.
- * - Only MEDIA_PROBE / MEDIA_PROXY are owned by this worker; the legacy
- *   fire-and-forget job types keep their existing behavior untouched.
+ * - Ownership: MEDIA_PROBE / MEDIA_PROXY (M3 media pipeline),
+ *   GANGZII_ANALYZE / GANGZII_PROCESS (M5 audio engine) and NIKKI_RENDER
+ *   (M6 motion graphics) are owned by this worker; the legacy fire-and-forget
+ *   job types keep their existing behavior.
  */
 
 const TICK_MS = 2_000;
@@ -46,6 +53,9 @@ const GLOBAL_MAX_ACTIVE = 2;
 const USER_MAX_ACTIVE: Record<string, number> = {
   [JOB_TYPE_MEDIA_PROBE]: 2,
   [JOB_TYPE_MEDIA_PROXY]: 1,
+  [JOB_TYPE_GANGZII_ANALYZE]: 1,
+  [JOB_TYPE_GANGZII_PROCESS]: 1,
+  [JOB_TYPE_NIKKI_RENDER]: 1,
 };
 /** Scratch sweeps run at most this often. */
 const SWEEP_INTERVAL_MS = 15 * 60_000;
@@ -63,6 +73,9 @@ type MediaJobHandler = (job: {
 const HANDLERS: Record<string, MediaJobHandler> = {
   [JOB_TYPE_MEDIA_PROBE]: runProbeJob,
   [JOB_TYPE_MEDIA_PROXY]: runProxyJob,
+  [JOB_TYPE_GANGZII_ANALYZE]: runGangziiAnalyzeJob,
+  [JOB_TYPE_GANGZII_PROCESS]: runGangziiProcessJob,
+  [JOB_TYPE_NIKKI_RENDER]: runNikkiRenderJob,
 };
 
 interface WorkerState {
