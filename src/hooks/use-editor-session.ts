@@ -233,7 +233,7 @@ export function useEditorSession(projectId: string | null): EditorSession {
       if (timerRef.current) clearTimeout(timerRef.current);
     };
     // Reload only when the project changes.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+     
   }, [projectId]);
 
   // Durability: flush queued edits when the tab closes — the 600 ms debounce

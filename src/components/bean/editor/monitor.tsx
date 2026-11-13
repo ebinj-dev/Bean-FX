@@ -43,11 +43,17 @@ export function ProgramMonitor({
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const audioRefs = useRef<Array<HTMLAudioElement | null>>([]);
   const playheadRef = useRef(playhead);
-  playheadRef.current = playhead;
   const seqRef = useRef(sequence);
-  seqRef.current = sequence;
   const rafRef = useRef<number | null>(null);
   const lastTickRef = useRef<number | null>(null);
+
+  // Mirror the latest props into refs for the playback clock callbacks.
+  // (Assignment happens after render, never during render — the clock only
+  // reads these from rAF/event callbacks, which always run post-render.)
+  useEffect(() => {
+    playheadRef.current = playhead;
+    seqRef.current = sequence;
+  }, [playhead, sequence]);
 
   // ---- playback clock: rAF advances the integer-frame playhead ----------
   useEffect(() => {
@@ -223,7 +229,7 @@ export function ProgramMonitor({
         {/* IMAGE assets are stills on VIDEO tracks — rendered as an <img>,
             never fed to the <video> decoder. */}
         {isImageAsset && videoSrc && (
-          /* eslint-disable-next-line @next/next/no-img-element */
+           
           <img src={videoSrc} alt="" className="max-h-full max-w-full object-contain" />
         )}
         {/* Audio pool (audio tracks only — video clips' audio rides the video element) */}

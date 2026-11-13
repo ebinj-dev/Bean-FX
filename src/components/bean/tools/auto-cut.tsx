@@ -590,7 +590,7 @@ export function AutoCutTool({ user, onLogout }: { user: SessionUser; onLogout: (
     return () => {
       cancelled = true;
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+     
   }, [media, mediaKey, analyzing, analysisJobId]);
 
   /* ----------------------------- playback ------------------------------- */
