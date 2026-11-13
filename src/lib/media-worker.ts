@@ -13,6 +13,7 @@ import {
   JOB_TYPE_JAZMII_GENERATE,
   JOB_TYPE_JAZMII_ANALYZE,
   JOB_TYPE_LAXII_GENERATE,
+  JOB_TYPE_STUDIO_TOPIC,
   PermanentJobError,
   handleJobError,
   requeueJob,
@@ -26,6 +27,7 @@ import { runGangziiAnalyzeJob, runGangziiProcessJob } from "@/lib/gangzii/jobs";
 import { runNikkiRenderJob } from "@/lib/nikki/jobs";
 import { runJazmiiGenerateJob, runJazmiiAnalyzeJob } from "@/lib/jazmii/jobs";
 import { runLaxiiGenerateJob } from "@/lib/laxii/jobs";
+import { runStudioTopicJob } from "@/lib/studio/jobs";
 
 /**
  * M3.4 — durable background worker for media processing.
@@ -64,6 +66,7 @@ const USER_MAX_ACTIVE: Record<string, number> = {
   [JOB_TYPE_JAZMII_GENERATE]: 1,
   [JOB_TYPE_JAZMII_ANALYZE]: 1,
   [JOB_TYPE_LAXII_GENERATE]: 1,
+  [JOB_TYPE_STUDIO_TOPIC]: 1,
 };
 /** Scratch sweeps run at most this often. */
 const SWEEP_INTERVAL_MS = 15 * 60_000;
@@ -87,6 +90,7 @@ const HANDLERS: Record<string, MediaJobHandler> = {
   [JOB_TYPE_JAZMII_GENERATE]: runJazmiiGenerateJob,
   [JOB_TYPE_JAZMII_ANALYZE]: runJazmiiAnalyzeJob,
   [JOB_TYPE_LAXII_GENERATE]: runLaxiiGenerateJob,
+  [JOB_TYPE_STUDIO_TOPIC]: runStudioTopicJob,
 };
 
 interface WorkerState {

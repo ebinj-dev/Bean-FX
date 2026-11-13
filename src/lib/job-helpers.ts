@@ -14,6 +14,7 @@ export const JOB_TYPE_NIKKI_RENDER = "NIKKI_RENDER";
 export const JOB_TYPE_JAZMII_GENERATE = "JAZMII_GENERATE";
 export const JOB_TYPE_JAZMII_ANALYZE = "JAZMII_ANALYZE";
 export const JOB_TYPE_LAXII_GENERATE = "LAXII_GENERATE";
+export const JOB_TYPE_STUDIO_TOPIC = "STUDIO_TOPIC";
 /** Worker-owned job types: M3 media pipeline + M5 GANGZII + M6 NIIKI; legacy job types keep their existing behavior. */
 export const MEDIA_JOB_TYPES = [
   JOB_TYPE_MEDIA_PROBE,
@@ -24,6 +25,7 @@ export const MEDIA_JOB_TYPES = [
   JOB_TYPE_JAZMII_GENERATE,
   JOB_TYPE_JAZMII_ANALYZE,
   JOB_TYPE_LAXII_GENERATE,
+  JOB_TYPE_STUDIO_TOPIC,
 ] as const;
 
 /** Default hard wall-clock limits per job type (seconds). */
@@ -36,6 +38,7 @@ export const DEFAULT_TIMEOUT_SEC: Record<string, number> = {
   [JOB_TYPE_JAZMII_GENERATE]: 20 * 60,
   [JOB_TYPE_JAZMII_ANALYZE]: 10 * 60,
   [JOB_TYPE_LAXII_GENERATE]: 15 * 60,
+  [JOB_TYPE_STUDIO_TOPIC]: 15 * 60,
 };
 
 export const MAX_ATTEMPTS_DEFAULT = 3;
