@@ -10,12 +10,14 @@ export const JOB_TYPE_MEDIA_PROBE = "MEDIA_PROBE";
 export const JOB_TYPE_MEDIA_PROXY = "MEDIA_PROXY";
 export const JOB_TYPE_GANGZII_ANALYZE = "GANGZII_ANALYZE";
 export const JOB_TYPE_GANGZII_PROCESS = "GANGZII_PROCESS";
-/** Worker-owned job types: M3 media pipeline + M5 GANGZII audio engine; legacy job types keep their existing behavior. */
+export const JOB_TYPE_NIKKI_RENDER = "NIKKI_RENDER";
+/** Worker-owned job types: M3 media pipeline + M5 GANGZII + M6 NIIKI; legacy job types keep their existing behavior. */
 export const MEDIA_JOB_TYPES = [
   JOB_TYPE_MEDIA_PROBE,
   JOB_TYPE_MEDIA_PROXY,
   JOB_TYPE_GANGZII_ANALYZE,
   JOB_TYPE_GANGZII_PROCESS,
+  JOB_TYPE_NIKKI_RENDER,
 ] as const;
 
 /** Default hard wall-clock limits per job type (seconds). */
@@ -24,6 +26,7 @@ export const DEFAULT_TIMEOUT_SEC: Record<string, number> = {
   [JOB_TYPE_MEDIA_PROXY]: 45 * 60,
   [JOB_TYPE_GANGZII_ANALYZE]: 15 * 60,
   [JOB_TYPE_GANGZII_PROCESS]: 30 * 60,
+  [JOB_TYPE_NIKKI_RENDER]: 45 * 60,
 };
 
 export const MAX_ATTEMPTS_DEFAULT = 3;

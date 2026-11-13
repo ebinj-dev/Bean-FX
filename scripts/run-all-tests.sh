@@ -17,6 +17,8 @@ SUITES=(
   scripts/test-gangzii-analysis.test.ts
   scripts/test-gangzii-dsp.test.ts
   scripts/test-gangzii-jobs.test.ts
+  scripts/test-nikki-core.test.ts
+  scripts/test-nikki-render.test.ts
   scripts/test-riishe-timeline.test.ts
   scripts/test-editor-regressions.test.ts
   scripts/test-media-pipeline.test.ts

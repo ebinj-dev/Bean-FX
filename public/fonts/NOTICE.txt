@@ -1,0 +1,6 @@
+Noto Sans Tamil, Noto Sans
+Copyright 2014-2021 The Noto Project Authors (https://github.com/notofonts/noto-fonts)
+This Font Software is licensed under the SIL Open Font License, Version 1.1 (OFL.txt available at https://openfontlicense.org).
+The fonts are bundled with BEAN FX for preview (browser canvas) and rendering
+(FFmpeg drawtext fontfile). Redistribution is permitted under the OFL; the
+fonts are unmodified upstream builds from the google/fonts repository.
