@@ -23,6 +23,11 @@ model User {
   uploadSessions UploadSession[]
   cutDecisions CutDecision[]
   gangziiProcesses GangziiProcess[]
+  conversations Conversation[] @relation("Conversations")
+  aiPlans       AIPlan[]       @relation("AIPlans")
+  automationTokens AutomationToken[] @relation("AutomationToken")
+  automationAudits AutomationAudit[] @relation("AutomationAudit")
+  aiUsage       AIUsage[]      @relation("AIUsage")
 }
 
 /// User-defined words/phrases RIISHE should consider removing (context-aware —
@@ -62,6 +67,8 @@ model Project {
   updatedAt   DateTime     @updatedAt
   mediaAssets      MediaAsset[]
   timelineVersions TimelineVersion[]
+  conversations Conversation[] @relation("Conversations")
+  aiPlans       AIPlan[]       @relation("AIPlans")
 }
 
 model MediaAsset {
@@ -321,4 +328,118 @@ model UploadSession {
 
   @@index([userId, status])
   @@index([lastChunkAt])
+}
+
+/// ── M8 MY AI orchestration ─────────────────────────────────────────────────
+/// Project-scoped assistant conversation (§11): user-owned, deletable, never
+/// cross-user. Messages hold bounded text/tool summaries — no private media.
+model Conversation {
+  id          String   @id @default(cuid())
+  userId      String
+  user        User     @relation("Conversations", fields: [userId], references: [id], onDelete: Cascade)
+  projectId   String?
+  project     Project? @relation("Conversations", fields: [projectId], references: [id], onDelete: Cascade)
+  title       String   @default("Conversation")
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  messages    ConversationMessage[]
+  plans       AIPlan[]
+
+  @@index([userId, projectId, updatedAt])
+}
+
+/// One assistant/user/tool turn. role: user | assistant | tool | system.
+model ConversationMessage {
+  id             String      @id @default(cuid())
+  conversationId String
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  role           String
+  content        String
+  /// Bounded structured attachments (tool summaries, plan refs) — never media.
+  metaJson       String?
+  createdAt      DateTime @default(now())
+
+  @@index([conversationId, createdAt])
+}
+
+/// A versioned editing plan (§6). status: DRAFT | VALIDATING | AWAITING_APPROVAL
+/// | APPROVED | QUEUED | RUNNING | PARTIALLY_COMPLETED | COMPLETED | FAILED
+/// | CANCELLED | EXPIRED. stepsJson holds the validated plan; resultsJson the
+/// per-step outcomes (partial failure is recorded accurately).
+model AIPlan {
+  id             String   @id @default(cuid())
+  userId         String
+  user           User     @relation("AIPlans", fields: [userId], references: [id], onDelete: Cascade)
+  projectId      String?
+  project        Project? @relation("AIPlans", fields: [projectId], references: [id], onDelete: SetNull)
+  conversationId String?
+  conversation   Conversation? @relation(fields: [conversationId], references: [id], onDelete: SetNull)
+  schemaVersion  Int      @default(1)
+  status         String   @default("DRAFT")
+  requestSummary String  
+  stepsJson      String  
+  contextVersion String?
+  plannerMode    String   @default("deterministic") // llm | deterministic-fallback
+  engines        String?
+  warningsJson   String?
+  resultJson     String?
+  idempotencyKey String?
+  expiresAt      DateTime?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@unique([userId, idempotencyKey])
+  @@index([userId, projectId, status, updatedAt])
+}
+
+/// Automation credentials for MCP / JSON-RPC clients (§9B). The raw token is
+/// shown ONCE at creation; only the SHA-256 hash is stored.
+model AutomationToken {
+  id           String    @id @default(cuid())
+  userId       String
+  user         User      @relation("AutomationToken", fields: [userId], references: [id], onDelete: Cascade)
+  name         String
+  tokenHash    String    @unique
+  prefix       String
+  /// read-only | editing — editing includes every read-only capability.
+  profile      String    @default("read-only")
+  /// Optional tool allowlist (JSON array of tool names; empty = all in profile).
+  allowlistJson String?
+  lastUsedAt   DateTime?
+  revokedAt    DateTime?
+  createdAt    DateTime  @default(now())
+
+  @@index([userId, revokedAt])
+}
+
+/// Audit history for every automation/API/MY AI mutation (§9B/§13).
+model AutomationAudit {
+  id         String   @id @default(cuid())
+  userId     String
+  user       User     @relation("AutomationAudit", fields: [userId], references: [id], onDelete: Cascade)
+  projectId  String?
+  action     String
+  detailJson String?
+  createdAt  DateTime @default(now())
+
+  @@index([userId, createdAt])
+  @@index([projectId, createdAt])
+}
+
+/// LLM usage accounting (§4/§13): token counts reported by the provider.
+model AIUsage {
+  id               String   @id @default(cuid())
+  userId           String
+  user             User     @relation("AIUsage", fields: [userId], references: [id], onDelete: Cascade)
+  provider         String
+  model            String
+  purpose          String
+  promptTokens     Int      @default(0)
+  completionTokens Int      @default(0)
+  totalTokens      Int      @default(0)
+  latencyMs        Int?
+  ok               Boolean  @default(true)
+  createdAt        DateTime @default(now())
+
+  @@index([userId, createdAt])
 }

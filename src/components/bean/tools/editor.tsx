@@ -44,6 +44,7 @@ import { ProgramMonitor } from "@/components/bean/editor/monitor";
 import { EditorTimeline } from "@/components/bean/editor/timeline";
 import { ClipInspector } from "@/components/bean/editor/inspector";
 import { GangziiPanel } from "@/components/bean/editor/gangzii-panel";
+import { MyAiPanel } from "@/components/bean/editor/my-ai-panel";
 import { NikkiPanel } from "@/components/bean/editor/nikki-panel";
 import { JazmiiPanel } from "@/components/bean/editor/jazmii-panel";
 import { LaxiiPanel } from "@/components/bean/editor/laxii-panel";
@@ -524,6 +525,7 @@ export function EditorTool({ user, onLogout }: { user: { id: string }; onLogout:
         <div className="w-72 shrink-0 space-y-2 overflow-y-auto">
           {sequence && <ClipInspector sequence={sequence} session={session} />}
           {sequence && <GangziiPanel sequence={sequence} session={session} />}
+          {sequence && <MyAiPanel sequence={sequence} session={session} projectId={projectId} />}
           {sequence && <NikkiPanel sequence={sequence} session={session} />}
           {sequence && <JazmiiPanel sequence={sequence} session={session} />}
           {sequence && <LaxiiPanel sequence={sequence} session={session} />}
