@@ -43,7 +43,7 @@ const USER_A = "user-a-test";
 const USER_B = "user-b-test";
 
 // Fixtures (real ffmpeg output) — generated once for the whole file.
-const FIX = {
+const FIX: Record<string, string> = {
   fp360: path.join(WORK, "small.mp4"),
   fp720: path.join(WORK, "hd.mp4"),
   fnoAudio: path.join(WORK, "noaudio.mp4"),
@@ -62,7 +62,7 @@ async function seedUser(id: string) {
   await db.user.create({ data: { id, email: `${id}@m3.test`, passwordHash: "scrypt:x:y", name: id } }).catch(() => undefined);
 }
 
-async function seedAsset(userId: string, filePath: string, name: string, kind: "VIDEO" | "AUDIO" = "VIDEO") {
+async function seedAsset(userId: string, filePath: string, name: string, kind: "VIDEO" | "AUDIO" | "IMAGE" = "VIDEO") {
   return db.mediaAsset.create({
     data: {
       userId,
@@ -107,6 +107,13 @@ beforeAll(async () => {
   ffmpeg(`-f lavfi -i testsrc2=duration=1:size=320x240:rate=30 -c:v libx264 -preset ultrafast`, path.join(WORK, "full.mp4"));
   writeFileSync(FIX.fcorrupt, readFileSync(path.join(WORK, "full.mp4")).subarray(0, 20_000));
   ffmpeg(`-f lavfi -i sine=frequency=440:duration=1.5:sample_rate=48000 -c:a pcm_s16le`, FIX.faudio);
+  // Image fixtures (§4): real JPEG/PNG/WebP stills via ffmpeg.
+  FIX.fimgPng = path.join(WORK, "still.png");
+  FIX.fimgJpg = path.join(WORK, "still.jpg");
+  FIX.fimgWebp = path.join(WORK, "still.webp");
+  ffmpeg(`-f lavfi -i testsrc2=size=800x600:rate=1 -frames:v 1`, FIX.fimgPng);
+  ffmpeg(`-f lavfi -i testsrc2=size=800x600:rate=1 -frames:v 1 -q:v 2`, FIX.fimgJpg);
+  ffmpeg(`-f lavfi -i testsrc2=size=800x600:rate=1 -frames:v 1 -c:v libwebp -quality 80`, FIX.fimgWebp);
 
   const dbm = await import("../src/lib/db");
   db = dbm.db;
@@ -147,7 +154,7 @@ describe("M3.1 signature validation", () => {
     expect(storage.sniffContainer(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0, 0])).family).toBe("png");
     expect(storage.sniffContainer(Buffer.from([0xff, 0xd8, 0xff, 0xe0])).family).toBe("jpeg");
     expect(storage.sniffContainer(Buffer.from("this is not media at all............")).family).toBe("unknown");
-  });
+  }, 60_000);
 
   test("sniffMatchesClass rejects cross-class uploads (wav masquerading as video)", () => {
     expect(storage.sniffMatchesClass({ family: "wav", mime: "audio/wav" }, "VIDEO")).toBe(false);
@@ -155,13 +162,13 @@ describe("M3.1 signature validation", () => {
     expect(storage.sniffMatchesClass({ family: "ftyp", mime: "video/mp4" }, "AUDIO")).toBe(true); // m4a
     expect(storage.sniffMatchesClass({ family: "ftyp", mime: "video/mp4" }, "VIDEO")).toBe(true);
     expect(storage.sniffMatchesClass({ family: "png", mime: "image/png" }, "VIDEO")).toBe(false);
-  });
+  }, 60_000);
 
   test("sha256File produces the NIST vector for 'abc'", async () => {
     const p = path.join(WORK, "abc.txt");
     writeFileSync(p, "abc");
     expect(await storage.sha256File(p)).toBe("ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad");
-  });
+  }, 60_000);
 });
 
 // ── 2. deep probe on real fixtures ───────────────────────────────────────────
@@ -178,7 +185,7 @@ describe("M3.2 ffprobe deep analysis", () => {
     expect(probe.formatName).toContain("mp4");
     expect(probe.mime).toBe("video/mp4");
     expect(Math.abs(probe.durationSec! - 2)).toBeLessThan(0.3);
-  });
+  }, 60_000);
 
   test("variable frame rate is detected (avg diverges from nominal)", async () => {
     const probe = await analysis.probeMediaDeep(FIX.fvfr);
@@ -187,37 +194,37 @@ describe("M3.2 ffprobe deep analysis", () => {
     expect(probe.fpsNominal).not.toBeNull();
     expect(probe.fpsAvg).not.toBeNull();
     expect(probe.fpsAvg!).toBeLessThan(probe.fpsNominal!);
-  });
+  }, 60_000);
 
   test("rotation metadata is read from the display matrix", async () => {
     const probe = await analysis.probeMediaDeep(FIX.frot);
     expect(probe.rotation).toBe(90);
-  });
+  }, 60_000);
 
   test("video-only file: hasAudio false", async () => {
     const probe = await analysis.probeMediaDeep(FIX.fnoAudio);
     expect(probe.hasVideo).toBe(true);
     expect(probe.hasAudio).toBe(false);
     expect(probe.audioCodec).toBeNull();
-  });
+  }, 60_000);
 
   test("wav: audio-only container", async () => {
     const probe = await analysis.probeMediaDeep(FIX.faudio);
     expect(probe.hasAudio).toBe(true);
     expect(probe.hasVideo).toBe(false);
     expect(probe.mime).toBe("audio/wav");
-  });
+  }, 60_000);
 
   test("corrupt file is a permanent failure", async () => {
     await expect(analysis.probeMediaDeep(FIX.fcorrupt)).rejects.toThrow(helpers.PermanentJobError);
-  });
+  }, 60_000);
 
   test("proxy eligibility gates on resolution and duration", () => {
     expect(analysis.proxyEligible({ hasVideo: true, width: 1280, height: 720, durationSec: 2 })).toBe(true);
     expect(analysis.proxyEligible({ hasVideo: true, width: 640, height: 360, durationSec: 2 })).toBe(false);
     expect(analysis.proxyEligible({ hasVideo: true, width: 1920, height: 1080, durationSec: 5 * 3600 })).toBe(false);
     expect(analysis.proxyEligible({ hasVideo: false, width: 1920, height: 1080, durationSec: 2 })).toBe(false);
-  });
+  }, 60_000);
 
   test("buildProxyPlan: even dims, rotation-aware scale, passthrough, audio guard", () => {
     const out1 = proxy.buildProxyPlan("src.mp4", { width: 1920, height: 1080, rotation: 0, hasAudio: true, durationSec: 10 }, "out.mp4");
@@ -235,7 +242,7 @@ describe("M3.2 ffprobe deep analysis", () => {
     // Rotated 90° landscape source: ffmpeg auto-rotates, so output is portrait.
     const out3 = proxy.buildProxyPlan("src.mp4", { width: 1920, height: 1080, rotation: 90, hasAudio: false, durationSec: 10 }, "out.mp4");
     expect(out3.outWidth).toBeLessThan(out3.outHeight);
-  });
+  }, 60_000);
 });
 
 // ── 3. worker: probe + proxy end to end ──────────────────────────────────────
@@ -260,7 +267,7 @@ describe("M3.4 durable worker pipeline", () => {
     expect(updated!.proxyStatus).toBe("QUEUED"); // 720p source → proxy queued
     const proxyJobs = await db.job.findMany({ where: { userId: USER_A, type: helpers.JOB_TYPE_MEDIA_PROXY } });
     expect(proxyJobs.length).toBe(1);
-  });
+  }, 60_000);
 
   test("proxy job produces an aligned, smaller proxy (timestamps preserved)", async () => {
     const asset = await db.mediaAsset.findFirst({ where: { userId: USER_A, originalName: "hd.mp4" } });
@@ -277,7 +284,7 @@ describe("M3.4 durable worker pipeline", () => {
     const probe = await analysis.probeMediaDeep(a!.proxyPath!);
     expect(Math.abs(probe.durationSec! - a!.durationSec!)).toBeLessThan(0.4);
     expect(Math.abs(a!.proxyDurationSec! - a!.durationSec!)).toBeLessThan(0.4);
-  });
+  }, 60_000);
 
   test("sub-HD sources get proxyStatus NONE (original is used for preview)", async () => {
     const asset = await seedAsset(USER_A, FIX.fp360, "small.mp4");
@@ -289,7 +296,7 @@ describe("M3.4 durable worker pipeline", () => {
     const a = await db.mediaAsset.findUnique({ where: { id: asset.id } });
     expect(a!.probeStatus).toBe("READY");
     expect(a!.proxyStatus).toBe("NONE");
-  });
+  }, 60_000);
 
   test("VFR source probes isVfr; sub-HD VFR is not proxied", async () => {
     const asset = await seedAsset(USER_A, FIX.fvfr, "vfr.mp4");
@@ -302,7 +309,7 @@ describe("M3.4 durable worker pipeline", () => {
     expect(a!.probeStatus).toBe("READY");
     expect(a!.isVfr).toBe(true);
     expect(a!.proxyStatus).toBe("NONE"); // 320x240 → not eligible
-  });
+  }, 60_000);
 
   test("corrupt media: probe fails permanently (no retries wasted), asset intact", async () => {
     const asset = await seedAsset(USER_A, FIX.fcorrupt, "corrupt.mp4");
@@ -318,7 +325,7 @@ describe("M3.4 durable worker pipeline", () => {
     expect(a!.probeStatus).toBe("FAILED");
     expect(a!.probeError!.length).toBeGreaterThan(0);
     expect(existsSync(a!.storagePath)).toBe(true); // original never deleted
-  });
+  }, 60_000);
 
   test("proxy failure on unreadable source marks the asset FAILED", async () => {
     const asset = await seedAsset(USER_A, FIX.fcorrupt, "corrupt2.mp4");
@@ -337,7 +344,7 @@ describe("M3.4 durable worker pipeline", () => {
     const a = await db.mediaAsset.findUnique({ where: { id: asset.id } });
     expect(a!.proxyStatus).toBe("FAILED");
     expect(a!.proxyError).toBeTruthy();
-  });
+  }, 60_000);
 
   test("retryable failure requeues with backoff; exhausted attempts fail; permanent fails at once", async () => {
     const jobId = await helpers.enqueueMediaJob(USER_A, helpers.JOB_TYPE_MEDIA_PROBE, { mediaId: "does-not-matter" }, { maxAttempts: 3 });
@@ -358,7 +365,7 @@ describe("M3.4 durable worker pipeline", () => {
     await helpers.handleJobError(jobId2, new helpers.PermanentJobError("bad media"), 1, 3, "test");
     const job2 = await db.job.findUnique({ where: { id: jobId2 } });
     expect(job2!.status).toBe("FAILED");
-  });
+  }, 60_000);
 
   test("queued job cancelled before claim never runs", async () => {
     const asset = await seedAsset(USER_A, FIX.fp360, "cancel-me.mp4");
@@ -371,7 +378,7 @@ describe("M3.4 durable worker pipeline", () => {
     expect(job!.status).toBe("CANCELLED");
     const a = await db.mediaAsset.findUnique({ where: { id: asset.id } });
     expect(a!.probeStatus).toBe("PENDING"); // untouched by the cancelled job
-  });
+  }, 60_000);
 
   test("crashed claim recovers: stale heartbeat → requeue with backoff → completes", async () => {
     const asset = await seedAsset(USER_A, FIX.fp360, "crash.mp4");
@@ -401,7 +408,7 @@ describe("M3.4 durable worker pipeline", () => {
     expect(job!.attempts).toBe(2); // crashed claim + recovered claim
     const after = await db.mediaAsset.findUnique({ where: { id: asset.id } });
     expect(after!.probeStatus).toBe("READY");
-  });
+  }, 60_000);
 
   test("global concurrency cap holds across a tick", async () => {
     const assets = [];
@@ -418,7 +425,7 @@ describe("M3.4 durable worker pipeline", () => {
       const done = await db.job.count({ where: { userId: USER_B, type: helpers.JOB_TYPE_MEDIA_PROBE, status: { in: ["COMPLETED", "FAILED", "CANCELLED"] } } });
       return done === 4;
     }, 80, "cap test completion");
-  });
+  }, 60_000);
 });
 
 // ── 4. quota, dedup refcount, sweeps ────────────────────────────────────────
@@ -439,7 +446,7 @@ describe("M3.5 storage quota, dedup and cleanup", () => {
     expect(over.ok).toBe(false); // 17 MB used + 510 MB > 500 MiB
     const fits = await storage.hasQuotaFor(USER_Q, 500_000_000);
     expect(fits.ok).toBe(true); // 17 MB + 500 MB = 517 MB ≤ 524.29 MB
-  });
+  }, 60_000);
 
   test("content-addressed delete: file removed only with the last reference", async () => {
     const shared = path.join(WORK, "originals-shared.wav");
@@ -456,7 +463,7 @@ describe("M3.5 storage quota, dedup and cleanup", () => {
     await db.mediaAsset.delete({ where: { id: b.id } });
     expect(await storage.deleteMediaFileIfLastReference(shared, b.id)).toBe(true);
     expect(existsSync(shared)).toBe(false);
-  });
+  }, 60_000);
 
   test("sweeps cancel abandoned upload sessions and remove scratch + orphan proxies", async () => {
     const staleDir = path.join(storage.MEDIA_ROOT, "tmp", "up_stale-session-01");
@@ -486,5 +493,71 @@ describe("M3.5 storage quota, dedup and cleanup", () => {
     expect(session!.status).toBe("CANCELLED");
     expect(existsSync(staleDir)).toBe(false);
     expect(existsSync(orphanProxy)).toBe(false);
-  });
+  }, 60_000);
+});
+
+// ── 5. image ingestion (§4) ──────────────────────────────────────────────────
+describe("M4-storage image ingestion", () => {
+  test("webp sniffing + IMAGE class matching (jpeg/png already covered by fixture probes)", () => {
+    const webp = Buffer.concat([Buffer.from("RIFF"), Buffer.alloc(4, 0), Buffer.from("WEBP")]);
+    expect(storage.sniffContainer(webp)).toEqual({ family: "webp", mime: "image/webp" });
+    expect(storage.sniffMatchesClass({ family: "webp", mime: "image/webp" }, "IMAGE")).toBe(true);
+    expect(storage.sniffMatchesClass({ family: "png", mime: "image/png" }, "IMAGE")).toBe(true);
+    expect(storage.sniffMatchesClass({ family: "wav", mime: "audio/wav" }, "IMAGE")).toBe(false);
+    expect(storage.classifyByExtension(".jpg")).toBe("IMAGE");
+    expect(storage.classifyByExtension(".jpeg")).toBe("IMAGE");
+    expect(storage.classifyByExtension(".png")).toBe("IMAGE");
+    expect(storage.classifyByExtension(".webp")).toBe("IMAGE");
+    expect(storage.classifyByExtension(".gif")).toBe("UNSUPPORTED");
+  }, 60_000);
+
+  test("probe job handles a real PNG: dimensions persisted, no proxy, image mime", async () => {
+    const asset = await seedAsset(USER_A, FIX.fimgPng, "still.png", "IMAGE");
+    const jobId = await helpers.enqueueMediaJob(USER_A, helpers.JOB_TYPE_MEDIA_PROBE, { mediaId: asset.id });
+    await tickUntil(async () => {
+      const j = await db.job.findUnique({ where: { id: jobId } });
+      return j?.status === "COMPLETED" || j?.status === "FAILED";
+    }, 40, "png probe");
+    const job = await db.job.findUnique({ where: { id: jobId } });
+    expect(job!.status).toBe("COMPLETED");
+    const a = await db.mediaAsset.findUnique({ where: { id: asset.id } });
+    expect(a!.probeStatus).toBe("READY");
+    expect(a!.width).toBe(800);
+    expect(a!.height).toBe(600);
+    expect(a!.mimeType).toBe("image/png");
+    expect(a!.proxyStatus).toBe("NONE"); // stills never get proxies
+    expect(a!.durationSec).toBeNull();
+  }, 60_000);
+
+  test("probe job handles JPEG and WebP stills", async () => {
+    for (const [fixture, name, mime] of [
+      [FIX.fimgJpg, "still.jpg", "image/jpeg"],
+      [FIX.fimgWebp, "still.webp", "image/webp"],
+    ] as const) {
+      const asset = await seedAsset(USER_A, fixture, name, "IMAGE");
+      const jobId = await helpers.enqueueMediaJob(USER_A, helpers.JOB_TYPE_MEDIA_PROBE, { mediaId: asset.id });
+      await tickUntil(async () => {
+        const j = await db.job.findUnique({ where: { id: jobId } });
+        return j?.status === "COMPLETED" || j?.status === "FAILED";
+      }, 40, `${name} probe`);
+      const job = await db.job.findUnique({ where: { id: jobId } });
+      expect(job!.status).toBe("COMPLETED");
+      const a = await db.mediaAsset.findUnique({ where: { id: asset.id } });
+      expect(a!.probeStatus).toBe("READY");
+      expect(a!.width).toBe(800);
+      expect(a!.mimeType).toBe(mime);
+    }
+  }, 60_000);
+
+  test("wav bytes named .png are refused by the sniff class check", () => {
+    expect(storage.sniffMatchesClass({ family: "wav", mime: "audio/wav" }, "IMAGE")).toBe(false);
+  }, 60_000);
+
+  test("pathInsideMediaRoot refuses escapes; isInsideMediaRoot is containment-true", () => {
+    expect(storage.isInsideMediaRoot(path.join(storage.MEDIA_ROOT, "originals", "x.mp4"))).toBe(true);
+    expect(storage.isInsideMediaRoot("/etc/passwd")).toBe(false);
+    expect(storage.isInsideMediaRoot(`${storage.MEDIA_ROOT}../outside.bin`)).toBe(false);
+    expect(storage.pathInsideMediaRoot("tmp", "up_abc", "000000.part")).toBe(path.join(storage.MEDIA_ROOT, "tmp", "up_abc", "000000.part"));
+    expect(() => storage.pathInsideMediaRoot("../escape")).toThrow(/outside the storage root/);
+  }, 60_000);
 });

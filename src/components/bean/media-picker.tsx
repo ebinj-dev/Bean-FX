@@ -103,13 +103,13 @@ export function MediaPicker({
           </button>
         </p>
         <p className="mt-1 text-[11px] text-[#7a7a76]">
-          MP4 · MOV · WebM · MKV · MP3 · WAV · M4A · AAC · FLAC — up to 250 MB. Validated server-side with ffprobe.
+          MP4 · MOV · WebM · MKV · MP3 · WAV · M4A · AAC · FLAC · JPG · PNG · WebP — up to 250 MB. Validated server-side with ffprobe.
         </p>
         <input
           ref={fileInput}
           type="file"
           className="hidden"
-          accept="audio/*,video/*,.mp4,.mov,.webm,.mkv,.mp3,.wav,.m4a,.aac,.flac,.ogg"
+          accept="audio/*,video/*,image/jpeg,image/png,image/webp,.mp4,.mov,.webm,.mkv,.mp3,.wav,.m4a,.aac,.flac,.ogg,.jpg,.jpeg,.png,.webp"
           onChange={(e) => {
             const f = e.target.files?.[0];
             if (f) void doUpload(f);

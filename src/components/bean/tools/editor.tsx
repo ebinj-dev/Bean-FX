@@ -31,7 +31,10 @@ import {
 } from "lucide-react";
 import type { MediaMeta } from "@/lib/types";
 import type { Sequence } from "@/lib/editor/model";
-import { formatTimecode } from "@/lib/editor/time";
+import { formatTimecode, rationalFromFps } from "@/lib/editor/time";
+
+/** How long a newly placed image still stays on the timeline (seconds). */
+const DEFAULT_IMAGE_TIMELINE_SEC = 5;
 import { sequenceEndFrame } from "@/lib/editor/preview";
 import { api } from "@/lib/client-api";
 import { useEditorSession } from "@/hooks/use-editor-session";
@@ -175,7 +178,7 @@ export function EditorTool({ user, onLogout }: { user: { id: string }; onLogout:
   const addMediaAtPlayhead = useCallback(
     async (asset: MediaMeta) => {
       if (!sequence) return;
-      const wantVideo = asset.kind === "VIDEO";
+      const wantVideo = asset.kind === "VIDEO" || asset.kind === "IMAGE";
       const kind = wantVideo ? "VIDEO" : "AUDIO";
       const track = sequence.tracks.find((t) => t.kind === kind && !t.locked);
       if (!track) {
@@ -183,7 +186,7 @@ export function EditorTool({ user, onLogout }: { user: { id: string }; onLogout:
         return;
       }
       let placed = asset;
-      if ((asset.durationSec == null || asset.durationSec <= 0) && asset.probeStatus && asset.probeStatus !== "READY" && asset.probeStatus !== "FAILED") {
+      if ((asset.durationSec == null || asset.durationSec <= 0) && asset.kind !== "IMAGE" && asset.probeStatus && asset.probeStatus !== "READY" && asset.probeStatus !== "FAILED") {
         setNotice("Analyzing media — placing it as soon as the probe finishes…");
         placed = await api.waitForProbe(asset.id, 120_000);
       }
@@ -191,12 +194,18 @@ export function EditorTool({ user, onLogout }: { user: { id: string }; onLogout:
         setNotice(`Media analysis failed: ${placed.probeError ?? "the file may be corrupt or unsupported."}`);
         return;
       }
-      if (placed.durationSec == null || placed.durationSec <= 0) {
+      // Images are stills: no intrinsic duration — they take a fixed 5 s slot
+      // on a VIDEO track (trim to taste), timebased 1:1 with the sequence.
+      const isImage = placed.kind === "IMAGE";
+      if (!isImage && (placed.durationSec == null || placed.durationSec <= 0)) {
         setNotice("This asset has no measurable duration — it cannot be placed.");
         return;
       }
-      const srcFps = placed.fps && placed.fps > 0 ? placed.fps : sequence.fps.num / sequence.fps.den;
-      const sourceDurationFrames = Math.round(placed.durationSec * srcFps);
+      const seqFps = sequence.fps.num / sequence.fps.den;
+      const srcFps = isImage ? seqFps : placed.fps && placed.fps > 0 ? placed.fps : seqFps;
+      const sourceDurationFrames = isImage
+        ? Math.round(DEFAULT_IMAGE_TIMELINE_SEC * seqFps)
+        : Math.round((placed.durationSec as number) * srcFps);
       const ok = session.apply([
         {
           type: "AddClip",
@@ -206,7 +215,10 @@ export function EditorTool({ user, onLogout }: { user: { id: string }; onLogout:
             sourceAssetId: placed.id,
             sourceInFrame: 0,
             sourceOutFrame: sourceDurationFrames,
-            sourceFps: { num: Math.round(srcFps * 1000), den: 1000 },
+            // Broadcast-exact rationals for the SMPTE families (29.97 →
+            // 30000/1001 …) instead of a 1000-based approximation; stills use
+            // the sequence timebase 1:1.
+            sourceFps: isImage ? sequence.fps : rationalFromFps(srcFps),
             timelineStartFrame: session.playheadFrame,
             label: placed.originalName,
           },

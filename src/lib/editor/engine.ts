@@ -72,9 +72,16 @@ export class EditHistory {
     // Undo = apply the inverse commands in reverse order (last change first).
     // The entry itself moves to the redo stack unchanged: its `forward` is
     // exactly what redo replays, and its `inverse` undoes that again.
+    // A failing inverse must not corrupt the stack: the entry is pushed back
+    // and the failure is REPORTED (ok:false), never swallowed.
     let seq = this.current;
-    for (let i = entry.inverse.length - 1; i >= 0; i--) {
-      seq = applyCommand(seq, entry.inverse[i]).sequence;
+    try {
+      for (let i = entry.inverse.length - 1; i >= 0; i--) {
+        seq = applyCommand(seq, entry.inverse[i]).sequence;
+      }
+    } catch (err) {
+      this.undoStack.push(entry);
+      return { ok: false, warnings: [err instanceof Error ? err.message : "undo failed"] };
     }
     this.current = seq;
     this.redoStack.push(entry);
@@ -84,10 +91,16 @@ export class EditHistory {
   redo(): { ok: boolean; warnings: string[] } {
     const entry = this.redoStack.pop();
     if (!entry) return { ok: false, warnings: [] };
-    // Redo = replay the original forward commands in order.
+    // Redo = replay the original forward commands in order. Same resilience
+    // contract as undo: a failed replay keeps the entry and reports failure.
     let seq = this.current;
-    for (const cmd of entry.forward) {
-      seq = applyCommand(seq, cmd).sequence;
+    try {
+      for (const cmd of entry.forward) {
+        seq = applyCommand(seq, cmd).sequence;
+      }
+    } catch (err) {
+      this.redoStack.push(entry);
+      return { ok: false, warnings: [err instanceof Error ? err.message : "redo failed"] };
     }
     this.current = seq;
     this.undoStack.push(entry);

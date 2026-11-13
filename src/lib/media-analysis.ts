@@ -86,9 +86,14 @@ function parseNum(v: string | number | undefined): number | null {
   return Number.isFinite(n) ? n : null;
 }
 
-function mimeFromContainer(formatName: string | null, hasVideo: boolean): string | null {
+function mimeFromContainer(formatName: string | null, hasVideo: boolean, videoCodec: string | null): string | null {
   if (!formatName) return null;
   const f = formatName.toLowerCase();
+  // Image containers first: ffprobe reports e.g. "png", "webp_pipe", and
+  // plain JPEG as the generic demuxer "image2" — the video codec decides.
+  if (f.startsWith("png") || videoCodec === "png") return "image/png";
+  if (f.startsWith("jpeg") || f.includes("mjpeg") || videoCodec === "mjpeg") return "image/jpeg";
+  if (f.includes("webp") || videoCodec === "webp") return "image/webp";
   if (f.includes("webm")) return hasVideo ? "video/webm" : "audio/webm";
   if (f.includes("matroska")) return "video/x-matroska";
   if (f.includes("mov") || f.includes("mp4") || f.includes("m4a") || f.includes("3gp")) return hasVideo ? "video/mp4" : "audio/mp4";
@@ -181,7 +186,7 @@ export function probeMediaDeep(storagePath: string): Promise<DeepProbe> {
           channelLayout: audio?.channel_layout ?? null,
           hasVideo: Boolean(video),
           hasAudio: Boolean(audio),
-          mime: mimeFromContainer(format.format_name ?? null, Boolean(video)),
+          mime: mimeFromContainer(format.format_name ?? null, Boolean(video), video?.codec_name ?? null),
         });
       }
     );
@@ -285,7 +290,9 @@ export async function runProbeJob(job: {
     });
 
     await jobManager.setProgress(job.id, 95, "Queuing proxy");
-    if (proxyEligible({ hasVideo: probe.hasVideo, width: probe.width, height: probe.height, durationSec: probe.durationSec })) {
+    // Images are stills — no proxy, no duration gate; their probe output is
+    // the pixel dimensions + container metadata.
+    if (asset.kind !== "IMAGE" && proxyEligible({ hasVideo: probe.hasVideo, width: probe.width, height: probe.height, durationSec: probe.durationSec })) {
       try {
         await db.mediaAsset.update({ where: { id: asset.id }, data: { proxyStatus: "QUEUED", proxyError: null } });
         await db.job.create({
@@ -303,10 +310,15 @@ export async function runProbeJob(job: {
           .update({ where: { id: asset.id }, data: { proxyStatus: "FAILED", proxyError: `Proxy could not be queued: ${msg}` } })
           .catch(() => undefined);
       }
-    } else if (probe.hasVideo) {
+    } else if (probe.hasVideo || asset.kind === "IMAGE") {
       await db.mediaAsset.update({ where: { id: asset.id }, data: { proxyStatus: "NONE" } });
     }
-    await completeJob(job.id, `Analysis complete: ${probe.hasVideo ? `${probe.width}×${probe.height}${probe.isVfr ? " VFR" : ""}` : "audio-only"}${probe.hasAudio ? `, ${probe.audioCodec ?? "audio"}` : ""}.`);
+    await completeJob(
+      job.id,
+      asset.kind === "IMAGE"
+        ? `Image analysis complete: ${probe.width}×${probe.height} (${probe.formatName ?? "image"}).`
+        : `Analysis complete: ${probe.hasVideo ? `${probe.width}×${probe.height}${probe.isVfr ? " VFR" : ""}` : "audio-only"}${probe.hasAudio ? `, ${probe.audioCodec ?? "audio"}` : ""}.`
+    );
   } catch (err) {
     await db.mediaAsset
       .update({

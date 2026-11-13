@@ -180,30 +180,46 @@ export async function applyTimelineEdits(
   }
 
   const nextVersion = head.versionNumber + 1;
-  // Atomic: snapshot + audit rows commit together or not at all.
-  await db.$transaction(async (tx) => {
-    const created = await tx.timelineVersion.create({
-      data: {
-        projectId,
-        versionNumber: nextVersion,
-        sequenceJson,
-        isAutosave,
-        createdById: userId,
-      },
-    });
-    for (let i = 0; i < edits.length; i++) {
-      const cmd = edits[i] as { type?: string };
-      await tx.timelineEdit.create({
+  // Atomic: snapshot + audit rows commit together or not at all. Two writers
+  // that pass the head check simultaneously are separated by the DB-level
+  // unique constraint — the loser surfaces as a REAL 409 (with the fresh head)
+  // instead of a raw P2002 400 the client would treat as generic failure.
+  try {
+    await db.$transaction(async (tx) => {
+      const created = await tx.timelineVersion.create({
         data: {
-          versionId: created.id,
-          opIndex: i,
-          type: typeof cmd?.type === "string" ? cmd.type.slice(0, 64) : "UNKNOWN",
-          payloadJson: JSON.stringify(edits[i]).slice(0, 200_000),
-          inverseJson: JSON.stringify(result.inverses[i] ?? []).slice(0, 400_000),
+          projectId,
+          versionNumber: nextVersion,
+          sequenceJson,
+          isAutosave,
+          createdById: userId,
         },
       });
+      for (let i = 0; i < edits.length; i++) {
+        const cmd = edits[i] as { type?: string };
+        await tx.timelineEdit.create({
+          data: {
+            versionId: created.id,
+            opIndex: i,
+            type: typeof cmd?.type === "string" ? cmd.type.slice(0, 64) : "UNKNOWN",
+            payloadJson: JSON.stringify(edits[i]).slice(0, 200_000),
+            inverseJson: JSON.stringify(result.inverses[i] ?? []).slice(0, 400_000),
+          },
+        });
+      }
+    });
+  } catch (err) {
+    if ((err as { code?: string })?.code === "P2002") {
+      const winner = await db.timelineVersion.findFirst({
+        where: { projectId },
+        orderBy: { versionNumber: "desc" },
+      });
+      if (winner) {
+        throw new VersionConflictError(winner.versionNumber, parseSequence(JSON.parse(winner.sequenceJson)));
+      }
     }
-  });
+    throw err;
+  }
 
   return { version: nextVersion, sequence: result.sequence, warnings: result.warnings, isAutosave };
 }

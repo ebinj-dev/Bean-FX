@@ -113,7 +113,7 @@ function parseIdentity(req: NextRequest): { identity: UploadIdentity } | { error
   if (kind === "UNSUPPORTED") {
     return {
       error: jsonError(
-        `Unsupported file type "${ext}". Supported: MP4, MOV, WebM, MKV, MP3, WAV, M4A, AAC, FLAC, OGG, SRT.`,
+        `Unsupported file type "${ext}". Supported: MP4, MOV, WebM, MKV, MP3, WAV, M4A, AAC, FLAC, OGG, JPG, PNG, WebP, SRT.`,
         415
       ),
     };
@@ -240,7 +240,7 @@ async function finalizeUpload(
   if (sniff.family === "unknown") {
     throw new PermanentUploadError("Unrecognized file content — not a known media container.");
   }
-  if (identity.kind !== "AUDIO" && identity.kind !== "VIDEO") {
+  if (identity.kind !== "AUDIO" && identity.kind !== "VIDEO" && identity.kind !== "IMAGE") {
     throw new PermanentUploadError("Unsupported file class.");
   }
   if (!sniffMatchesClass(sniff, identity.kind)) {
@@ -254,7 +254,7 @@ async function finalizeUpload(
   // Duplicate upload: same user + same bytes → reuse the stored original.
   // No second copy is written, and the original is never overwritten.
   const existing = await db.mediaAsset.findFirst({
-    where: { userId, sha256: sha, kind: { in: ["AUDIO", "VIDEO"] } },
+    where: { userId, sha256: sha, kind: { in: ["AUDIO", "VIDEO", "IMAGE"] } },
     orderBy: { createdAt: "asc" },
   });
   if (existing && (await fs.stat(existing.storagePath).then(() => true).catch(() => false))) {

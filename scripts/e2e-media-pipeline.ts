@@ -328,6 +328,85 @@ async function main() {
     const del2Body = (await del2.json()) as { ok: boolean; fileRemoved: boolean };
     check("deleting the last reference removes the bytes", del2.ok && del2Body.fileRemoved === true);
 
+    // ---- 15. image ingestion workflow (§4, workflow D) -----------------------
+    const pngPath = path.join(WORK, "still.png");
+    execSync(`ffmpeg -y -f lavfi -i testsrc2=size=640x360:rate=1 -frames:v 1 "${pngPath}"`, { stdio: ["ignore", "ignore", "inherit"] });
+    const pngBytes = readFileSync(pngPath);
+    const imgRes = await fetch(`${BASE}/api/media`, {
+      method: "POST",
+      headers: { ...userA, "x-filename": encodeURIComponent("broll-still.png"), "Content-Type": "application/octet-stream" },
+      body: pngBytes,
+    });
+    const imgBody = (await imgRes.json()) as { media?: { id: string; kind: string; probeStatus?: string } };
+    check("image upload accepted (IMAGE kind)", imgRes.ok && imgBody.media?.kind === "IMAGE", `status=${imgRes.status} kind=${imgBody.media?.kind}`);
+    const imgId = imgBody.media!.id;
+    const imgProbed = await pollAsset(userA, imgId, (m) => m.probeStatus === "READY" || m.probeStatus === "FAILED", 30_000);
+    check("image probe READY with pixel dimensions, no proxy", imgProbed.media.probeStatus === "READY" && imgProbed.media.width === 640 && imgProbed.media.mimeType === "image/png" && imgProbed.media.proxyStatus === "NONE", `w=${imgProbed.media.width} mime=${imgProbed.media.mimeType}`);
+    const imgFile = await fetch(`${BASE}/api/media/${imgId}/file?variant=original`, { headers: userA });
+    check("image streams through the file route with its real bytes", imgFile.ok && Number(imgFile.headers.get("content-length")) === pngBytes.byteLength, `${imgFile.status}`);
+    // Place the image on the timeline (workflow D: upload → place on editor).
+    const projRes = await fetch(`${BASE}/api/projects`, {
+      method: "POST",
+      headers: { ...userA, "Content-Type": "application/json" },
+      body: JSON.stringify({ name: `e2e-image-${Date.now()}` }),
+    });
+    const projBody = (await projRes.json()) as { project: { id: string } };
+    const projectId = projBody.project.id;
+    const headRes = await fetch(`${BASE}/api/editor/projects/${projectId}/timeline`, { headers: userA });
+    const head = (await headRes.json()) as { version: number; sequence: { tracks: { id: string; kind: string; locked: boolean }[] } };
+    const videoTrack = head.sequence.tracks.find((t) => t.kind === "VIDEO" && !t.locked)!;
+    const addClip = {
+      type: "AddClip",
+      clip: {
+        id: `img-clip-${Date.now()}`,
+        trackId: videoTrack.id,
+        sourceAssetId: imgId,
+        sourceInFrame: 0,
+        sourceOutFrame: 150, // 5 s still @ 30 fps sequence timebase
+        sourceFps: { num: 30, den: 1 },
+        timelineStartFrame: 0,
+        label: "broll-still.png",
+      },
+    };
+    const placeRes = await fetch(`${BASE}/api/editor/projects/${projectId}/timeline`, {
+      method: "POST",
+      headers: { ...userA, "Content-Type": "application/json" },
+      body: JSON.stringify({ baseVersion: head.version, edits: [addClip] }),
+    });
+    check("image placed on the video track as a timeline clip", placeRes.ok, `status=${placeRes.status} ${(await placeRes.text()).slice(0, 90)}`);
+
+    // ---- 16. concurrent timeline writes: real 409, no silent loss ------------
+    const raceEdits = [
+      {
+        type: "UpdateTrack",
+        trackId: videoTrack.id,
+        muted: true,
+      },
+    ];
+    const [raceA, raceB] = await Promise.all([
+      fetch(`${BASE}/api/editor/projects/${projectId}/timeline`, {
+        method: "POST",
+        headers: { ...userA, "Content-Type": "application/json" },
+        body: JSON.stringify({ baseVersion: head.version + 1, edits: raceEdits }),
+      }),
+      fetch(`${BASE}/api/editor/projects/${projectId}/timeline`, {
+        method: "POST",
+        headers: { ...userA, "Content-Type": "application/json" },
+        body: JSON.stringify({ baseVersion: head.version + 1, edits: [{ type: "UpdateTrack", trackId: videoTrack.id, solo: true }] }),
+      }),
+    ]);
+    const statuses = [raceA.status, raceB.status].sort();
+    check("simultaneous writes: exactly one wins, the loser gets 409 with the head", statuses[0] === 200 && statuses[1] === 409, `statuses=${statuses.join(",")}`);
+    const loserBody = (await (raceA.status === 409 ? raceA : raceB).json()) as { headVersion?: number; sequence?: unknown };
+    check("409 carries the authoritative head for rebase", Boolean(loserBody.headVersion) && Boolean(loserBody.sequence));
+
+    // ---- 17. concurrent duplicate uploads (dedup race, benign) ---------------
+    const [dupA, dupB] = await Promise.all([
+      fetch(`${BASE}/api/media`, { method: "POST", headers: { ...userA, "x-filename": encodeURIComponent("race-dup.png"), "Content-Type": "application/octet-stream" }, body: pngBytes }),
+      fetch(`${BASE}/api/media`, { method: "POST", headers: { ...userA, "x-filename": encodeURIComponent("race-dup-2.png"), "Content-Type": "application/octet-stream" }, body: pngBytes }),
+    ]);
+    check("simultaneous identical uploads both succeed (dedup race is lossless)", dupA.ok && dupB.ok, `a=${dupA.status} b=${dupB.status}`);
+
     // ---- measured limits (single-node, honest) ------------------------------
     console.log("\n=== measured on this sandbox (2 vCPU, single node) ===");
     console.log(`upload:   ${(bigBytes.byteLength / 1e6).toFixed(2)} MB chunked+resumed in ${uploadMs} ms`);

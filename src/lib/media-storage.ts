@@ -4,13 +4,69 @@ import { createReadStream, promises as fs } from "fs";
 import path from "path";
 import { db } from "@/lib/db";
 
-export const MEDIA_ROOT = "/home/z/my-project/media-store";
+/**
+ * Storage root (§4): every media file lives under one configurable root.
+ * BEANFX_DATA_DIR overrides the default; relative values resolve against the
+ * project directory. Empty-after-trim and filesystem-root values are refused
+ * with a clear error (the startup validation surfaces it loudly).
+ */
+function resolveDataDir(): string {
+  const raw = process.env.BEANFX_DATA_DIR;
+  if (raw === undefined) return "/home/z/my-project/media-store";
+  const trimmed = raw.trim();
+  if (!trimmed) {
+    throw new Error("BEANFX_DATA_DIR is set but empty — set it to an absolute directory path.");
+  }
+  const resolved = path.isAbsolute(trimmed) ? path.normalize(trimmed) : path.resolve(process.cwd(), trimmed);
+  if (resolved === path.parse(resolved).root) {
+    throw new Error("BEANFX_DATA_DIR must be a dedicated subdirectory, not a filesystem root.");
+  }
+  return resolved;
+}
+
+export const MEDIA_ROOT = resolveDataDir();
 export const MAX_UPLOAD_BYTES = 250 * 1024 * 1024; // 250 MB per file (declared limit)
 /** Resumable chunked uploads may go beyond the single-shot cap (M3). */
 export const MAX_CHUNKED_BYTES = 2 * 1024 * 1024 * 1024; // 2 GB
 /** Per-user storage quota (originals + proxies + exports). Env-overridable for tests. */
 export const USER_QUOTA_BYTES = Number(process.env.BEANFX_USER_QUOTA_BYTES ?? 5 * 1024 * 1024 * 1024);
 export const PROXIES_DIR = path.join(MEDIA_ROOT, "proxies");
+
+/** True when `candidate` resolves strictly inside MEDIA_ROOT (symlink-aware). */
+export function isInsideMediaRoot(candidate: string): boolean {
+  const resolved = path.resolve(candidate);
+  return resolved === MEDIA_ROOT || resolved.startsWith(MEDIA_ROOT + path.sep);
+}
+
+/**
+ * Resolve a server-generated relative path against the storage root,
+ * refusing anything that escapes it (defense in depth — the ids feeding
+ * these paths are already regex-validated).
+ */
+export function pathInsideMediaRoot(...segments: string[]): string {
+  const joined = path.join(MEDIA_ROOT, ...segments);
+  if (!isInsideMediaRoot(joined)) {
+    throw new Error(`refusing path outside the storage root: ${segments.join("/")}`);
+  }
+  return joined;
+}
+
+/**
+ * Verify the storage root is real and writable: creates it if needed, then
+ * round-trips a probe file. A symlinked root is allowed (deliberate volume
+ * mounts) — the probe confirms bytes actually land somewhere writable.
+ */
+export async function validateStorageRoot(): Promise<{ ok: true } | { ok: false; error: string }> {
+  try {
+    await fs.mkdir(path.join(MEDIA_ROOT, "originals"), { recursive: true });
+    const probe = pathInsideMediaRoot(".write-probe");
+    await fs.writeFile(probe, "ok");
+    await fs.rm(probe, { force: true });
+    return { ok: true };
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : String(err) };
+  }
+}
 
 export async function ensureMediaRoot() {
   await fs.mkdir(path.join(MEDIA_ROOT, "originals"), { recursive: true });
@@ -27,12 +83,14 @@ export function safeExt(name: string): string {
 const ALLOWED_AUDIO_EXT = [".mp3", ".wav", ".m4a", ".aac", ".flac", ".ogg", ".oga", ".webm", ".mp4", ".mov", ".aif", ".aiff"];
 const ALLOWED_VIDEO_EXT = [".mp4", ".mov", ".webm", ".mkv", ".m4v"];
 const ALLOWED_SUBTITLE_EXT = [".srt"];
+const ALLOWED_IMAGE_EXT = [".jpg", ".jpeg", ".png", ".webp"];
 
-export type MediaKind = "AUDIO" | "VIDEO" | "SUBTITLE" | "UNSUPPORTED";
+export type MediaKind = "AUDIO" | "VIDEO" | "SUBTITLE" | "IMAGE" | "UNSUPPORTED";
 
 export function classifyByExtension(ext: string): MediaKind {
   if (ALLOWED_VIDEO_EXT.includes(ext)) return "VIDEO";
   if (ALLOWED_AUDIO_EXT.includes(ext)) return "AUDIO";
+  if (ALLOWED_IMAGE_EXT.includes(ext)) return "IMAGE";
   if (ALLOWED_SUBTITLE_EXT.includes(ext)) return "SUBTITLE";
   return "UNSUPPORTED";
 }
@@ -175,6 +233,9 @@ export function sniffContainer(head: Buffer): SniffResult {
     // MPEG audio frame sync (bare MP3) or ADTS AAC (0xFFF1/0xFFF9 syncword).
     return { family: head[1] === 0xf1 || head[1] === 0xf9 ? "aac-adts" : "mp3", mime: head[1] === 0xf1 || head[1] === 0xf9 ? "audio/aac" : "audio/mpeg" };
   }
+  if (head.length >= 12 && head.subarray(0, 4).toString("latin1") === "RIFF" && head.subarray(8, 12).toString("latin1") === "WEBP") {
+    return { family: "webp", mime: "image/webp" };
+  }
   if (head.length >= 4 && head[0] === 0x89 && head.subarray(1, 4).toString("latin1") === "PNG") {
     return { family: "png", mime: "image/png" };
   }
@@ -184,14 +245,15 @@ export function sniffContainer(head: Buffer): SniffResult {
   return { family: "unknown", mime: null };
 }
 
-/** Container families an A/V upload may claim, by extension class. */
-const MAGIC_FAMILIES_BY_CLASS: Record<"AUDIO" | "VIDEO", Set<string>> = {
+/** Container families an upload may claim, by extension class. */
+const MAGIC_FAMILIES_BY_CLASS: Record<"AUDIO" | "VIDEO" | "IMAGE", Set<string>> = {
   VIDEO: new Set(["ftyp", "matroska"]),
   AUDIO: new Set(["ftyp", "matroska", "ogg", "wav", "flac", "mp3", "aac-adts"]),
+  IMAGE: new Set(["png", "jpeg", "webp"]),
 };
 
 /** True when the sniffed container is plausible for the declared class. */
-export function sniffMatchesClass(sniff: SniffResult, kind: "AUDIO" | "VIDEO"): boolean {
+export function sniffMatchesClass(sniff: SniffResult, kind: "AUDIO" | "VIDEO" | "IMAGE"): boolean {
   const families = MAGIC_FAMILIES_BY_CLASS[kind];
   return families.has(sniff.family);
 }

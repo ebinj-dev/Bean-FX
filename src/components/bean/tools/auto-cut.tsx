@@ -22,6 +22,7 @@ import { ToolShell } from "@/components/bean/tool-shell";
 import { readMediaRef } from "@/components/bean/upload-gate";
 import { JobProgressBar } from "@/components/bean/job-progress";
 import { AnalysisJobProgress } from "@/components/bean/analysis-progress";
+import { api } from "@/lib/client-api";
 import { Waveform, type WaveCuts } from "@/components/bean/waveform";
 import type {
   SessionUser,
@@ -31,7 +32,11 @@ import type {
   TranscriptSegment,
   SensitivityProfile,
   CutPlanSummary,
+  AnalysisListItem,
+  CutDecisionValue,
+  CutReviewStatus,
   RiisheAnalyzeResult,
+  SavedDecisionView,
 } from "@/lib/types";
 import { normalizeRanges, round3 } from "@/lib/audio-analysis";
 import { formatDuration, formatPrecise } from "@/lib/format-utils";
@@ -113,11 +118,41 @@ interface KeptSegment {
   outEnd: number;
 }
 
+/** Persisted-decision value → candidate review state (P3 mapping, unit-tested). */
+export function decisionToReview(decision: CutDecisionValue): CutReviewStatus {
+  switch (decision) {
+    case "APPROVE":
+      return "REMOVE";
+    case "REJECT":
+      return "REVIEW";
+    case "KEEP":
+      return "KEEP";
+  }
+}
+
+/** User-set review state → the decision persisted for it (null = not a persisted state). */
+function reviewToDecision(review: CutReviewStatus): CutDecisionValue | null {
+  switch (review) {
+    case "REMOVE":
+      return "APPROVE";
+    case "REVIEW":
+      return "REJECT";
+    case "KEEP":
+      return "KEEP";
+    default:
+      return null;
+  }
+}
+
 export function AutoCutTool({ user, onLogout }: { user: SessionUser; onLogout: () => void }) {
   const [media, setMedia] = useState<MediaMeta | null>(() => readMediaRef("autocut"));
   const [mediaKey, setMediaKey] = useState(0);
   const [analyzing, setAnalyzing] = useState(false);
   const [analysisJobId, setAnalysisJobId] = useState<string | null>(null);
+  // P3 decision persistence: the completed analysis job (decisions attach to
+  // it) and the decisions the server confirmed for the current candidates.
+  const completedJobIdRef = useRef<string | null>(null);
+  const [savedDecisions, setSavedDecisions] = useState<Map<string, CutDecisionValue>>(new Map());
   const [analysisError, setAnalysisError] = useState<string | null>(null);
 
   // Server-produced analysis artifacts (single source of truth).
@@ -444,6 +479,25 @@ export function AutoCutTool({ user, onLogout }: { user: SessionUser; onLogout: (
       }));
       setCuts(proposals);
 
+      // P3: restore the persisted decisions of THIS analysis. A fresh run has
+      // none; the reopen path (below) uses the same hook to bring SAVED
+      // badges and their review states back.
+      const jobIdForDecisions = completedJobIdRef.current;
+      if (jobIdForDecisions) {
+        void api
+          .decisions(jobIdForDecisions)
+          .then((res) => {
+            const map = new Map<string, CutDecisionValue>();
+            for (const d of res.decisions as SavedDecisionView[]) map.set(d.candidateId, d.decision);
+            setSavedDecisions(map);
+            if (map.size > 0) {
+              setCuts((prev) => prev.map((c) => (map.has(c.id) ? { ...c, review: decisionToReview(map.get(c.id)!) } : c)));
+              setAnalyzeNotes((prev) => [...prev, `${map.size} saved decision(s) restored from the persisted record.`]);
+            }
+          })
+          .catch(() => setAnalyzeNotes((prev) => [...prev, "Saved decisions could not be loaded — they remain on the server."]));
+      }
+
       // Transcript segments aligned server-side (word timings estimated).
       setTranscript(
         result.transcript.segments.map((s) => ({
@@ -499,6 +553,7 @@ export function AutoCutTool({ user, onLogout }: { user: SessionUser; onLogout: (
       const jobId = (data as { jobId?: string }).jobId;
       if (!jobId) throw new Error("The analysis endpoint did not return a job id.");
       setAnalysisJobId(jobId);
+      completedJobIdRef.current = jobId;
     } catch (err) {
       setAnalysisError(err instanceof Error ? err.message : "Analysis failed.");
       setAnalyzing(false);
@@ -510,6 +565,33 @@ export function AutoCutTool({ user, onLogout }: { user: SessionUser; onLogout: (
     setAnalyzing(false);
     setAnalysisError(error);
   }, []);
+
+  // P3 reopen path: selecting a media that already has a completed analysis
+  // loads THAT analysis (immutable payload + persisted decisions) instead of
+  // starting from a blank state. A fresh run always supersedes it.
+  const reopenLoadedForRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!media || analyzing || analysisJobId) return;
+    if (reopenLoadedForRef.current === media.id) return;
+    let cancelled = false;
+    void api
+      .analyses(media.id)
+      .then(async (res) => {
+        const latest = (res.analyses as AnalysisListItem[])[0];
+        if (!latest || cancelled) return;
+        reopenLoadedForRef.current = media.id;
+        const res2 = await fetch(`/api/autocut/analyze/result/${latest.jobId}`);
+        if (!res2.ok || cancelled) return;
+        const payload = (await res2.json()) as RiisheAnalyzeResult;
+        completedJobIdRef.current = latest.jobId;
+        handleAnalysisCompleted(payload);
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [media, mediaKey, analyzing, analysisJobId]);
 
   /* ----------------------------- playback ------------------------------- */
   // Preview decode budget: a 20-minute 48 kHz stereo file decoded at full
@@ -1048,8 +1130,18 @@ export function AutoCutTool({ user, onLogout }: { user: SessionUser; onLogout: (
     }
   }, [media, cuts, summary, duration]);
 
-  const setCutReview = (id: string, review: CutRange["review"]) =>
+  const setCutReview = (id: string, review: CutRange["review"]) => {
     setCuts((prev) => prev.map((c) => (c.id === id ? { ...c, review } : c)));
+    // P3: an explicit review toggle IS a decision — persist it. Failures are
+    // surfaced and the SAVED badge only appears after server confirmation.
+    const decision = reviewToDecision(review);
+    const jobId = completedJobIdRef.current;
+    if (!decision || !jobId) return;
+    void api
+      .saveDecision({ jobId, candidateId: id, decision })
+      .then(() => setSavedDecisions((prev) => new Map(prev).set(id, decision)))
+      .catch((err) => setAnalysisError(err instanceof Error ? err.message : "Decision could not be saved."));
+  };
 
   const deleteCut = (id: string) => setCuts((prev) => prev.filter((c) => c.id !== id));
 
@@ -1556,6 +1648,14 @@ export function AutoCutTool({ user, onLogout }: { user: SessionUser; onLogout: (
                           {st}
                         </button>
                       ))}
+                      {savedDecisions.has(c.id) && (
+                        <span
+                          className="rounded border border-[#22c55e]/60 bg-[#0f2415] px-1.5 py-0.5 text-[9px] font-extrabold tracking-wider text-[#86efac]"
+                          title="This decision is persisted server-side and restores on reopen."
+                        >
+                          SAVED
+                        </span>
+                      )}
                       <button
                         type="button"
                         onClick={() => deleteCut(c.id)}
