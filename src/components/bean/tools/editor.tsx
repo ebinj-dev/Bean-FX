@@ -45,6 +45,8 @@ import { EditorTimeline } from "@/components/bean/editor/timeline";
 import { ClipInspector } from "@/components/bean/editor/inspector";
 import { GangziiPanel } from "@/components/bean/editor/gangzii-panel";
 import { NikkiPanel } from "@/components/bean/editor/nikki-panel";
+import { JazmiiPanel } from "@/components/bean/editor/jazmii-panel";
+import { LaxiiPanel } from "@/components/bean/editor/laxii-panel";
 
 interface ProjectSummary {
   id: string;
@@ -523,6 +525,8 @@ export function EditorTool({ user, onLogout }: { user: { id: string }; onLogout:
           {sequence && <ClipInspector sequence={sequence} session={session} />}
           {sequence && <GangziiPanel sequence={sequence} session={session} />}
           {sequence && <NikkiPanel sequence={sequence} session={session} />}
+          {sequence && <JazmiiPanel sequence={sequence} session={session} />}
+          {sequence && <LaxiiPanel sequence={sequence} session={session} />}
         </div>
       </div>
 

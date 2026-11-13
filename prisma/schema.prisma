@@ -125,8 +125,29 @@ model MediaAsset {
   /// GANGZII operations whose source is this asset.
   gangziiSource GangziiProcess[] @relation("GangziiSource")
 
+  // ── M7 JAZMII/LAXII provenance (additive; NULL = upload or legacy asset) ──
+  /// How this asset came into being: UPLOAD | JAZMII | LAXII. NULL = legacy.
+  createdBy String?
+  /// AI provider that produced the asset (e.g. "zai-image", "zai-video").
+  provider String?
+  /// Provider model identifier (e.g. "cogvideox-3").
+  model String?
+  /// Generation prompt (JAZMII/LAXII) — provenance record, not UI state.
+  prompt String?
+  /// Structured generation parameters (size, fps, duration, quality…).
+  paramsJson String?
+  /// License key resolved through the provider metadata registry.
+  license String?
+  /// Attribution string built from provider metadata + prompt provenance.
+  attribution String?
+  /// Reference asset (image-to-image, variations) — provenance, NOT a
+  /// derived-copy link: the output is new content guided by the reference.
+  referenceAssetId String?
+
   @@index([userId, sha256])
   @@index([derivedFromId])
+  @@index([userId, createdBy])
+  @@index([referenceAssetId])
 }
 
 /// GANGZII audio operation (M5): a persisted processing profile (params as
