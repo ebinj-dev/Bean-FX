@@ -10,6 +10,9 @@ import {
   JOB_TYPE_GANGZII_ANALYZE,
   JOB_TYPE_GANGZII_PROCESS,
   JOB_TYPE_NIKKI_RENDER,
+  JOB_TYPE_JAZMII_GENERATE,
+  JOB_TYPE_JAZMII_ANALYZE,
+  JOB_TYPE_LAXII_GENERATE,
   PermanentJobError,
   handleJobError,
   requeueJob,
@@ -21,6 +24,8 @@ import { runProbeJob } from "@/lib/media-analysis";
 import { runProxyJob } from "@/lib/media-proxy";
 import { runGangziiAnalyzeJob, runGangziiProcessJob } from "@/lib/gangzii/jobs";
 import { runNikkiRenderJob } from "@/lib/nikki/jobs";
+import { runJazmiiGenerateJob, runJazmiiAnalyzeJob } from "@/lib/jazmii/jobs";
+import { runLaxiiGenerateJob } from "@/lib/laxii/jobs";
 
 /**
  * M3.4 — durable background worker for media processing.
@@ -56,6 +61,9 @@ const USER_MAX_ACTIVE: Record<string, number> = {
   [JOB_TYPE_GANGZII_ANALYZE]: 1,
   [JOB_TYPE_GANGZII_PROCESS]: 1,
   [JOB_TYPE_NIKKI_RENDER]: 1,
+  [JOB_TYPE_JAZMII_GENERATE]: 1,
+  [JOB_TYPE_JAZMII_ANALYZE]: 1,
+  [JOB_TYPE_LAXII_GENERATE]: 1,
 };
 /** Scratch sweeps run at most this often. */
 const SWEEP_INTERVAL_MS = 15 * 60_000;
@@ -76,6 +84,9 @@ const HANDLERS: Record<string, MediaJobHandler> = {
   [JOB_TYPE_GANGZII_ANALYZE]: runGangziiAnalyzeJob,
   [JOB_TYPE_GANGZII_PROCESS]: runGangziiProcessJob,
   [JOB_TYPE_NIKKI_RENDER]: runNikkiRenderJob,
+  [JOB_TYPE_JAZMII_GENERATE]: runJazmiiGenerateJob,
+  [JOB_TYPE_JAZMII_ANALYZE]: runJazmiiAnalyzeJob,
+  [JOB_TYPE_LAXII_GENERATE]: runLaxiiGenerateJob,
 };
 
 interface WorkerState {
