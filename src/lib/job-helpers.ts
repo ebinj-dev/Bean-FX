@@ -15,7 +15,11 @@ export const JOB_TYPE_JAZMII_GENERATE = "JAZMII_GENERATE";
 export const JOB_TYPE_JAZMII_ANALYZE = "JAZMII_ANALYZE";
 export const JOB_TYPE_LAXII_GENERATE = "LAXII_GENERATE";
 export const JOB_TYPE_STUDIO_TOPIC = "STUDIO_TOPIC";
-/** Worker-owned job types: M3 media pipeline + M5 GANGZII + M6 NIIKI; legacy job types keep their existing behavior. */
+// ── M9 Professional Publishing ──
+export const JOB_TYPE_PUBLISH_THUMBNAIL = "PUBLISH_THUMBNAIL";
+export const JOB_TYPE_EXPORT_VARIANT = "EXPORT_VARIANT";
+export const JOB_TYPE_PUBLISH_PACKAGE = "PUBLISH_PACKAGE";
+/** Worker-owned job types: M3 media pipeline + M5 GANGZII + M6 NIIKI + M7 engines + M8.1 studio + M9 publishing; legacy job types keep their existing behavior. */
 export const MEDIA_JOB_TYPES = [
   JOB_TYPE_MEDIA_PROBE,
   JOB_TYPE_MEDIA_PROXY,
@@ -26,6 +30,9 @@ export const MEDIA_JOB_TYPES = [
   JOB_TYPE_JAZMII_ANALYZE,
   JOB_TYPE_LAXII_GENERATE,
   JOB_TYPE_STUDIO_TOPIC,
+  JOB_TYPE_PUBLISH_THUMBNAIL,
+  JOB_TYPE_EXPORT_VARIANT,
+  JOB_TYPE_PUBLISH_PACKAGE,
 ] as const;
 
 /** Default hard wall-clock limits per job type (seconds). */
@@ -39,6 +46,9 @@ export const DEFAULT_TIMEOUT_SEC: Record<string, number> = {
   [JOB_TYPE_JAZMII_ANALYZE]: 10 * 60,
   [JOB_TYPE_LAXII_GENERATE]: 15 * 60,
   [JOB_TYPE_STUDIO_TOPIC]: 15 * 60,
+  [JOB_TYPE_PUBLISH_THUMBNAIL]: 15 * 60,
+  [JOB_TYPE_EXPORT_VARIANT]: 45 * 60,
+  [JOB_TYPE_PUBLISH_PACKAGE]: 30 * 60,
 };
 
 export const MAX_ATTEMPTS_DEFAULT = 3;
