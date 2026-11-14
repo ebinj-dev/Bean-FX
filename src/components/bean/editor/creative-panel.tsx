@@ -9,7 +9,7 @@
  * Uses the BEAN FX visual language; no separate editor is created.
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Loader2, Sparkles, ClipboardList, Timer, Gauge, Wrench, GitCompareArrows, History, RefreshCw, Check, X, Send, Ban, Eye, Search } from "lucide-react";
+import { Loader2, Sparkles, ClipboardList, Timer, Gauge, Wrench, GitCompareArrows, History, RefreshCw, Check, X, Send, Ban, Eye, Search, Activity } from "lucide-react";
 
 interface ReviewRow {
   id: string;
@@ -87,7 +87,7 @@ interface VariantRow {
   evaluationNote?: string;
 }
 
-type Tab = "assistant" | "review" | "retention" | "scorecard" | "recommendations" | "ab" | "visual" | "history";
+type Tab = "assistant" | "review" | "retention" | "scorecard" | "recommendations" | "ab" | "visual" | "motion" | "history";
 
 async function jfetch<T>(url: string, init?: RequestInit): Promise<T> {
   const res = await fetch(url, init);
@@ -136,6 +136,7 @@ export function CreativeDirectorPanel({ projectId, onSeekSec }: { projectId: str
     ["recommendations", "Recommendations", Wrench],
     ["ab", "A/B", GitCompareArrows],
     ["visual", "Visual", Eye],
+    ["motion", "Motion", Activity],
     ["history", "History", History],
   ];
 
@@ -159,6 +160,7 @@ export function CreativeDirectorPanel({ projectId, onSeekSec }: { projectId: str
       {tab === "recommendations" && <RecommendationsTab projectId={projectId} tick={tick} flash={flash} onSeekSec={onSeekSec} />}
       {tab === "ab" && <AbTab projectId={projectId} tick={tick} flash={flash} />}
       {tab === "visual" && <VisualTab projectId={projectId} tick={tick} flash={flash} onSeekSec={onSeekSec} />}
+      {tab === "motion" && <MotionTab projectId={projectId} tick={tick} flash={flash} onSeekSec={onSeekSec} />}
       {tab === "history" && <HistoryTab projectId={projectId} tick={tick} flash={flash} />}
     </div>
   );
@@ -1040,6 +1042,330 @@ function VisualTab({ projectId, tick, flash, onSeekSec }: { projectId: string; t
         </div>
       )}
       <div className="text-[9px] text-[#6a6a64]">Scene boundaries are deterministic ffmpeg detections; descriptions exist ONLY where a real vision provider inspected extracted frames. Mismatches are observations, not editing errors.</div>
+    </div>
+  );
+}
+
+// ── MOTION / TEMPORAL INTELLIGENCE (M13 §10) ────────────────────────────────
+interface TemporalTrackRow {
+  trackId: string;
+  category: string | null;
+  categoryProvenance: string | null;
+  samples: { sourceSec: number; timelineSec: number | null; nx: number; ny: number; confidence: number; visibility: string; bbox: { x: number; y: number; w: number; h: number } }[];
+  entrySourceSec: number;
+  exitSourceSec: number;
+  entryTimelineSec: number | null;
+  exitTimelineSec: number | null;
+  occlusionIntervals: { startSec: number; endSec: number; reason: string }[];
+  terminationReason: string;
+  confidence: number | null;
+  reappearsAs: string[];
+  provider: string | null;
+}
+interface TemporalIndexRow {
+  assetName: string;
+  width: number | null;
+  height: number | null;
+  settings: { sampleFps: number; windowSec: number; maxTracks: number; providerLabels: boolean };
+  tracks: TemporalTrackRow[];
+  motion: { trackId: string; direction: string | null; speedPxPerSec: number | null; displacementPx: number; accelTrend: string | null; repeatedPatternSec: number | null; suddenJumps: { sourceSec: number; px: number }[]; limitations: string }[];
+  camera: { windowIndex: number; classification: string; medianDxPx: number | null; medianDyPx: number | null; medianScaleRatio: number | null; confidence: number | null; note: string }[];
+  events: { eventId: string; type: string; sourceStartSec: number; sourceEndSec: number; timelineStartSec: number | null; description: string; evidenceLabel: string; confidence: number | null; trackIds: string[] }[];
+  sceneSummaries: { sceneId: string; description: string | null; representativeAssetId: string | null; sourceStartSec: number }[];
+  measurement: { framesSampled: number; windows: number; tracksTotal: number; tracksLost: number; cameraClassified: number; providerLabelsUsed: number; consentVisual: boolean };
+  notes: string[];
+}
+interface MographProposalRow {
+  proposalId: string;
+  trackId: string;
+  label: string;
+  primaryText: string;
+  templateId: string;
+  durationFrames: number;
+  keyframes: { property: string; frame: number; value: number }[];
+  gaps: { fromFrame: number; toFrame: number; note: string }[];
+  warnings: string[];
+  previewAssetIds: string[];
+  confidence: number | null;
+}
+interface TemporalApiPayload {
+  index: { status: string; stale: boolean; staleReason: string | null; provider: string | null; consentVisual: boolean; missingEvidence: string[]; result: TemporalIndexRow | null } | null;
+  mograph: { status: string; stale: boolean; result: { proposals: MographProposalRow[] } | null } | null;
+  review: { status: string; stage: string; progress: number; error: string | null } | null;
+}
+interface TemporalSearchHit {
+  kind: string;
+  refId: string;
+  sourceStartSec: number;
+  sourceEndSec: number;
+  timelineStartSec: number | null;
+  description: string | null;
+  previewAssetId: string | null;
+  relevanceScore: number;
+  evidence: string;
+}
+
+function MotionTab({ projectId, tick, flash, onSeekSec }: { projectId: string; tick: number; flash: (k: "ok" | "err", t: string) => void; onSeekSec?: (sec: number) => void }) {
+  const [data, setData] = useState<TemporalApiPayload | null>(null);
+  const [consent, setConsent] = useState(false);
+  const [sampleFps, setSampleFps] = useState(5);
+  const [busy, setBusy] = useState(false);
+  const [query, setQuery] = useState("");
+  const [searching, setSearching] = useState(false);
+  const [searchRes, setSearchRes] = useState<{ available: boolean; method: string; results: TemporalSearchHit[]; notes: string[] } | null>(null);
+  const [openTrack, setOpenTrack] = useState<string | null>(null);
+  const [mographBusy, setMographBusy] = useState<string | null>(null);
+
+  const load = useCallback(() => {
+    jfetch<TemporalApiPayload>(`/api/creative/temporal/index?projectId=${projectId}`).then(setData).catch(() => undefined);
+  }, [projectId]);
+  useEffect(() => {
+    load();
+  }, [load, tick]);
+
+  const run = async () => {
+    setBusy(true);
+    try {
+      const d = await jfetch<{ jobId: string; disclosure: string }>("/api/creative/temporal/index", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ projectId, consentVisual: consent, settings: { sampleFps, providerLabels: consent } }),
+      });
+      flash("ok", `Motion analysis queued (job ${d.jobId.slice(0, 8)}…). ${d.disclosure}`);
+    } catch (e) {
+      flash("err", e instanceof Error ? e.message : "Failed to queue");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const doSearch = async () => {
+    if (!query.trim()) return;
+    setSearching(true);
+    try {
+      const d = await jfetch<{ available: boolean; method: string; results: TemporalSearchHit[]; notes: string[] }>("/api/creative/temporal/search", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ projectId, query }),
+      });
+      setSearchRes(d);
+    } catch (e) {
+      flash("err", e instanceof Error ? e.message : "Search failed");
+    } finally {
+      setSearching(false);
+    }
+  };
+
+  const buildMograph = async (trackId: string) => {
+    setMographBusy(trackId);
+    try {
+      const d = await jfetch<{ proposal: MographProposalRow; note: string }>("/api/creative/temporal/mograph", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ projectId, trackId }),
+      });
+      flash("ok", `Motion-graphics proposal built (${d.proposal.keyframes.length} keyframes) — approve it in the Recommendations tab.`);
+    } catch (e) {
+      flash("err", e instanceof Error ? e.message : "Proposal failed");
+    } finally {
+      setMographBusy(null);
+    }
+  };
+
+  const index = data?.index?.result ?? null;
+  const running = data?.review && (data.review.status === "QUEUED" || data.review.status === "RUNNING");
+  const seeking = (tl: number | null) => {
+    if (tl !== null && onSeekSec) onSeekSec(tl);
+  };
+
+  return (
+    <div className="space-y-2.5">
+      <div className="rounded border border-[#2a2a2a] p-2">
+        <div className="flex flex-wrap items-center gap-2">
+          <label className="flex items-center gap-1 text-[10px] text-[#a8a8a0]">
+            <input type="checkbox" checked={consent} onChange={(e) => setConsent(e.target.checked)} />
+            consent: label tracked subjects with the vision provider (≤4 small crops)
+          </label>
+          <select className={`${inputCls} max-w-[110px]`} value={sampleFps} onChange={(e) => setSampleFps(Number(e.target.value))}>
+            {[3, 5, 8, 10].map((n) => (
+              <option key={n} value={n}>{n} fps sampling</option>
+            ))}
+          </select>
+          <button type="button" className={btnCls} disabled={busy || Boolean(running)} onClick={() => void run()}>
+            {running ? <Loader2 className="h-3 w-3 animate-spin" /> : <Activity className="h-3 w-3" />} {running ? "tracking…" : "Run motion analysis"}
+          </button>
+        </div>
+        <div className="mt-1 text-[9px] text-[#6a6a64]">Local tracking (OpenCV CSRT) and camera registration upload NOTHING — consent only controls optional subject labeling. {data?.review ? `Review ${data.review.status} ${data.review.stage} (${data.review.progress}%)` : ""}</div>
+        {data?.review?.error && <div className="mt-1 text-[10px] text-[#e0a094]">{data.review.error}</div>}
+      </div>
+
+      {data?.index && (
+        <div className="text-[9px] text-[#6a6a64]">
+          temporal index {data.index.status}
+          {data.index.stale && <span className="text-[#e0a094]"> · STALE: {data.index.staleReason ?? "reason pending"}</span>} · {index?.measurement.framesSampled ?? 0} frames / {index?.measurement.windows ?? 0} windows
+        </div>
+      )}
+      {(data?.index?.missingEvidence?.length ?? 0) > 0 && (
+        <div className="rounded border border-[#4a3a20] bg-[#1a150c] p-1.5 text-[9px] text-[#d4a017]">
+          {data?.index?.missingEvidence.slice(0, 4).map((m, i) => <div key={i}>· {m}</div>)}
+        </div>
+      )}
+
+      {index && (
+        <>
+          {/* Object Tracks + Track Inspector */}
+          <div>
+            <div className={labelCls}>Object Tracks — {index.tracks.length} track(s) ({index.measurement.tracksLost} lost) of {index.assetName.slice(0, 36)}</div>
+            {index.tracks.map((t) => {
+              const m = index.motion.find((mm) => mm.trackId === t.trackId);
+              return (
+                <div key={t.trackId} className="mt-1 rounded border border-[#2a2a2a] p-1.5 text-[9px]">
+                  <div className="flex flex-wrap items-center gap-1">
+                    <span className="text-[#d4a017]">{t.category ?? "subject"}</span>
+                    <span className="text-[#6a6a64]">({t.categoryProvenance})</span>
+                    <span className="text-[#a8a8a0]">{t.samples.length} samples</span>
+                    <span style={{ color: t.terminationReason === "tracker-lost" ? "#e06c55" : "#7fb069" }}>{t.terminationReason}</span>
+                    {t.entryTimelineSec !== null && (
+                      <button type="button" className="text-[#6aa9c9] hover:underline" onClick={() => seeking(t.entryTimelineSec)}>
+                        entry {t.entryTimelineSec.toFixed(1)}s ↗
+                      </button>
+                    )}
+                    <span className="text-[#6a6a64]">exit {t.exitSourceSec.toFixed(1)}s{t.exitTimelineSec !== null ? ` (tl ${t.exitTimelineSec.toFixed(1)}s)` : ""}</span>
+                    {t.occlusionIntervals.length > 0 && <span className="text-[#d4a017]">occl×{t.occlusionIntervals.length}</span>}
+                    {t.reappearsAs.length > 0 && <span className="text-[#6aa9c9]">reappears→{t.reappearsAs.length} (inferred)</span>}
+                    <span className="text-[#6a6a64]">conf {t.confidence?.toFixed(2) ?? "—"}</span>
+                  </div>
+                  {m && (
+                    <div className="mt-0.5 text-[#a8a8a0]">
+                      {m.direction ?? "unknown"} · {m.speedPxPerSec?.toFixed(1) ?? "0"} px/s · {m.displacementPx.toFixed(0)} px total{m.accelTrend && m.accelTrend !== "insufficient-data" ? ` · ${m.accelTrend}` : ""}
+                      {m.repeatedPatternSec ? ` · repeats ~${m.repeatedPatternSec}s` : ""}
+                    </div>
+                  )}
+                  <div className="mt-0.5 flex gap-1.5">
+                    <button type="button" className="text-[#6aa9c9] hover:underline" onClick={() => setOpenTrack(openTrack === t.trackId ? null : t.trackId)}>
+                      {openTrack === t.trackId ? "hide inspector" : "track inspector"}
+                    </button>
+                    <button type="button" className="text-[#7fb069] hover:underline" disabled={mographBusy === t.trackId} onClick={() => void buildMograph(t.trackId)}>
+                      {mographBusy === t.trackId ? "building…" : "motion graphic ⟶"}
+                    </button>
+                  </div>
+                  {openTrack === t.trackId && (
+                    <div className="mt-1 rounded bg-[#0b0b0a] p-1">
+                      {t.samples.slice(0, 12).map((s, i) => (
+                        <div key={i} className="text-[9px] text-[#a8a8a0]">
+                          <span className="text-[#d4a017]">{s.sourceSec.toFixed(2)}s</span> (tl {s.timelineSec?.toFixed(2) ?? "—"}s) box [{s.bbox.x},{s.bbox.y} {s.bbox.w}×{s.bbox.h}] center ({s.nx.toFixed(2)},{s.ny.toFixed(2)}) {s.visibility}
+                          {s.timelineSec !== null && (
+                            <button type="button" className="ml-1 text-[#6aa9c9] hover:underline" onClick={() => seeking(s.timelineSec)}>
+                              ↗
+                            </button>
+                          )}
+                        </div>
+                      ))}
+                      {t.occlusionIntervals.slice(0, 2).map((o, i) => (
+                        <div key={`o${i}`} className="text-[9px] text-[#e0a094]">occlusion {o.startSec.toFixed(2)}–{o.endSec.toFixed(2)}s: {o.reason}</div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+
+          {/* Camera Movement */}
+          {index.camera.length > 0 && (
+            <div>
+              <div className={labelCls}>Camera Movement — {index.measurement.cameraClassified} window(s) classified</div>
+              {index.camera.map((c) => (
+                <div key={c.windowIndex} className="mt-1 rounded border border-[#2a2a2a] p-1.5 text-[9px]">
+                  <div className="flex items-center gap-1">
+                    <span style={{ color: c.classification === "static" ? "#7fb069" : c.classification === "uncertain" ? "#8a8a84" : "#d4a017" }}>{c.classification}</span>
+                    <span className="text-[#6a6a64]">conf {c.confidence?.toFixed(2) ?? "—"} · window {c.windowIndex}</span>
+                  </div>
+                  <div className="text-[#a8a8a0]">median {c.medianDxPx?.toFixed(1) ?? "?"}px/frame x · {c.medianDyPx?.toFixed(1) ?? "?"}px/frame y · scale {c.medianScaleRatio?.toFixed(4) ?? "n/a"}</div>
+                  <div className="text-[#6a6a64]">{c.note.slice(0, 180)}</div>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Temporal Events */}
+          <div>
+            <div className={labelCls}>Temporal Events — {index.events.length} observation(s)</div>
+            {index.events.slice(0, 10).map((e) => (
+              <div key={e.eventId} className="mt-1 rounded border border-[#2a2a2a] p-1.5 text-[9px]">
+                <div className="flex flex-wrap items-center gap-1">
+                  <LabelChip label={e.evidenceLabel} />
+                  <span className="text-[#d8d8d2]">{e.type}</span>
+                  {e.timelineStartSec !== null && (
+                    <button type="button" className="text-[#6aa9c9] hover:underline" onClick={() => seeking(e.timelineStartSec)}>
+                      {e.timelineStartSec.toFixed(1)}s ↗
+                    </button>
+                  )}
+                  <span className="text-[#6a6a64]">conf {e.confidence?.toFixed(2) ?? "—"}</span>
+                </div>
+                <div className="text-[#a8a8a0]">{e.description.slice(0, 200)}</div>
+              </div>
+            ))}
+          </div>
+
+          {/* Temporal Search */}
+          <div>
+            <div className={labelCls}>Temporal Search (tracks · motion · camera · events)</div>
+            <div className="mt-1 flex gap-1.5">
+              <input className={inputCls} placeholder='e.g. "moving left to right" / "camera pan" / "almost no movement"' value={query} onChange={(e) => setQuery(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter" && !searching) void doSearch(); }} />
+              <button type="button" className={btnCls} disabled={searching} onClick={() => void doSearch()}>
+                {searching ? <Loader2 className="h-3 w-3 animate-spin" /> : <Search className="h-3 w-3" />}
+              </button>
+            </div>
+            {searchRes && (
+              <div className="mt-1 space-y-1">
+                <div className="text-[9px] text-[#6a6a64]">method: {searchRes.method}{searchRes.notes.length > 0 && ` · ${searchRes.notes[0]}`}</div>
+                {searchRes.results.map((r) => (
+                  <div key={r.refId} className="flex gap-1.5 rounded border border-[#2a2a2a] p-1.5">
+                    {r.previewAssetId && <img src={`/api/media/${r.previewAssetId}/file`} alt="result" className="h-10 w-16 rounded object-cover" />}
+                    <div className="flex-1 text-[9px] text-[#a8a8a0]">
+                      <span className="text-[#d4a017]">{(r.relevanceScore * 100).toFixed(0)}%</span> {r.kind} · src {r.sourceStartSec.toFixed(1)}–{r.sourceEndSec.toFixed(1)}s
+                      {r.timelineStartSec !== null && (
+                        <button type="button" className="ml-1 text-[#6aa9c9] hover:underline" onClick={() => seeking(r.timelineStartSec)}>
+                          tl {r.timelineStartSec.toFixed(1)}s ↗
+                        </button>
+                      )}
+                      <div>{r.description?.slice(0, 140)}</div>
+                      <div className="text-[#6a6a64]">{r.evidence.slice(0, 140)}</div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Motion Graphics Proposals (from the run artifact) */}
+          {data?.mograph?.result?.proposals && data.mograph.result.proposals.length > 0 && (
+            <div>
+              <div className={labelCls}>Motion Graphics Proposals — approve in the Recommendations tab</div>
+              {data.mograph.result.proposals.map((p) => (
+                <div key={p.proposalId} className="mt-1 rounded border border-[#2a2a2a] p-1.5 text-[9px]">
+                  <div className="flex flex-wrap items-center gap-1">
+                    <span className="text-[#7fb069]">{p.label}</span>
+                    <span className="text-[#6a6a64]">{p.keyframes.length} keyframes · {p.durationFrames} frames · template {p.templateId}</span>
+                    {p.gaps.length > 0 && <span className="text-[#d4a017]">gaps×{p.gaps.length} (held, not extrapolated)</span>}
+                  </div>
+                  <div className="mt-0.5 flex gap-1">
+                    {p.previewAssetIds.slice(0, 3).map((a) => (
+                      <img key={a} src={`/api/media/${a}/file`} alt="preview" className="h-10 w-16 rounded object-cover" />
+                    ))}
+                  </div>
+                  {p.warnings.slice(0, 2).map((w, i) => (
+                    <div key={i} className="text-[#e0a094]">{w}</div>
+                  ))}
+                </div>
+              ))}
+            </div>
+          )}
+          <div className="text-[9px] text-[#6a6a64]">Tracks are real OpenCV CSRT correspondences across consecutive frames. Pixel speeds are not real-world speeds. Lost tracking produces broken tracks — identity is never invented across gaps.</div>
+        </>
+      )}
+      {!index && !running && <div className="text-[11px] text-[#6a6a64]">No temporal index yet — run Motion Analysis to sample consecutive frames and track real subjects{consent ? " (provider labeling on)" : ""}.</div>}
     </div>
   );
 }

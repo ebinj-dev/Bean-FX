@@ -64,8 +64,9 @@ function ffmpegRun(args: string[], timeoutMs = 60_000): Promise<void> {
   });
 }
 
-/** Map a source second into every timeline placement (may be several clips). */
-function timelinePlacementsFor(sourceSec: number, ctx: FrameExtractionContext): { clipId: string; timelineSec: number }[] {
+/** Map a source second into every timeline placement (may be several clips).
+ *  Exported for the M13 temporal sampler (same speed-aware mapping). */
+export function timelinePlacementsFor(sourceSec: number, ctx: FrameExtractionContext): { clipId: string; timelineSec: number }[] {
   const out: { clipId: string; timelineSec: number }[] = [];
   for (const c of ctx.clips) {
     const srcFps = c.sourceFpsNum / c.sourceFpsDen;
