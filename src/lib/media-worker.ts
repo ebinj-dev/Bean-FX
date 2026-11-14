@@ -17,6 +17,8 @@ import {
   JOB_TYPE_PUBLISH_THUMBNAIL,
   JOB_TYPE_EXPORT_VARIANT,
   JOB_TYPE_PUBLISH_PACKAGE,
+  JOB_TYPE_CREATIVE_REVIEW,
+  JOB_TYPE_CREATIVE_VARIANTS,
   PermanentJobError,
   handleJobError,
   requeueJob,
@@ -32,6 +34,7 @@ import { runJazmiiGenerateJob, runJazmiiAnalyzeJob } from "@/lib/jazmii/jobs";
 import { runLaxiiGenerateJob } from "@/lib/laxii/jobs";
 import { runStudioTopicJob } from "@/lib/studio/jobs";
 import { runPublishThumbnailJob, runExportVariantJob, runPublishPackageJob } from "@/lib/publish/jobs";
+import { runCreativeReviewJob, runCreativeVariantsJob } from "@/lib/creative/jobs";
 
 /**
  * M3.4 — durable background worker for media processing.
@@ -74,6 +77,8 @@ const USER_MAX_ACTIVE: Record<string, number> = {
   [JOB_TYPE_PUBLISH_THUMBNAIL]: 1,
   [JOB_TYPE_EXPORT_VARIANT]: 1,
   [JOB_TYPE_PUBLISH_PACKAGE]: 1,
+  [JOB_TYPE_CREATIVE_REVIEW]: 1,
+  [JOB_TYPE_CREATIVE_VARIANTS]: 1,
 };
 /** Scratch sweeps run at most this often. */
 const SWEEP_INTERVAL_MS = 15 * 60_000;
@@ -101,6 +106,8 @@ const HANDLERS: Record<string, MediaJobHandler> = {
   [JOB_TYPE_PUBLISH_THUMBNAIL]: runPublishThumbnailJob,
   [JOB_TYPE_EXPORT_VARIANT]: runExportVariantJob,
   [JOB_TYPE_PUBLISH_PACKAGE]: runPublishPackageJob,
+  [JOB_TYPE_CREATIVE_REVIEW]: runCreativeReviewJob,
+  [JOB_TYPE_CREATIVE_VARIANTS]: runCreativeVariantsJob,
 };
 
 interface WorkerState {

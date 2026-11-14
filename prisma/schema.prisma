@@ -36,6 +36,8 @@ model User {
   publishMetadata   PublishMetadata[]  @relation("PublishMetadata")
   exportVariants    ExportVariant[]    @relation("ExportVariants")
   publishPackages   PublishPackage[]   @relation("PublishPackages")
+  creativeReviews   CreativeReview[]   @relation("CreativeReviews")
+  creativeVariants  CreativeVariant[]  @relation("CreativeVariants")
 }
 
 /// User-defined words/phrases RIISHE should consider removing (context-aware —
@@ -82,6 +84,8 @@ model Project {
   publishMetadataRows PublishMetadata[] @relation("PublishMetadataRows")
   exportVariants ExportVariant[] @relation("ExportVariants")
   publishPackages PublishPackage[] @relation("PublishPackages")
+  creativeReviews CreativeReview[] @relation("CreativeReviews")
+  creativeVariants CreativeVariant[] @relation("CreativeVariants")
 }
 
 model MediaAsset {
@@ -682,4 +686,153 @@ model PublishPackage {
   updatedAt        DateTime @updatedAt
 
   @@index([userId, createdAt])
+}
+
+/// ── M10 AI Creative Director & Content Intelligence ────────────────────────
+/// One creative analysis run over a project. contextVersion captures the
+/// timeline head using the SAME staleness formula MY AI uses
+/// (v:<version>:<clipCount>:<maxEnd>) so stale reviews are detectable.
+model CreativeReview {
+  id                  String   @id @default(cuid())
+  userId              String
+  user                User     @relation("CreativeReviews", fields: [userId], references: [id], onDelete: Cascade)
+  projectId           String
+  project             Project  @relation("CreativeReviews", fields: [projectId], references: [id], onDelete: Cascade)
+  /// full | retention | scorecard | brief
+  scope               String   @default("full")
+  language            String   @default("en") // en | ta
+  /// QUEUED | RUNNING | COMPLETED | FAILED | CANCELLED
+  status              String   @default("QUEUED")
+  progress            Int      @default(0)
+  stage               String?
+  /// Timeline version the analysis was computed against (staleness check).
+  contextVersion      String
+  headVersion         Int
+  /// Structured creative brief (observed vs AI-interpreted, evidence refs).
+  briefJson           String?
+  /// What was NOT inspected (honest partial analysis).
+  missingEvidenceJson String?
+  /// Which engines provided which evidence (e.g. GANGZII inspection job id).
+  evidenceSourcesJson String?
+  /// LLM model used for interpretive parts (null = deterministic only).
+  provider            String?
+  model               String?
+  error               String?
+  jobId               String?
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  findings         CreativeFinding[]
+  recommendations  CreativeRecommendation[]
+  scorecard        CreativeScorecard?
+
+  @@index([userId, projectId, createdAt])
+}
+
+/// One evidence-based finding from a review. evidenceLabel separates MEASURED
+/// facts from inferred/AI interpretation/insufficient evidence (§4 honesty).
+model CreativeFinding {
+  id            String  @id @default(cuid())
+  reviewId      String
+  review        CreativeReview @relation(fields: [reviewId], references: [id], onDelete: Cascade)
+  findingNo     Int
+  /// opening-hook | long-pause | dead-air | pacing | caption-timing |
+  /// repeated-narration | audio-quality | transition | ending-cta |
+  /// scene-structure | visual-repetition | technical | narrative
+  category      String
+  startSec      Float?
+  endSec        Float?
+  /// info | minor | moderate | major
+  severity      String  @default("info")
+  /// 0..1 where quantifiable; null when not.
+  confidence    Float?
+  /// measured | inferred | ai-interpretation | insufficient-evidence
+  evidenceLabel String
+  /// The actual measured values + source references (engine, job, asset).
+  evidenceJson  String
+  explanation   String
+  suggestion    String?
+  /// RIISHE | GANGZII | NIIKI | JAZMII | LAXII | MYAI | deterministic
+  engine        String  @default("deterministic")
+
+  @@index([reviewId])
+}
+
+/// A typed, executable-or-informational improvement proposal (§5). Executable
+/// proposals carry M1 commands and are applied ONLY after explicit approval,
+/// through the versioned persistence path (undo/redo/autosave intact). Stale
+/// proposals are rejected when the timeline head has moved.
+model CreativeRecommendation {
+  id                        String   @id @default(cuid())
+  reviewId                  String
+  review                    CreativeReview @relation(fields: [reviewId], references: [id], onDelete: Cascade)
+  userId                    String
+  projectId                 String
+  recNo                     Int
+  /// informational | executable
+  kind                      String
+  engine                    String
+  title                     String
+  detail                    String
+  /// Target range/reference: { clipId?, trackId?, startSec?, endSec? }.
+  targetJson                String?
+  /// Typed proposal payload: { commands: Command[] } or engineAction spec.
+  proposalJson              String
+  /// Human-readable preview of what applying would do.
+  previewJson               String?
+  requiresApproval          Boolean  @default(true)
+  /// PROPOSED | APPROVED | REJECTED | EXECUTED | FAILED | STALE
+  status                    String   @default("PROPOSED")
+  timelineVersionAtProposal Int
+  executedVersion           Int?
+  resultJson                String?
+  createdAt                 DateTime @default(now())
+  updatedAt                 DateTime @updatedAt
+
+  @@index([reviewId])
+  @@index([userId, projectId, status])
+}
+
+/// A/B Studio variant (§6): a creative alternative preserved alongside the
+/// original. Applied variants record the decision; no performance claims are
+/// made without real experimental data (labelled creative evaluation).
+model CreativeVariant {
+  id                 String   @id @default(cuid())
+  userId             String
+  user               User     @relation("CreativeVariants", fields: [userId], references: [id], onDelete: Cascade)
+  projectId          String
+  project            Project  @relation("CreativeVariants", fields: [projectId], references: [id], onDelete: Cascade)
+  reviewId           String?
+  /// hook | narration-section | thumbnail | title | description | cta | scene-sequence
+  kind               String
+  label              String
+  description        String
+  /// Which elements changed (e.g. ["first-8-seconds narration"]).
+  changedElementsJson String?
+  /// Text payload / LAXII assetId / M1 command batch for scene-sequence.
+  payloadJson        String
+  provenanceJson     String
+  /// PROPOSED | SELECTED | DISCARDED | APPLIED
+  status             String   @default("PROPOSED")
+  comparisonJson     String?
+  decisionNote       String?
+  appliedVersion     Int?
+  appliedAt          DateTime?
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  @@index([userId, projectId, kind])
+}
+
+/// Explainable scorecard (§7) — one per review. dimensionsJson holds the 8
+/// dimensions (score/evidence/explanation/confidence/missingData/suggestions)
+/// under a documented, versioned scoring model. Missing data → null score.
+model CreativeScorecard {
+  id           String   @id @default(cuid())
+  reviewId     String   @unique
+  review       CreativeReview @relation(fields: [reviewId], references: [id], onDelete: Cascade)
+  modelVersion String
+  dimensionsJson String
+  overallNote  String?
+  createdAt    DateTime @default(now())
 }

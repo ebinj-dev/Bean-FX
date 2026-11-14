@@ -28,6 +28,7 @@ SUITES=(
   scripts/test-automation-api.test.ts
   scripts/test-studio-core.test.ts
   scripts/test-publish-core.test.ts
+  scripts/test-creative-core.test.ts
   scripts/test-riishe-timeline.test.ts
   scripts/test-editor-regressions.test.ts
   scripts/test-media-pipeline.test.ts
