@@ -7,7 +7,8 @@
 import { z } from "zod";
 import { llmProvider, type LLMProvider, type LLMChatOptions } from "./provider";
 
-function extractJson(text: string): unknown {
+/** Exported for the M12 vision gateway (same fence-tolerant semantics). */
+export function extractJson(text: string): unknown {
   const trimmed = text.trim();
   // The verified provider wraps JSON in ```json fences even when asked not to.
   const fence = trimmed.match(/```(?:json)?\s*([\s\S]*?)```/);

@@ -99,7 +99,7 @@ export const ProposalPayloadSchema = z.discriminatedUnion("kind", [
   z.object({
     kind: z.literal("engine-action"),
     engine: RecEngine,
-    action: z.enum(["laxii-thumbnail-variants", "gangzii-loudness", "riishe-autocut-analysis", "jazmii-broll"]),
+    action: z.enum(["laxii-thumbnail-variants", "laxii-broll-image", "gangzii-loudness", "riishe-autocut-analysis", "jazmii-broll"]),
     /** Engine params — validated by the engine's own schema at dispatch. */
     params: z.record(z.string(), z.unknown()),
   }),

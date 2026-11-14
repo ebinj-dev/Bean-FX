@@ -9,7 +9,7 @@
  * Uses the BEAN FX visual language; no separate editor is created.
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Loader2, Sparkles, ClipboardList, Timer, Gauge, Wrench, GitCompareArrows, History, RefreshCw, Check, X, Send, Ban } from "lucide-react";
+import { Loader2, Sparkles, ClipboardList, Timer, Gauge, Wrench, GitCompareArrows, History, RefreshCw, Check, X, Send, Ban, Eye, Search } from "lucide-react";
 
 interface ReviewRow {
   id: string;
@@ -87,7 +87,7 @@ interface VariantRow {
   evaluationNote?: string;
 }
 
-type Tab = "assistant" | "review" | "retention" | "scorecard" | "recommendations" | "ab" | "history";
+type Tab = "assistant" | "review" | "retention" | "scorecard" | "recommendations" | "ab" | "visual" | "history";
 
 async function jfetch<T>(url: string, init?: RequestInit): Promise<T> {
   const res = await fetch(url, init);
@@ -135,6 +135,7 @@ export function CreativeDirectorPanel({ projectId, onSeekSec }: { projectId: str
     ["scorecard", "Scorecard", Gauge],
     ["recommendations", "Recommendations", Wrench],
     ["ab", "A/B", GitCompareArrows],
+    ["visual", "Visual", Eye],
     ["history", "History", History],
   ];
 
@@ -157,6 +158,7 @@ export function CreativeDirectorPanel({ projectId, onSeekSec }: { projectId: str
       {tab === "scorecard" && <ScorecardTab projectId={projectId} tick={tick} flash={flash} />}
       {tab === "recommendations" && <RecommendationsTab projectId={projectId} tick={tick} flash={flash} onSeekSec={onSeekSec} />}
       {tab === "ab" && <AbTab projectId={projectId} tick={tick} flash={flash} />}
+      {tab === "visual" && <VisualTab projectId={projectId} tick={tick} flash={flash} onSeekSec={onSeekSec} />}
       {tab === "history" && <HistoryTab projectId={projectId} tick={tick} flash={flash} />}
     </div>
   );
@@ -754,6 +756,290 @@ function HistoryTab({ projectId, tick, flash }: { projectId: string; tick: numbe
           )}
         </div>
       ))}
+    </div>
+  );
+}
+
+// ── VISUAL INTELLIGENCE (M12 §9) ────────────────────────────────────────────
+interface VisualSceneRow {
+  sceneId: string;
+  assetId: string;
+  index: number;
+  sourceStartSec: number;
+  sourceEndSec: number;
+  timelinePlacements: { clipId: string; timelineStartSec: number; timelineEndSec: number }[];
+  representativeFrameId: string | null;
+  representativeAssetId: string | null;
+  description: string | null;
+  objects: string[];
+  activities: string[];
+  similarSceneIds: string[];
+  repeatGroup: number | null;
+  understanding: "semantic" | "heuristic-only";
+  provider: string | null;
+  model: string | null;
+}
+interface VisualIndexRow {
+  assetId: string;
+  assetName: string;
+  settings: { sampleIntervalSec: number; maxFramesPerAsset: number; maxFrameWidth: number };
+  frames: { frameId: string; sourceSec: number; timelineSec: number | null; status: string; analysis: { description: string; objects: string[]; shotType: string | null } | null; provider: string | null; model: string | null }[];
+  scenes: VisualSceneRow[];
+  measurement: { framesExtracted: number; framesDeduped: number; framesAnalyzed: number; sceneCount: number; consentVisual: boolean };
+  notes: string[];
+}
+interface VisualMatchRow {
+  segmentIndex: number;
+  text: string;
+  language: string;
+  timelineStartSec: number | null;
+  timelineEndSec: number | null;
+  matchedSceneIds: string[];
+  coverage: string;
+  relevance: string;
+  relevanceScore: number | null;
+  explanation: string;
+  missingData: string[];
+  evidenceLabel: string;
+  provider: string | null;
+  model: string | null;
+}
+interface VisualApiPayload {
+  index: { id: string; kind: string; status: string; stale: boolean; staleReason: string | null; provider: string | null; model: string | null; consentVisual: boolean; missingEvidence: string[]; result: VisualIndexRow | null; updatedAt: string } | null;
+  matches: { status: string; stale: boolean; provider: string | null; model: string | null; missingEvidence: string[]; result: { matches: VisualMatchRow[]; notes: string[]; transcriptVersionNo: number | null } | null } | null;
+  continuity: { status: string; stale: boolean; missingEvidence: string[]; result: { findings: FindingRow[] } | null } | null;
+  review: { id: string; status: string; stage: string; progress: number; error: string | null; jobId: string | null } | null;
+}
+interface VisualSearchHit {
+  sceneId: string;
+  representativeAssetId: string | null;
+  sourceStartSec: number;
+  sourceEndSec: number;
+  timelineStartSec: number | null;
+  description: string | null;
+  relevanceScore: number;
+  evidence: string;
+}
+
+function VisualTab({ projectId, tick, flash, onSeekSec }: { projectId: string; tick: number; flash: (k: "ok" | "err", t: string) => void; onSeekSec?: (sec: number) => void }) {
+  const [data, setData] = useState<VisualApiPayload | null>(null);
+  const [consent, setConsent] = useState(false);
+  const [maxFrames, setMaxFrames] = useState(16);
+  const [sampleSec, setSampleSec] = useState(4);
+  const [busy, setBusy] = useState(false);
+  const [query, setQuery] = useState("");
+  const [searching, setSearching] = useState(false);
+  const [searchRes, setSearchRes] = useState<{ available: boolean; method: string; results: VisualSearchHit[]; notes: string[] } | null>(null);
+  const [openScene, setOpenScene] = useState<string | null>(null);
+
+  const load = useCallback(() => {
+    jfetch<VisualApiPayload>(`/api/creative/visual/index?projectId=${projectId}`).then(setData).catch(() => undefined);
+  }, [projectId]);
+  useEffect(() => {
+    load();
+  }, [load, tick]);
+
+  const run = async () => {
+    setBusy(true);
+    try {
+      const d = await jfetch<{ jobId: string; estimatedVisionCalls: string }>("/api/creative/visual/index", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ projectId, consentVisual: consent, settings: { maxFramesPerAsset: maxFrames, sampleIntervalSec: sampleSec } }),
+      });
+      flash("ok", `Visual intelligence queued (job ${d.jobId.slice(0, 8)}…). ${d.estimatedVisionCalls}`);
+    } catch (e) {
+      flash("err", e instanceof Error ? e.message : "Failed to queue");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const doSearch = async () => {
+    if (!query.trim()) return;
+    setSearching(true);
+    try {
+      const d = await jfetch<{ available: boolean; method: string; results: VisualSearchHit[]; notes: string[] }>("/api/creative/visual/search", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ projectId, query }),
+      });
+      setSearchRes(d);
+    } catch (e) {
+      flash("err", e instanceof Error ? e.message : "Search failed");
+    } finally {
+      setSearching(false);
+    }
+  };
+
+  const index = data?.index?.result ?? null;
+  const running = data?.review && (data.review.status === "QUEUED" || data.review.status === "RUNNING");
+  const seeking = (tl: number | null) => {
+    if (tl !== null && onSeekSec) onSeekSec(tl);
+  };
+
+  return (
+    <div className="space-y-2.5">
+      {/* run controls */}
+      <div className="rounded border border-[#2a2a2a] p-2">
+        <div className="flex flex-wrap items-center gap-2">
+          <label className="flex items-center gap-1 text-[10px] text-[#a8a8a0]">
+            <input type="checkbox" checked={consent} onChange={(e) => setConsent(e.target.checked)} />
+            consent: send extracted frames (≤{maxFrames} JPEG, ≤512 px) to the configured vision provider
+          </label>
+          <select className={`${inputCls} max-w-[86px]`} value={maxFrames} onChange={(e) => setMaxFrames(Number(e.target.value))}>
+            {[8, 16, 24].map((n) => (
+              <option key={n} value={n}>{n} frames</option>
+            ))}
+          </select>
+          <select className={`${inputCls} max-w-[96px]`} value={sampleSec} onChange={(e) => setSampleSec(Number(e.target.value))}>
+            {[2, 4, 8].map((n) => (
+              <option key={n} value={n}>every {n}s</option>
+            ))}
+          </select>
+          <button type="button" className={btnCls} disabled={busy || Boolean(running)} onClick={() => void run()}>
+            {running ? <Loader2 className="h-3 w-3 animate-spin" /> : <Eye className="h-3 w-3" />} {running ? "running…" : "Run visual intelligence"}
+          </button>
+        </div>
+        <div className="mt-1 text-[9px] text-[#6a6a64]">Without consent the run is deterministic-only (frames never leave the server; no semantic descriptions). Never Ollama. {data?.review ? `Review ${data.review.status} ${data.review.stage} (${data.review.progress}%)` : ""}</div>
+        {data?.review?.error && <div className="mt-1 text-[10px] text-[#e0a094]">{data.review.error}</div>}
+      </div>
+
+      {data?.index && (
+        <div className="text-[9px] text-[#6a6a64]">
+          index {data.index.status}
+          {data.index.stale && <span className="text-[#e0a094]"> · STALE: {data.index.staleReason ?? "reason pending"}</span>} · provider {data.index.provider ?? "—"} / {data.index.model ?? "—"}
+        </div>
+      )}
+      {(data?.index?.missingEvidence?.length ?? 0) > 0 && (
+        <div className="rounded border border-[#4a3a20] bg-[#1a150c] p-1.5 text-[9px] text-[#d4a017]">
+          {data?.index?.missingEvidence.slice(0, 4).map((m, i) => <div key={i}>· {m}</div>)}
+        </div>
+      )}
+
+      {/* Scene Browser + Frame Evidence Inspector */}
+      {index && (
+        <div>
+          <div className={labelCls}>Scene Browser — {index.scenes.length} scene(s) of {index.assetName.slice(0, 40)} · {index.measurement.framesAnalyzed} analyzed / {index.measurement.framesExtracted} extracted ({index.measurement.framesDeduped} deduped)</div>
+          <div className="mt-1 grid grid-cols-2 gap-1.5">
+            {index.scenes.map((s) => (
+              <div key={s.sceneId} className="rounded border border-[#2a2a2a] p-1.5">
+                {s.representativeAssetId ? (
+                  <img src={`/api/media/${s.representativeAssetId}/file`} alt={`scene ${s.index}`} className="mb-1 h-20 w-full cursor-pointer rounded object-cover" onClick={() => setOpenScene(openScene === s.sceneId ? null : s.sceneId)} />
+                ) : (
+                  <div className="mb-1 flex h-20 w-full items-center justify-center rounded bg-[#0b0b0a] text-[9px] text-[#6a6a64]" onClick={() => setOpenScene(openScene === s.sceneId ? null : s.sceneId)}>no registered frame</div>
+                )}
+                <div className="flex items-center gap-1 text-[9px] text-[#a8a8a0]">
+                  <span className="text-[#d4a017]">#{s.index}</span> src {s.sourceStartSec.toFixed(1)}–{s.sourceEndSec.toFixed(1)}s
+                  {s.timelinePlacements[0] && (
+                    <button type="button" className="text-[#6aa9c9] hover:underline" onClick={() => seeking(s.timelinePlacements[0].timelineStartSec)}>
+                      tl {s.timelinePlacements[0].timelineStartSec.toFixed(1)}s ↗
+                    </button>
+                  )}
+                  <span style={{ color: s.understanding === "semantic" ? "#7fb069" : "#8a8a84" }}>{s.understanding}</span>
+                  {s.repeatGroup !== null && <span className="text-[#d4a017]">repeat×{s.similarSceneIds.length + 1}</span>}
+                </div>
+                {s.description && <div className="mt-0.5 line-clamp-2 text-[9px] text-[#d8d8d2]">{s.description}</div>}
+                {s.objects.length > 0 && <div className="mt-0.5 text-[9px] text-[#6a6a64]">{s.objects.slice(0, 5).join(", ")}</div>}
+                {openScene === s.sceneId && (
+                  <div className="mt-1 rounded bg-[#0b0b0a] p-1">
+                    <div className={labelCls}>Frame Evidence Inspector</div>
+                    {index.frames.filter((f) => Math.abs(f.sourceSec - (s.sourceStartSec + s.sourceEndSec) / 2) < (s.sourceEndSec - s.sourceStartSec) / 2 + 0.3).slice(0, 4).map((f) => (
+                      <div key={f.frameId} className="mt-0.5 text-[9px] text-[#a8a8a0]">
+                        <span className="text-[#d4a017]">{f.sourceSec.toFixed(2)}s</span> (tl {f.timelineSec?.toFixed(2) ?? "—"}s) {f.status}
+                        {f.analysis && <> · {f.analysis.description.slice(0, 140)}</>}
+                        {f.provider && <> · {f.provider}/{f.model}</>}
+                      </div>
+                    ))}
+                    {s.similarSceneIds.length > 0 && <div className="mt-0.5 text-[9px] text-[#6a6a64]">similar: {s.similarSceneIds.join(", ")}</div>}
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+      {!index && !running && <div className="text-[11px] text-[#6a6a64]">No visual index yet — run Visual Intelligence to extract REAL frames{consent ? " and analyze them with the configured vision provider" : " (add consent for semantic descriptions)"}.</div>}
+
+      {/* Visual Search */}
+      {index && (
+        <div>
+          <div className={labelCls}>Visual Search (natural language, EN/TA)</div>
+          <div className="mt-1 flex gap-1.5">
+            <input className={inputCls} placeholder='e.g. "scenes with a person speaking" / "கணினி காட்சிகள்"' value={query} onChange={(e) => setQuery(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter" && !searching) void doSearch(); }} />
+            <button type="button" className={btnCls} disabled={searching} onClick={() => void doSearch()}>
+              {searching ? <Loader2 className="h-3 w-3 animate-spin" /> : <Search className="h-3 w-3" />}
+            </button>
+          </div>
+          {searchRes && (
+            <div className="mt-1 space-y-1">
+              <div className="text-[9px] text-[#6a6a64]">method: {searchRes.method}{searchRes.notes.length > 0 && ` · ${searchRes.notes[0]}`}</div>
+              {searchRes.results.map((r) => (
+                <div key={r.sceneId} className="flex gap-1.5 rounded border border-[#2a2a2a] p-1.5">
+                  {r.representativeAssetId && <img src={`/api/media/${r.representativeAssetId}/file`} alt="result" className="h-12 w-20 rounded object-cover" />}
+                  <div className="flex-1 text-[9px] text-[#a8a8a0]">
+                    <span className="text-[#d4a017]">{(r.relevanceScore * 100).toFixed(0)}%</span> src {r.sourceStartSec.toFixed(1)}–{r.sourceEndSec.toFixed(1)}s
+                    {r.timelineStartSec !== null && (
+                      <button type="button" className="ml-1 text-[#6aa9c9] hover:underline" onClick={() => seeking(r.timelineStartSec)}>
+                        tl {r.timelineStartSec.toFixed(1)}s ↗
+                      </button>
+                    )}
+                    <div>{r.description ?? "(heuristic-only scene)"}</div>
+                    <div className="text-[#6a6a64]">{r.evidence.slice(0, 160)}</div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Narration Match */}
+      {data?.matches?.result && (
+        <div>
+          <div className={labelCls}>Narration Match — transcript v{data.matches.result.transcriptVersionNo ?? "?"} × scenes {data.matches.provider ? `(${data.matches.provider}/${data.matches.model})` : "(coverage-only)"}</div>
+          {data.matches.result.matches.slice(0, 10).map((m) => (
+            <div key={m.segmentIndex} className="mt-1 rounded border border-[#2a2a2a] p-1.5 text-[9px]">
+              <div className="flex flex-wrap items-center gap-1">
+                <LabelChip label={m.evidenceLabel} />
+                <span className="text-[#d8d8d2]">[{m.coverage}]</span>
+                <span style={{ color: m.relevance === "supported" ? "#7fb069" : m.relevance === "unrelated" ? "#e0a094" : "#a8a8a0" }}>{m.relevance}</span>
+                {m.timelineStartSec !== null && (
+                  <button type="button" className="text-[#6aa9c9] hover:underline" onClick={() => seeking(m.timelineStartSec)}>
+                    tl {m.timelineStartSec.toFixed(1)}s ↗
+                  </button>
+                )}
+              </div>
+              <div className="mt-0.5 text-[#a8a8a0]">&ldquo;{m.text.slice(0, 160)}&rdquo;</div>
+              <div className="text-[#6a6a64]">{m.explanation.slice(0, 220)}</div>
+              {m.missingData.length > 0 && <div className="text-[#e0a094]">missing: {m.missingData[0]}</div>}
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Visual Continuity Review */}
+      {data?.continuity?.result && (
+        <div>
+          <div className={labelCls}>Visual Continuity Review</div>
+          {data.continuity.result.findings.slice(0, 8).map((f) => (
+            <div key={f.findingNo} className="mt-1 rounded border border-[#2a2a2a] p-1.5 text-[9px]">
+              <div className="flex items-center gap-1">
+                <LabelChip label={f.evidenceLabel} />
+                <span className="text-[#d8d8d2]">{f.category}</span>
+                {f.startSec !== null && (
+                  <button type="button" className="text-[#6aa9c9] hover:underline" onClick={() => seeking(f.startSec)}>
+                    {f.startSec.toFixed(1)}s ↗
+                  </button>
+                )}
+                <span className="text-[#6a6a64]">conf {f.confidence?.toFixed(2) ?? "—"}</span>
+              </div>
+              <div className="text-[#a8a8a0]">{f.explanation.slice(0, 220)}</div>
+            </div>
+          ))}
+        </div>
+      )}
+      <div className="text-[9px] text-[#6a6a64]">Scene boundaries are deterministic ffmpeg detections; descriptions exist ONLY where a real vision provider inspected extracted frames. Mismatches are observations, not editing errors.</div>
     </div>
   );
 }

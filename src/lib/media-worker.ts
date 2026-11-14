@@ -21,6 +21,7 @@ import {
   JOB_TYPE_CREATIVE_VARIANTS,
   JOB_TYPE_CREATIVE_MULTIMODAL,
   JOB_TYPE_TRANSCRIBE_PROJECT,
+  JOB_TYPE_VISUAL_INTELLIGENCE,
   PermanentJobError,
   handleJobError,
   requeueJob,
@@ -38,6 +39,7 @@ import { runStudioTopicJob } from "@/lib/studio/jobs";
 import { runPublishThumbnailJob, runExportVariantJob, runPublishPackageJob } from "@/lib/publish/jobs";
 import { runCreativeReviewJob, runCreativeVariantsJob } from "@/lib/creative/jobs";
 import { runCreativeMultimodalJob, runTranscribeProjectJob } from "@/lib/creative/multimodal-jobs";
+import { runVisualIntelligenceJob } from "@/lib/creative/visual/jobs";
 
 /**
  * M3.4 — durable background worker for media processing.
@@ -84,6 +86,7 @@ const USER_MAX_ACTIVE: Record<string, number> = {
   [JOB_TYPE_CREATIVE_VARIANTS]: 1,
   [JOB_TYPE_CREATIVE_MULTIMODAL]: 1,
   [JOB_TYPE_TRANSCRIBE_PROJECT]: 1,
+  [JOB_TYPE_VISUAL_INTELLIGENCE]: 1,
 };
 /** Scratch sweeps run at most this often. */
 const SWEEP_INTERVAL_MS = 15 * 60_000;
@@ -115,6 +118,7 @@ const HANDLERS: Record<string, MediaJobHandler> = {
   [JOB_TYPE_CREATIVE_VARIANTS]: runCreativeVariantsJob,
   [JOB_TYPE_CREATIVE_MULTIMODAL]: runCreativeMultimodalJob,
   [JOB_TYPE_TRANSCRIBE_PROJECT]: runTranscribeProjectJob,
+  [JOB_TYPE_VISUAL_INTELLIGENCE]: runVisualIntelligenceJob,
 };
 
 interface WorkerState {

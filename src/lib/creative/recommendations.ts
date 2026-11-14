@@ -335,6 +335,11 @@ export async function approveAndExecuteRecommendation(userId: string, recId: str
     if (!parsed.success) throw new PermanentJobError(`JAZMII params invalid: ${parsed.error.issues.map((i) => i.message).join("; ")}`);
     const jobId = await jobManager.createJob(userId, JOB_TYPE_JAZMII_GENERATE, parsed.data);
     detail = `JAZMII generation queued (job ${jobId}, metered provider).`;
+  } else if (payload.action === "laxii-broll-image") {
+    const parsed = LaxiiGenerateParamsSchema.safeParse({ prompt: String(params.prompt ?? ""), mode: "generate", referenceAssetId: null, size: String(params.size ?? "1920x1080"), count: Math.min(2, Number(params.count ?? 1)), aspect: "original", projectId: rec.projectId });
+    if (!parsed.success) throw new PermanentJobError(`LAXII params invalid: ${parsed.error.issues.map((i) => i.message).join("; ")}`);
+    const jobId = await jobManager.createJob(userId, JOB_TYPE_LAXII_GENERATE, parsed.data);
+    detail = `LAXII b-roll still generation queued (job ${jobId}) — insert into the timeline via your explicit insert action after inspection.`;
   } else if (payload.action === "laxii-thumbnail-variants") {
     const parsed = LaxiiGenerateParamsSchema.safeParse({ prompt: String(params.prompt ?? "bold thumbnail background matching the video subject, no text"), mode: "generate", referenceAssetId: null, size: String(params.size ?? "1344x768"), count: Math.min(4, Number(params.count ?? 2)), aspect: "original", projectId: rec.projectId });
     if (!parsed.success) throw new PermanentJobError(`LAXII params invalid: ${parsed.error.issues.map((i) => i.message).join("; ")}`);
