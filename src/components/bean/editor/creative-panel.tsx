@@ -115,7 +115,7 @@ const inputCls = "w-full rounded border border-[#2a2a2a] bg-[#141413] px-2 py-1.
 const btnCls = "inline-flex items-center gap-1 rounded border border-[#2a2a2a] px-2 py-1 text-[11px] text-[#d8d8d2] hover:border-[#d4a017] hover:text-[#d4a017] disabled:opacity-40";
 const labelCls = "text-[10px] uppercase tracking-wide text-[#8a8a84]";
 
-export function CreativeDirectorPanel({ projectId }: { projectId: string }) {
+export function CreativeDirectorPanel({ projectId, onSeekSec }: { projectId: string; onSeekSec?: (sec: number) => void }) {
   const [tab, setTab] = useState<Tab>("assistant");
   const [notice, setNotice] = useState<{ kind: "ok" | "err"; text: string } | null>(null);
   const [tick, setTick] = useState(0);
@@ -153,9 +153,9 @@ export function CreativeDirectorPanel({ projectId }: { projectId: string }) {
       {notice && <div className={`mb-2 rounded border px-2 py-1 text-[11px] ${notice.kind === "ok" ? "border-[#3a5a3a] text-[#a8c9a0]" : "border-[#6a3a30] text-[#e0a094]"}`}>{notice.text}</div>}
       {tab === "assistant" && <AssistantTab projectId={projectId} flash={flash} />}
       {tab === "review" && <ReviewTab projectId={projectId} tick={tick} flash={flash} />}
-      {tab === "retention" && <RetentionTab projectId={projectId} tick={tick} flash={flash} />}
+      {tab === "retention" && <RetentionTab projectId={projectId} tick={tick} flash={flash} onSeekSec={onSeekSec} />}
       {tab === "scorecard" && <ScorecardTab projectId={projectId} tick={tick} flash={flash} />}
-      {tab === "recommendations" && <RecommendationsTab projectId={projectId} tick={tick} flash={flash} />}
+      {tab === "recommendations" && <RecommendationsTab projectId={projectId} tick={tick} flash={flash} onSeekSec={onSeekSec} />}
       {tab === "ab" && <AbTab projectId={projectId} tick={tick} flash={flash} />}
       {tab === "history" && <HistoryTab projectId={projectId} tick={tick} flash={flash} />}
     </div>
@@ -265,6 +265,12 @@ function ReviewTab({ projectId, tick, flash }: { projectId: string; tick: number
 
   const enqueue = async () => {
     try {
+      if (scope === "multimodal") {
+        const d = await jfetch<{ jobId: string }>("/api/creative/analyze/unified", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ projectId, language, withTranscript: true }) });
+        flash("ok", `Multimodal review queued (job ${d.jobId.slice(0, 8)}…) — embedded audio, local scene analysis, cross-modal findings, transcript and surgery plan.`);
+        reload();
+        return;
+      }
       const d = await jfetch<{ jobId: string }>("/api/creative/reviews", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ projectId, scope, language, enqueueEvidence: true }) });
       flash("ok", `Review queued (job ${d.jobId.slice(0, 8)}…) — the worker will gather GANGZII evidence, findings and recommendations.`);
       reload();
@@ -280,6 +286,7 @@ function ReviewTab({ projectId, tick, flash }: { projectId: string; tick: number
         <div className="flex gap-1.5">
           <select className={inputCls} value={scope} onChange={(e) => setScope(e.target.value)}>
             <option value="full">Full review (brief + findings + scorecard)</option>
+            <option value="multimodal">Multimodal (embedded audio + scenes + transcript)</option>
             <option value="retention">Retention/pacing only</option>
             <option value="scorecard">Scorecard only</option>
             <option value="brief">Creative brief only</option>
@@ -346,14 +353,80 @@ function ReviewTab({ projectId, tick, flash }: { projectId: string; tick: number
           ))}
         </div>
       )}
+      <TranscriptsBlock projectId={projectId} flash={flash} />
+    </div>
+  );
+}
+
+// ── §4 integrated transcripts: version list + approve/discard ───────────────
+function TranscriptsBlock({ projectId, flash }: { projectId: string; flash: (k: "ok" | "err", t: string) => void }) {
+  const [rows, setRows] = useState<{ id: string; versionNo: number; language: string; provider: string | null; segments: number; textExcerpt: string; warnings: string[]; status: string; staleReason: string | null; captionAssetId: string | null; wordsAvailable: boolean }[]>([]);
+  const [busy, setBusy] = useState(false);
+  const load = useCallback(() => {
+    jfetch<{ transcripts: typeof rows }>(`/api/creative/analyze/transcripts?projectId=${projectId}`).then((d) => setRows(d.transcripts)).catch(() => undefined);
+  }, [projectId]);
+  useEffect(() => {
+    load();
+  }, [load]);
+  const act = async (id: string, action: "approve" | "discard") => {
+    setBusy(true);
+    try {
+      const d = await jfetch<{ note?: string }>(`/api/creative/analyze/transcripts/${id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action, applyCaptions: action === "approve" }) });
+      flash("ok", `${action}: ${d.note ?? "done"}`);
+      load();
+    } catch (e) {
+      flash("err", e instanceof Error ? e.message : "Failed");
+    } finally {
+      setBusy(false);
+    }
+  };
+  if (!rows.length) return null;
+  return (
+    <div className="rounded border border-[#2a2a2a] p-2">
+      <div className={labelCls}>Integrated transcripts (approval required before captions)</div>
+      {rows.map((t) => (
+        <div key={t.id} className="mt-1 rounded border border-[#232323] p-1.5">
+          <div className="flex flex-wrap items-center gap-1.5">
+            <Badge status={t.status.toUpperCase()} />
+            <span className="text-[10px] text-[#d8d8d2]">v{t.versionNo} · {t.language} · {t.segments} segment(s) · {t.provider ?? "?"}</span>
+            {t.staleReason && <LabelChip label="stale" />}
+          </div>
+          <div className="mt-0.5 text-[10px] text-[#a8a8a0]">{t.textExcerpt || "(empty transcript — see warnings)"}</div>
+          {t.warnings.slice(0, 2).map((w, i) => (
+            <div key={i} className="text-[9px] text-[#e0a094]">• {w}</div>
+          ))}
+          {t.status === "PENDING_REVIEW" && (
+            <div className="mt-1 flex gap-1.5">
+              <button type="button" className={btnCls} disabled={busy} onClick={() => void act(t.id, "approve")}>
+                <Check className="h-3 w-3" /> approve (+SRT asset)
+              </button>
+              <button type="button" className={btnCls} disabled={busy} onClick={() => void act(t.id, "discard")}>
+                <X className="h-3 w-3" /> discard
+              </button>
+            </div>
+          )}
+          {t.captionAssetId && <div className="text-[9px] text-[#7fb069]">SRT asset created (existing captions untouched)</div>}
+        </div>
+      ))}
     </div>
   );
 }
 
 // ── RETENTION ───────────────────────────────────────────────────────────────
-function RetentionTab({ projectId, tick }: { projectId: string; tick: number; flash: (k: "ok" | "err", t: string) => void }) {
+const FILTER_GROUPS: Record<string, string[]> = {
+  audio: ["long-pause", "dead-air", "audio-quality", "audio-gap", "av-sync"],
+  speech: ["opening-hook", "repeated-narration", "ending-cta", "speech-across-cut", "narration-without-visuals"],
+  captions: ["caption-timing", "caption-mismatch"],
+  visuals: ["visual-repetition", "static-visuals", "visuals-without-narration"],
+  pacing: ["pacing", "scene-structure", "transition"],
+  sync: ["av-sync", "speech-across-cut", "audio-gap"],
+  technical: ["technical"],
+};
+
+function RetentionTab({ projectId, tick, flash, onSeekSec }: { projectId: string; tick: number; flash: (k: "ok" | "err", t: string) => void; onSeekSec?: (sec: number) => void }) {
   const { reviews, active } = useReviews(projectId, tick);
   const [data, setData] = useState<{ findings: FindingRow[]; disclaimer: string | null } | null>(null);
+  const [filter, setFilter] = useState<string>("all");
   const latestCompleted = useMemo(() => reviews.find((r) => r.status === "COMPLETED") ?? null, [reviews]);
 
   useEffect(() => {
@@ -363,17 +436,34 @@ function RetentionTab({ projectId, tick }: { projectId: string; tick: number; fl
       .catch(() => setData(null));
   }, [latestCompleted?.id, tick]);
 
+  const visible = data?.findings.filter((f) => filter === "all" || (FILTER_GROUPS[filter] ?? []).includes(f.category)) ?? [];
   return (
     <div className="space-y-2">
+      <div className="flex flex-wrap gap-1">
+        {["all", "audio", "speech", "captions", "visuals", "pacing", "sync", "technical"].map((k) => (
+          <button key={k} type="button" onClick={() => setFilter(k)} className={`rounded border px-1.5 py-0.5 text-[10px] ${filter === k ? "border-[#d4a017] text-[#d4a017]" : "border-[#2a2a2a] text-[#8a8a84] hover:text-[#d8d8d2]"}`}>
+            {k}
+          </button>
+        ))}
+      </div>
       {active.length > 0 && <div className="text-[10px] text-[#d4a017]"><Loader2 className="inline h-3 w-3 animate-spin" /> analysis running…</div>}
-      {!latestCompleted && !active.length && <div className="text-[11px] text-[#6a6a64]">Run a review first (Review tab) — retention findings are produced from real GANGZII audio measurements, RIISHE transcripts and timeline structure.</div>}
-      {data?.findings.map((f) => (
+      {!latestCompleted && !active.length && <div className="text-[11px] text-[#6a6a64]">Run a review first (Review tab) — findings come from real GANGZII audio measurements (embedded or external), RIISHE transcripts, local scene analysis and timeline structure.</div>}
+      {visible.map((f) => (
         <div key={f.findingNo} className="rounded border border-[#2a2a2a] p-2">
           <div className="flex flex-wrap items-center gap-1.5">
             <Badge status={f.severity.toUpperCase()} />
             <LabelChip label={f.evidenceLabel} />
             <span className="text-[11px] text-[#d8d8d2]">#{f.findingNo} {f.category}</span>
-            {f.startSec !== null && <span className="text-[10px] text-[#6a6a64]">@ {f.startSec.toFixed(1)}s{f.endSec !== null ? `–${f.endSec.toFixed(1)}s` : ""}</span>}
+            {f.startSec !== null && (
+              <>
+                <span className="text-[10px] text-[#6a6a64]">@ {f.startSec.toFixed(1)}s{f.endSec !== null ? `–${f.endSec.toFixed(1)}s` : ""}</span>
+                {onSeekSec && (
+                  <button type="button" className="text-[10px] text-[#6aa9c9] hover:underline" onClick={() => onSeekSec(f.startSec as number)}>
+                    open in timeline ↗
+                  </button>
+                )}
+              </>
+            )}
             {f.confidence !== null && <span className="text-[10px] text-[#6a6a64]">confidence {Math.round(f.confidence * 100)}%</span>}
             <span className="text-[10px] text-[#6a6a64]">· {f.engine}</span>
           </div>
@@ -425,7 +515,7 @@ function ScorecardTab({ projectId, tick }: { projectId: string; tick: number; fl
 }
 
 // ── RECOMMENDATIONS ─────────────────────────────────────────────────────────
-function RecommendationsTab({ projectId, tick, flash }: { projectId: string; tick: number; flash: (k: "ok" | "err", t: string) => void }) {
+function RecommendationsTab({ projectId, tick, flash, onSeekSec }: { projectId: string; tick: number; flash: (k: "ok" | "err", t: string) => void; onSeekSec?: (sec: number) => void }) {
   const { reviews, reload } = useReviews(projectId, tick);
   const [recs, setRecs] = useState<RecommendationRow[]>([]);
   const [busyId, setBusyId] = useState<string | null>(null);
@@ -469,7 +559,15 @@ function RecommendationsTab({ projectId, tick, flash }: { projectId: string; tic
             {r.target?.startSec != null && <span className="text-[10px] text-[#6a6a64]">@ {r.target.startSec.toFixed(1)}s</span>}
           </div>
           <div className="mt-1 text-[11px] text-[#a8a8a0]">{r.detail}</div>
-          {r.payload.commands && <div className="mt-0.5 text-[10px] text-[#6aa9c9]">M1 commands: {r.payload.commands.map((c) => c.type).join(" → ")}</div>}
+          {r.target?.startSec != null && onSeekSec && (
+            <button type="button" className="ml-1 text-[10px] text-[#6aa9c9] hover:underline" onClick={() => onSeekSec(r.target!.startSec as number)}>
+              open in timeline ↗
+            </button>
+          )}
+          {r.payload.commands && <div className="mt-0.5 text-[10px] text-[#6aa9c9]">M1 commands: {r.payload.commands.map((c) => c.type).join(" → ")}{r.payload.commands.length > 3 ? ` (${r.payload.commands.length})` : ""}</div>}
+          {r.status === "PROPOSED" && r.payload.commands && (
+            <PreviewBlock projectId={projectId} recId={r.id} flash={flash} />
+          )}
           {r.result && (r.status === "EXECUTED" || r.status === "FAILED" || r.status === "STALE") && <div className="mt-0.5 text-[10px] text-[#8a8a84]">{JSON.stringify(r.result).slice(0, 220)}</div>}
           {r.status === "PROPOSED" && (
             <div className="mt-1.5 flex flex-wrap gap-1.5">
@@ -486,6 +584,46 @@ function RecommendationsTab({ projectId, tick, flash }: { projectId: string; tic
           )}
         </div>
       ))}
+    </div>
+  );
+}
+
+// ── §8 preview (dry-run simulation — structural, not a rendered export) ─────
+function PreviewBlock({ projectId, recId, flash }: { projectId: string; recId: string; flash: (k: "ok" | "err", t: string) => void }) {
+  const [open, setOpen] = useState(false);
+  const [data, setData] = useState<{ ok: boolean; error?: string; before?: { clipCount: number; durationSec: number }; after?: { clipCount: number; durationSec: number } | null; durationDeltaSec?: number | null; cuts?: { startSec: number; endSec: number; removedSec: number }[]; movedClips?: { clipId: string; fromStartSec: number; toStartSec: number }[]; warnings?: string[] } | null>(null);
+  const load = () => {
+    setOpen(true);
+    if (data) return;
+    jfetch<{ preview: { ok: boolean; error?: string; before?: { clipCount: number; durationSec: number }; after?: { clipCount: number; durationSec: number } | null; durationDeltaSec?: number | null; cuts?: { startSec: number; endSec: number; removedSec: number }[]; movedClips?: { clipId: string; fromStartSec: number; toStartSec: number }[]; warnings?: string[] } }>(`/api/creative/plans/preview`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ mode: "recommendation", projectId, recommendationId: recId }),
+    })
+      .then((d) => setData(d.preview))
+      .catch((e) => flash("err", e instanceof Error ? e.message : "Preview failed"));
+  };
+  return (
+    <div className="mt-1">
+      <button type="button" className="text-[10px] text-[#6aa9c9] hover:underline" onClick={load}>
+        {open && data ? "hide preview" : "preview (before/after simulation)"}
+      </button>
+      {open && data && (
+        <div className="mt-1 rounded border border-[#2a2a2a] bg-[#0b0b0a] p-1.5 text-[10px] text-[#a8a8a0]">
+          {!data.ok && <div className="text-[#e0a094]">Simulation refused: {data.error}</div>}
+          {data.ok && data.before && data.after && (
+            <>
+              <div>before: {data.before.clipCount} clips · {data.before.durationSec}s → after: {data.after.clipCount} clips · {data.after.durationSec}s (Δ {data.durationDeltaSec}s)</div>
+              {data.cuts && data.cuts.length > 0 && <div>cuts: {data.cuts.map((c) => `${c.startSec}s–${c.endSec}s (−${c.removedSec}s)`).join(", ")}</div>}
+              {data.movedClips && data.movedClips.length > 0 && <div>moved: {data.movedClips.slice(0, 6).map((m) => `${m.clipId.slice(0, 8)} ${m.fromStartSec}s→${m.toStartSec}s`).join(", ")}</div>}
+              {data.warnings?.map((w, i) => (
+                <div key={i} className="text-[#d4a017]">⚠ {w}</div>
+              ))}
+              <div className="text-[#6a6a64]">structural simulation — not a rendered export; nothing was written.</div>
+            </>
+          )}
+        </div>
+      )}
     </div>
   );
 }

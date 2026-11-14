@@ -42,6 +42,9 @@
     "skills",
     "scripts",
     "mini-services",
-    "media-store"
+    "media-store",
+    "BEAN-FX-Source-Export",
+    "BEAN-FX-Source-Code.zip.d",
+    ".deps-mirror"
   ]
 }

@@ -22,6 +22,8 @@ export const JOB_TYPE_PUBLISH_PACKAGE = "PUBLISH_PACKAGE";
 // ── M10 AI Creative Director ──
 export const JOB_TYPE_CREATIVE_REVIEW = "CREATIVE_REVIEW";
 export const JOB_TYPE_CREATIVE_VARIANTS = "CREATIVE_VARIANTS";
+export const JOB_TYPE_CREATIVE_MULTIMODAL = "CREATIVE_MULTIMODAL";
+export const JOB_TYPE_TRANSCRIBE_PROJECT = "TRANSCRIBE_PROJECT";
 /** Worker-owned job types: M3 media pipeline + M5 GANGZII + M6 NIIKI + M7 engines + M8.1 studio + M9 publishing; legacy job types keep their existing behavior. */
 export const MEDIA_JOB_TYPES = [
   JOB_TYPE_MEDIA_PROBE,
@@ -38,6 +40,8 @@ export const MEDIA_JOB_TYPES = [
   JOB_TYPE_PUBLISH_PACKAGE,
   JOB_TYPE_CREATIVE_REVIEW,
   JOB_TYPE_CREATIVE_VARIANTS,
+  JOB_TYPE_CREATIVE_MULTIMODAL,
+  JOB_TYPE_TRANSCRIBE_PROJECT,
 ] as const;
 
 /** Default hard wall-clock limits per job type (seconds). */
@@ -56,6 +60,8 @@ export const DEFAULT_TIMEOUT_SEC: Record<string, number> = {
   [JOB_TYPE_PUBLISH_PACKAGE]: 30 * 60,
   [JOB_TYPE_CREATIVE_REVIEW]: 30 * 60,
   [JOB_TYPE_CREATIVE_VARIANTS]: 10 * 60,
+  [JOB_TYPE_CREATIVE_MULTIMODAL]: 30 * 60,
+  [JOB_TYPE_TRANSCRIBE_PROJECT]: 15 * 60,
 };
 
 export const MAX_ATTEMPTS_DEFAULT = 3;

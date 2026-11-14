@@ -64,6 +64,8 @@ export interface MeasuredTranscript {
 
 export interface MeasuredCaptions {
   sourceKind: "srt-assets" | "clip-captions" | "none";
+  /** Bounded cue/caption text for overlap analysis (first ~2000 chars). */
+  textSample: string;
   cueCount: number;
   /** chars-per-second per cue — readability evidence (measured). */
   avgCps: number | null;
@@ -86,6 +88,10 @@ export interface MeasuredContext {
   videoClipAssets: { assetId: string; durationSec: number }[];
   /** AUDIO-track clips with timeline spans (for pause-trim proposals). */
   audioClipSpans: { id: string; trackId: string; startSec: number; endSec: number }[];
+  /** VIDEO-track clip spans on the timeline (for cross-modal coverage). */
+  videoTimelineSpans: { clipId: string; assetId: string | null; startSec: number; endSec: number }[];
+  /** Bounded caption TEXT sample (SRT cues + inline captions) for overlap checks. */
+  captionTextSample: string;
   lockedTrackCount: number;
   gaps: { trackId: string; startSec: number; endSec: number }[];
   overlaps: number;
@@ -206,7 +212,7 @@ async function measureCaptions(userId: string, projectId: string, clipCaptions: 
     const inline = clipCaptions.filter((c): c is string => Boolean(c && c.trim()));
     if (inline.length > 0) {
       return {
-        captions: { sourceKind: "clip-captions", cueCount: inline.length, avgCps: null, maxCps: null, overThirteenCps: 0, gapsOver3Sec: 0 },
+        captions: { sourceKind: "clip-captions", textSample: inline.join(" ").slice(0, 2000), cueCount: inline.length, avgCps: null, maxCps: null, overThirteenCps: 0, gapsOver3Sec: 0 },
         note: null,
       };
     }
@@ -224,6 +230,7 @@ async function measureCaptions(userId: string, projectId: string, clipCaptions: 
   return {
     captions: {
       sourceKind,
+      textSample: cues.map((c) => c.normalizedText).join(" ").slice(0, 2000),
       cueCount: cues.length,
       avgCps: Math.round((cps.reduce((a, b) => a + b, 0) / cps.length) * 100) / 100,
       maxCps: Math.round(Math.max(...cps) * 100) / 100,
@@ -267,6 +274,14 @@ export async function buildMeasuredContext(userId: string, projectId: string, op
   const videoClipAssets = seq.clips
     .filter((c) => seq.tracks.find((t) => t.id === c.trackId)?.kind === "VIDEO" && c.sourceAssetId)
     .map((c) => ({ assetId: c.sourceAssetId as string, durationSec: Math.round((c.timelineDurationFrames / fps) * 100) / 100 }));
+  const videoTimelineSpans = seq.clips
+    .filter((c) => seq.tracks.find((t) => t.id === c.trackId)?.kind === "VIDEO")
+    .map((c) => ({
+      clipId: c.id,
+      assetId: (c.sourceAssetId || null) as string | null,
+      startSec: Math.round((c.timelineStartFrame / fps) * 100) / 100,
+      endSec: Math.round(((c.timelineStartFrame + c.timelineDurationFrames) / fps) * 100) / 100,
+    }));
   const audioClipSpans = seq.clips
     .filter((c) => seq.tracks.find((t) => t.id === c.trackId)?.kind === "AUDIO")
     .map((c) => ({
@@ -396,6 +411,7 @@ export async function buildMeasuredContext(userId: string, projectId: string, op
     videoClipCount,
     videoClipAssets,
     audioClipSpans,
+    videoTimelineSpans,
     lockedTrackCount: seq.tracks.filter((t) => t.locked).length,
     gaps: overview.sequence.gaps.slice(0, 12).map((g) => ({ trackId: g.trackId, startSec: Math.round((g.startFrame / fps) * 100) / 100, endSec: Math.round((g.endFrame / fps) * 100) / 100 })),
     overlaps: overview.sequence.overlaps,
@@ -405,6 +421,7 @@ export async function buildMeasuredContext(userId: string, projectId: string, op
     audio,
     transcript,
     captions: capResult.captions,
+    captionTextSample: [capResult.captions?.textSample ?? "", ...clipCaptions.filter((c): c is string => Boolean(c && c.trim())).slice(0, 8)].join(" ").slice(0, 2200),
     scenes,
     suppliedAudience,
     publishing,

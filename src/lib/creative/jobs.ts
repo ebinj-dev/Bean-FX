@@ -32,14 +32,14 @@ interface HandlerJob {
   paramsJson: string | null;
 }
 
-async function assertOwnedReview(userId: string, reviewId: string) {
+export async function assertOwnedReview(userId: string, reviewId: string) {
   const review = await db.creativeReview.findUnique({ where: { id: reviewId } });
   if (!review || review.userId !== userId) throw new PermanentJobError("Creative review not found or not owned by the caller.");
   return review;
 }
 
 /** True when the job was cancelled/failed mid-run (checked between phases). */
-async function jobInterrupted(jobId: string): Promise<boolean> {
+export async function jobInterrupted(jobId: string): Promise<boolean> {
   const row = await db.job.findUnique({ where: { id: jobId }, select: { status: true } }).catch(() => null);
   return !row || row.status === "CANCELLED" || row.status === "FAILED";
 }

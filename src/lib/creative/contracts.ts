@@ -9,7 +9,10 @@
 import { z } from "zod";
 
 // ── evidence ────────────────────────────────────────────────────────────────
-export const EvidenceLabel = z.enum(["measured", "inferred", "ai-interpretation", "insufficient-evidence"]);
+// M11 adds "model-observed": evidence from REAL local frame/scene analysis
+// (JAZMII deterministic analyzer) — distinct from "measured" (waveform/
+// timing numbers) and from "ai-interpretation" (LLM reading).
+export const EvidenceLabel = z.enum(["measured", "model-observed", "inferred", "ai-interpretation", "insufficient-evidence"]);
 export type EvidenceLabelId = z.infer<typeof EvidenceLabel>;
 
 export const Severity = z.enum(["info", "minor", "moderate", "major"]);
@@ -28,6 +31,14 @@ export const FindingCategory = z.enum([
   "visual-repetition",
   "technical",
   "narrative",
+  // ── M11 cross-modal categories ──
+  "speech-across-cut",
+  "narration-without-visuals",
+  "visuals-without-narration",
+  "caption-mismatch",
+  "av-sync",
+  "static-visuals",
+  "audio-gap",
 ]);
 export type FindingCategoryId = z.infer<typeof FindingCategory>;
 
@@ -205,3 +216,22 @@ export type AssistantDecision = z.infer<typeof AssistantDecisionSchema>;
 export function contextVersionOf(version: number, clipCount: number, maxEndFrame: number): string {
   return `v:${version}:${clipCount}:${maxEndFrame}`;
 }
+
+// ── M11: unified multimodal observation (§2) ────────────────────────────────
+export const ObservationSchema = z.object({
+  projectId: z.string().max(64),
+  versionId: z.string().max(80),
+  assetId: z.string().max(64).nullable(),
+  clipId: z.string().max(64).nullable(),
+  streamIndex: z.number().int().min(0).nullable(),
+  sourceStartSec: z.number().min(0).nullable(),
+  sourceEndSec: z.number().min(0).nullable(),
+  timelineStartSec: z.number().min(0).nullable(),
+  timelineEndSec: z.number().min(0).nullable(),
+  method: z.string().max(60),
+  evidenceType: z.enum(["audio", "speech", "caption", "visual", "pacing", "sync", "structure"]),
+  confidence: z.number().min(0).max(1).nullable(),
+  status: z.enum(["analyzed", "detected-not-analyzed", "failed", "unsupported", "missing"]),
+  detail: z.record(z.string(), z.unknown()).nullable(),
+});
+export type Observation = z.infer<typeof ObservationSchema>;

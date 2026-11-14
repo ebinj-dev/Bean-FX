@@ -530,7 +530,7 @@ export function EditorTool({ user, onLogout }: { user: { id: string }; onLogout:
           {sequence && <GangziiPanel sequence={sequence} session={session} />}
           <StudioPanel onProjectCreated={(id) => setProjectId(id)} />
           {projectId && <PublishingPanel projectId={projectId} />}
-          {projectId && <CreativeDirectorPanel projectId={projectId} />}
+          {projectId && <CreativeDirectorPanel projectId={projectId} onSeekSec={(sec) => session.setPlayhead(Math.max(0, Math.round(sec * (fpsRational.num / fpsRational.den))))} />}
           {sequence && <MyAiPanel sequence={sequence} session={session} projectId={projectId} />}
           {sequence && <NikkiPanel sequence={sequence} session={session} />}
           {sequence && <JazmiiPanel sequence={sequence} session={session} />}

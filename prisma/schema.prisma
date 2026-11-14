@@ -38,6 +38,8 @@ model User {
   publishPackages   PublishPackage[]   @relation("PublishPackages")
   creativeReviews   CreativeReview[]   @relation("CreativeReviews")
   creativeVariants  CreativeVariant[]  @relation("CreativeVariants")
+  creativeArtifacts CreativeAnalysisArtifact[] @relation("CreativeArtifacts")
+  transcriptVersions TranscriptVersion[] @relation("TranscriptVersions")
 }
 
 /// User-defined words/phrases RIISHE should consider removing (context-aware —
@@ -86,6 +88,8 @@ model Project {
   publishPackages PublishPackage[] @relation("PublishPackages")
   creativeReviews CreativeReview[] @relation("CreativeReviews")
   creativeVariants CreativeVariant[] @relation("CreativeVariants")
+  creativeArtifacts CreativeAnalysisArtifact[] @relation("CreativeArtifacts")
+  transcriptVersions TranscriptVersion[] @relation("TranscriptVersions")
 }
 
 model MediaAsset {
@@ -822,6 +826,63 @@ model CreativeVariant {
   updatedAt          DateTime @updatedAt
 
   @@index([userId, projectId, kind])
+}
+
+/// ── M11 Multimodal Intelligence ────────────────────────────────────────────
+model CreativeAnalysisArtifact {
+  id             String   @id @default(cuid())
+  userId         String
+  user           User     @relation("CreativeArtifacts", fields: [userId], references: [id], onDelete: Cascade)
+  projectId      String
+  project        Project  @relation("CreativeArtifacts", fields: [projectId], references: [id], onDelete: Cascade)
+  kind           String
+  sourceAssetId  String?
+  streamIndex    Int?
+  status         String   @default("QUEUED")
+  depsJson       String
+  depsHash       String
+  staleReason    String?
+  resultJson     String?
+  missingEvidenceJson String?
+  provider       String?
+  model          String?
+  consentVisual  Boolean  @default(false)
+  error          String?
+  jobId          String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@index([userId, projectId, kind, depsHash])
+  @@index([projectId, sourceAssetId])
+}
+
+model TranscriptVersion {
+  id             String   @id @default(cuid())
+  userId         String
+  user           User     @relation("TranscriptVersions", fields: [userId], references: [id], onDelete: Cascade)
+  projectId      String
+  project        Project  @relation("TranscriptVersions", fields: [projectId], references: [id], onDelete: Cascade)
+  sourceAssetId  String
+  streamIndex    Int?
+  versionNo      Int
+  language       String
+  provider       String?
+  model          String?
+  text           String
+  segmentsJson   String
+  wordsAvailable Boolean  @default(false)
+  warningsJson   String?
+  status         String   @default("PENDING_REVIEW")
+  depsJson       String
+  depsHash       String
+  staleReason    String?
+  captionAssetId String?
+  jobId          String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@index([userId, sourceAssetId, versionNo])
+  @@index([projectId, status])
 }
 
 /// Explainable scorecard (§7) — one per review. dimensionsJson holds the 8
