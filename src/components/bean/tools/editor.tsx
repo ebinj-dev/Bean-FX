@@ -46,6 +46,8 @@ import { ClipInspector } from "@/components/bean/editor/inspector";
 import { GangziiPanel } from "@/components/bean/editor/gangzii-panel";
 import { MyAiPanel } from "@/components/bean/editor/my-ai-panel";
 import { StudioPanel } from "@/components/bean/editor/studio-panel";
+import { PublishingPanel } from "@/components/bean/editor/publishing-panel";
+import { CreativeDirectorPanel } from "@/components/bean/editor/creative-panel";
 import { NikkiPanel } from "@/components/bean/editor/nikki-panel";
 import { JazmiiPanel } from "@/components/bean/editor/jazmii-panel";
 import { LaxiiPanel } from "@/components/bean/editor/laxii-panel";
@@ -527,6 +529,8 @@ export function EditorTool({ user, onLogout }: { user: { id: string }; onLogout:
           {sequence && <ClipInspector sequence={sequence} session={session} />}
           {sequence && <GangziiPanel sequence={sequence} session={session} />}
           <StudioPanel onProjectCreated={(id) => setProjectId(id)} />
+          {projectId && <PublishingPanel projectId={projectId} />}
+          {projectId && <CreativeDirectorPanel projectId={projectId} onSeekSec={(sec) => session.setPlayhead(Math.max(0, Math.round(sec * (fpsRational.num / fpsRational.den))))} />}
           {sequence && <MyAiPanel sequence={sequence} session={session} projectId={projectId} />}
           {sequence && <NikkiPanel sequence={sequence} session={session} />}
           {sequence && <JazmiiPanel sequence={sequence} session={session} />}

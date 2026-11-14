@@ -31,6 +31,15 @@ model User {
   studioPlans   StudioPlan[]   @relation("StudioPlans")
   studioScenes  StudioScene[]  @relation("StudioScenes")
   studioBatches StudioBatch[]  @relation("StudioBatches")
+  brandPresets      BrandPreset[]      @relation("BrandPresets")
+  thumbnailDrafts   ThumbnailDraft[]   @relation("ThumbnailDrafts")
+  publishMetadata   PublishMetadata[]  @relation("PublishMetadata")
+  exportVariants    ExportVariant[]    @relation("ExportVariants")
+  publishPackages   PublishPackage[]   @relation("PublishPackages")
+  creativeReviews   CreativeReview[]   @relation("CreativeReviews")
+  creativeVariants  CreativeVariant[]  @relation("CreativeVariants")
+  creativeArtifacts CreativeAnalysisArtifact[] @relation("CreativeArtifacts")
+  transcriptVersions TranscriptVersion[] @relation("TranscriptVersions")
 }
 
 /// User-defined words/phrases RIISHE should consider removing (context-aware —
@@ -73,6 +82,14 @@ model Project {
   conversations Conversation[] @relation("Conversations")
   aiPlans       AIPlan[]       @relation("AIPlans")
   studioPlans StudioPlan[] @relation("StudioPlan")
+  thumbnailDrafts ThumbnailDraft[] @relation("ThumbnailDrafts")
+  publishMetadataRows PublishMetadata[] @relation("PublishMetadataRows")
+  exportVariants ExportVariant[] @relation("ExportVariants")
+  publishPackages PublishPackage[] @relation("PublishPackages")
+  creativeReviews CreativeReview[] @relation("CreativeReviews")
+  creativeVariants CreativeVariant[] @relation("CreativeVariants")
+  creativeArtifacts CreativeAnalysisArtifact[] @relation("CreativeArtifacts")
+  transcriptVersions TranscriptVersion[] @relation("TranscriptVersions")
 }
 
 model MediaAsset {
@@ -520,4 +537,363 @@ model StudioBatch {
   updatedAt         DateTime @updatedAt
 
   @@index([userId, createdAt])
+}
+
+/// ── M9 Professional Publishing ─────────────────────────────────────────────
+/// Reusable creator brand preset (§5 of the M9 spec). Colours are hex RGB;
+/// asset references are owned MediaAsset ids. Applying a preset to a project
+/// is ADDITIVE-merge only — keys the preset does not own are never touched.
+model BrandPreset {
+  id               String   @id @default(cuid())
+  userId           String
+  user             User     @relation("BrandPresets", fields: [userId], references: [id], onDelete: Cascade)
+  name             String
+  /// Display brand name used in metadata/thumbnail text suggestions.
+  brandName        String   @default("")
+  logoAssetId      String?
+  watermarkAssetId String?
+  /// Hex RGB (#rrggbb).
+  primaryColor     String   @default("#d4a017")
+  secondaryColor   String   @default("#111111")
+  /// Typography selection key from the preset registry (e.g. "inter", "nikki-tamil").
+  fontFamily       String   @default("inter")
+  /// Caption styling config (validated shape at the API boundary).
+  captionStyleJson String?
+  introAssetId     String?
+  outroAssetId     String?
+  /// Thumbnail styling preferences (overlay defaults for the Thumbnail Studio).
+  thumbnailStyleJson String?
+  /// Default export profile id (validated against the profile registry).
+  defaultExportProfile String?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  @@index([userId, updatedAt])
+}
+
+/// Thumbnail workspace for one project+platform (§3): generated candidates are
+/// MediaAssets (LAXII provenance preserved); selection and the editable title
+/// overlay are config, never in-place edits. Composite outputs are NEW assets —
+/// regeneration never overwrites a previous selection.
+model ThumbnailDraft {
+  id                String   @id @default(cuid())
+  userId            String
+  user              User     @relation("ThumbnailDrafts", fields: [userId], references: [id], onDelete: Cascade)
+  projectId         String
+  project           Project  @relation("ThumbnailDrafts", fields: [projectId], references: [id], onDelete: Cascade)
+  platform          String
+  /// DRAFT | GENERATING | READY | FAILED
+  status            String   @default("DRAFT")
+  /// User hint / custom prompt for LAXII generation.
+  prompt            String   @default("")
+  /// Editable title overlay: text, position, style (validated shape).
+  layoutJson        String?
+  /// Ordered generated candidate MediaAsset ids.
+  candidateIdsJson  String?
+  /// Currently selected base image (a candidate or an OWNED uploaded asset).
+  selectedAssetId   String?
+  /// Latest composited output asset (base + overlay) — new row per apply.
+  compositedAssetId String?
+  provenanceJson    String?
+  error             String?
+  jobId             String?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  @@unique([projectId, platform])
+  @@index([userId, updatedAt])
+}
+
+/// AI-generated publishing metadata for one project+platform (§4). draftJson
+/// holds the AI SUGGESTIONS (with per-field provider provenance); approvedJson
+/// holds USER-APPROVED values — the two are never conflated.
+model PublishMetadata {
+  id               String   @id @default(cuid())
+  userId           String
+  user             User     @relation("PublishMetadata", fields: [userId], references: [id], onDelete: Cascade)
+  projectId        String
+  project          Project  @relation("PublishMetadataRows", fields: [projectId], references: [id], onDelete: Cascade)
+  platform         String
+  language         String   @default("en") // en | ta
+  /// DRAFT | GENERATED | APPROVED
+  status           String   @default("DRAFT")
+  draftJson        String?
+  approvedJson     String?
+  provider         String?
+  model            String?
+  /// Bounded history of per-field regenerations (audit trail).
+  fieldHistoryJson String?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  @@unique([projectId, platform])
+  @@index([userId, updatedAt])
+}
+
+/// One multi-platform export variant (§6): a validated profile + durable job
+/// on the EXISTING M3 worker transcoding a master source through the existing
+/// FFmpeg path. profileJson records the EXACT profile used (audit evidence).
+model ExportVariant {
+  id             String   @id @default(cuid())
+  userId         String
+  user           User     @relation("ExportVariants", fields: [userId], references: [id], onDelete: Cascade)
+  projectId      String?
+  project        Project? @relation("ExportVariants", fields: [projectId], references: [id], onDelete: SetNull)
+  profileId      String
+  profileVersion String
+  profileJson    String
+  /// QUEUED | RENDERING | COMPLETED | FAILED | CANCELLED
+  status         String   @default("QUEUED")
+  progress       Int      @default(0)
+  stage          String?
+  /// Master source: a completed ExportFile (render) or an owned MediaAsset.
+  sourceExportId String?
+  sourceAssetId  String?
+  /// Completed output (ExportFile, kind VIDEO) on success.
+  resultExportId String?
+  /// ffprobe-based conformance report of the produced file.
+  validationJson String?
+  settingsJson   String?
+  error          String?
+  attempts       Int      @default(0)
+  jobId          String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@index([userId, createdAt])
+  @@index([projectId, status])
+}
+
+/// Publication-ready package (§7): deterministic manifest + zip of APPROVED
+/// metadata, selected thumbnail and COMPLETED variant outputs only — never
+/// private source media or unrelated assets.
+model PublishPackage {
+  id               String   @id @default(cuid())
+  userId           String
+  user             User     @relation("PublishPackages", fields: [userId], references: [id], onDelete: Cascade)
+  projectId        String?
+  project          Project? @relation("PublishPackages", fields: [projectId], references: [id], onDelete: SetNull)
+  /// BUILDING | READY | FAILED
+  status           String   @default("BUILDING")
+  variantIdsJson   String
+  metadataId       String?
+  thumbnailDraftId String?
+  /// Deterministic manifest (sorted keys, recorded sha256 per entry).
+  manifestJson     String?
+  manifestSha256   String?
+  /// The downloadable zip (packages/<id>.zip).
+  storagePath      String?
+  sizeBytes        Int?
+  error            String?
+  jobId            String?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  @@index([userId, createdAt])
+}
+
+/// ── M10 AI Creative Director & Content Intelligence ────────────────────────
+/// One creative analysis run over a project. contextVersion captures the
+/// timeline head using the SAME staleness formula MY AI uses
+/// (v:<version>:<clipCount>:<maxEnd>) so stale reviews are detectable.
+model CreativeReview {
+  id                  String   @id @default(cuid())
+  userId              String
+  user                User     @relation("CreativeReviews", fields: [userId], references: [id], onDelete: Cascade)
+  projectId           String
+  project             Project  @relation("CreativeReviews", fields: [projectId], references: [id], onDelete: Cascade)
+  /// full | retention | scorecard | brief
+  scope               String   @default("full")
+  language            String   @default("en") // en | ta
+  /// QUEUED | RUNNING | COMPLETED | FAILED | CANCELLED
+  status              String   @default("QUEUED")
+  progress            Int      @default(0)
+  stage               String?
+  /// Timeline version the analysis was computed against (staleness check).
+  contextVersion      String
+  headVersion         Int
+  /// Structured creative brief (observed vs AI-interpreted, evidence refs).
+  briefJson           String?
+  /// What was NOT inspected (honest partial analysis).
+  missingEvidenceJson String?
+  /// Which engines provided which evidence (e.g. GANGZII inspection job id).
+  evidenceSourcesJson String?
+  /// LLM model used for interpretive parts (null = deterministic only).
+  provider            String?
+  model               String?
+  error               String?
+  jobId               String?
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  findings         CreativeFinding[]
+  recommendations  CreativeRecommendation[]
+  scorecard        CreativeScorecard?
+
+  @@index([userId, projectId, createdAt])
+}
+
+/// One evidence-based finding from a review. evidenceLabel separates MEASURED
+/// facts from inferred/AI interpretation/insufficient evidence (§4 honesty).
+model CreativeFinding {
+  id            String  @id @default(cuid())
+  reviewId      String
+  review        CreativeReview @relation(fields: [reviewId], references: [id], onDelete: Cascade)
+  findingNo     Int
+  /// opening-hook | long-pause | dead-air | pacing | caption-timing |
+  /// repeated-narration | audio-quality | transition | ending-cta |
+  /// scene-structure | visual-repetition | technical | narrative
+  category      String
+  startSec      Float?
+  endSec        Float?
+  /// info | minor | moderate | major
+  severity      String  @default("info")
+  /// 0..1 where quantifiable; null when not.
+  confidence    Float?
+  /// measured | inferred | ai-interpretation | insufficient-evidence
+  evidenceLabel String
+  /// The actual measured values + source references (engine, job, asset).
+  evidenceJson  String
+  explanation   String
+  suggestion    String?
+  /// RIISHE | GANGZII | NIIKI | JAZMII | LAXII | MYAI | deterministic
+  engine        String  @default("deterministic")
+
+  @@index([reviewId])
+}
+
+/// A typed, executable-or-informational improvement proposal (§5). Executable
+/// proposals carry M1 commands and are applied ONLY after explicit approval,
+/// through the versioned persistence path (undo/redo/autosave intact). Stale
+/// proposals are rejected when the timeline head has moved.
+model CreativeRecommendation {
+  id                        String   @id @default(cuid())
+  reviewId                  String
+  review                    CreativeReview @relation(fields: [reviewId], references: [id], onDelete: Cascade)
+  userId                    String
+  projectId                 String
+  recNo                     Int
+  /// informational | executable
+  kind                      String
+  engine                    String
+  title                     String
+  detail                    String
+  /// Target range/reference: { clipId?, trackId?, startSec?, endSec? }.
+  targetJson                String?
+  /// Typed proposal payload: { commands: Command[] } or engineAction spec.
+  proposalJson              String
+  /// Human-readable preview of what applying would do.
+  previewJson               String?
+  requiresApproval          Boolean  @default(true)
+  /// PROPOSED | APPROVED | REJECTED | EXECUTED | FAILED | STALE
+  status                    String   @default("PROPOSED")
+  timelineVersionAtProposal Int
+  executedVersion           Int?
+  resultJson                String?
+  createdAt                 DateTime @default(now())
+  updatedAt                 DateTime @updatedAt
+
+  @@index([reviewId])
+  @@index([userId, projectId, status])
+}
+
+/// A/B Studio variant (§6): a creative alternative preserved alongside the
+/// original. Applied variants record the decision; no performance claims are
+/// made without real experimental data (labelled creative evaluation).
+model CreativeVariant {
+  id                 String   @id @default(cuid())
+  userId             String
+  user               User     @relation("CreativeVariants", fields: [userId], references: [id], onDelete: Cascade)
+  projectId          String
+  project            Project  @relation("CreativeVariants", fields: [projectId], references: [id], onDelete: Cascade)
+  reviewId           String?
+  /// hook | narration-section | thumbnail | title | description | cta | scene-sequence
+  kind               String
+  label              String
+  description        String
+  /// Which elements changed (e.g. ["first-8-seconds narration"]).
+  changedElementsJson String?
+  /// Text payload / LAXII assetId / M1 command batch for scene-sequence.
+  payloadJson        String
+  provenanceJson     String
+  /// PROPOSED | SELECTED | DISCARDED | APPLIED
+  status             String   @default("PROPOSED")
+  comparisonJson     String?
+  decisionNote       String?
+  appliedVersion     Int?
+  appliedAt          DateTime?
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  @@index([userId, projectId, kind])
+}
+
+/// ── M11 Multimodal Intelligence ────────────────────────────────────────────
+model CreativeAnalysisArtifact {
+  id             String   @id @default(cuid())
+  userId         String
+  user           User     @relation("CreativeArtifacts", fields: [userId], references: [id], onDelete: Cascade)
+  projectId      String
+  project        Project  @relation("CreativeArtifacts", fields: [projectId], references: [id], onDelete: Cascade)
+  kind           String
+  sourceAssetId  String?
+  streamIndex    Int?
+  status         String   @default("QUEUED")
+  depsJson       String
+  depsHash       String
+  staleReason    String?
+  resultJson     String?
+  missingEvidenceJson String?
+  provider       String?
+  model          String?
+  consentVisual  Boolean  @default(false)
+  error          String?
+  jobId          String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@index([userId, projectId, kind, depsHash])
+  @@index([projectId, sourceAssetId])
+}
+
+model TranscriptVersion {
+  id             String   @id @default(cuid())
+  userId         String
+  user           User     @relation("TranscriptVersions", fields: [userId], references: [id], onDelete: Cascade)
+  projectId      String
+  project        Project  @relation("TranscriptVersions", fields: [projectId], references: [id], onDelete: Cascade)
+  sourceAssetId  String
+  streamIndex    Int?
+  versionNo      Int
+  language       String
+  provider       String?
+  model          String?
+  text           String
+  segmentsJson   String
+  wordsAvailable Boolean  @default(false)
+  warningsJson   String?
+  status         String   @default("PENDING_REVIEW")
+  depsJson       String
+  depsHash       String
+  staleReason    String?
+  captionAssetId String?
+  jobId          String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@index([userId, sourceAssetId, versionNo])
+  @@index([projectId, status])
+}
+
+/// Explainable scorecard (§7) — one per review. dimensionsJson holds the 8
+/// dimensions (score/evidence/explanation/confidence/missingData/suggestions)
+/// under a documented, versioned scoring model. Missing data → null score.
+model CreativeScorecard {
+  id           String   @id @default(cuid())
+  reviewId     String   @unique
+  review       CreativeReview @relation(fields: [reviewId], references: [id], onDelete: Cascade)
+  modelVersion String
+  dimensionsJson String
+  overallNote  String?
+  createdAt    DateTime @default(now())
 }

@@ -27,6 +27,13 @@ SUITES=(
   scripts/test-automation-mcp.test.ts
   scripts/test-automation-api.test.ts
   scripts/test-studio-core.test.ts
+  scripts/test-publish-core.test.ts
+  scripts/test-creative-core.test.ts
+  scripts/test-creative-live.test.ts
+  scripts/test-multimodal-core.test.ts
+  scripts/test-multimodal-live.test.ts
+  scripts/test-visual-core.test.ts
+  scripts/test-visual-live.test.ts
   scripts/test-riishe-timeline.test.ts
   scripts/test-editor-regressions.test.ts
   scripts/test-media-pipeline.test.ts

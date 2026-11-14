@@ -5,9 +5,10 @@
  * treats that as "no usable plan", never as license to guess).
  */
 import { z } from "zod";
-import { llmProvider, type LLMChatOptions } from "./provider";
+import { llmProvider, type LLMProvider, type LLMChatOptions } from "./provider";
 
-function extractJson(text: string): unknown {
+/** Exported for the M12 vision gateway (same fence-tolerant semantics). */
+export function extractJson(text: string): unknown {
   const trimmed = text.trim();
   // The verified provider wraps JSON in ```json fences even when asked not to.
   const fence = trimmed.match(/```(?:json)?\s*([\s\S]*?)```/);
@@ -29,9 +30,13 @@ export async function chatValidated<T>(
   userId: string,
   schema: z.ZodType<T>,
   messages: { role: "system" | "user" | "assistant"; content: string }[],
-  options: LLMChatOptions & { onUsage?: (r: { usage: { promptTokens: number; completionTokens: number; totalTokens: number } | null; model: string }) => void },
+  options: LLMChatOptions & {
+    /** Optional explicit provider (service/test seam). Omitted = the configured gateway provider, unchanged. */
+    provider?: LLMProvider;
+    onUsage?: (r: { usage: { promptTokens: number; completionTokens: number; totalTokens: number } | null; model: string }) => void;
+  },
 ): Promise<{ data: T; raw: string; model: string }> {
-  const provider = llmProvider();
+  const provider = options.provider ?? llmProvider();
   const first = await provider.chat(messages, options);
   options.onUsage?.(first);
   const attempt = (raw: string): T => schema.parse(extractJson(raw));
