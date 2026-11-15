@@ -1,41 +1,25 @@
 "use client";
 
 /**
- * BEAN FX — Editor workspace (Milestone 2, editor integration).
+ * BEAN FX — Professional Editing Workspace (M15).
  *
- * The professional editing workspace inside the existing shell: project
- * picker, program monitor, multitrack timeline, inspector and media rail,
- * all driven by the validated command session (undo/redo, autosave, version
- * conflicts). Layout and visual language follow the established BEAN FX
- * design system (#050505 canvas, #2a2a2a borders, #d4a017 accent, bean-label).
+ * The primary application experience: an integrated desktop editing
+ * environment — application header (project/workspace/undo/save/export),
+ * resizable PROJECT & MEDIA / EFFECTS left dock, PROGRAM MONITOR with the
+ * interactive composition canvas, PROPERTIES INSPECTOR, editing-tool toolbar
+ * and the multitrack timeline. Every control drives the existing M1 command
+ * engine / engine panels — nothing decorative.
  */
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
-  Play,
-  Pause,
-  ChevronLeft,
-  ChevronRight,
-  Scissors,
-  Trash2,
-  Undo2,
-  Redo2,
-  RotateCcw,
-  Type,
-  Video as VideoIcon,
-  Music,
-  Loader2,
-  AlertTriangle,
-  CloudUpload,
-  Check,
-  Plus,
-  Sparkles,
+  AlertTriangle, Bot, Check, ChevronLeft, ChevronRight, CloudUpload, Download, LayoutGrid, Loader2,
+  Pause, Play, Redo2, Settings, SlidersHorizontal, Sparkles, Undo2,
 } from "lucide-react";
 import type { MediaMeta, RiisheAnalyzeResult, SavedDecisionView } from "@/lib/types";
-import type { Sequence } from "@/lib/editor/model";
-import { formatTimecode, rationalFromFps } from "@/lib/editor/time";
 
-/** How long a newly placed image still stays on the timeline (seconds). */
-const DEFAULT_IMAGE_TIMELINE_SEC = 5;
+interface ProjectSummary { id: string; name: string }
+import { formatTimecode, rationalFromFps } from "@/lib/editor/time";
+import type { Rational } from "@/lib/editor/time";
 import { sequenceEndFrame } from "@/lib/editor/preview";
 import { api } from "@/lib/client-api";
 import { effectiveRemovalSec, planRiisheTimelineApply } from "@/lib/riishe-timeline";
@@ -43,23 +27,22 @@ import { useEditorSession } from "@/hooks/use-editor-session";
 import { ProgramMonitor } from "@/components/bean/editor/monitor";
 import { EditorTimeline } from "@/components/bean/editor/timeline";
 import { ClipInspector } from "@/components/bean/editor/inspector";
-import { GangziiPanel } from "@/components/bean/editor/gangzii-panel";
-import { MyAiPanel } from "@/components/bean/editor/my-ai-panel";
-import { StudioPanel } from "@/components/bean/editor/studio-panel";
+import { EditingToolbar } from "@/components/bean/editor/editing-toolbar";
+import { MediaBrowser, useMediaImport } from "@/components/bean/editor/media-browser";
+import { EffectsBrowser } from "@/components/bean/editor/effects-browser";
+import { AiStudio } from "@/components/bean/editor/ai-studio";
 import { PublishingPanel } from "@/components/bean/editor/publishing-panel";
-import { CreativeDirectorPanel } from "@/components/bean/editor/creative-panel";
-import { NikkiPanel } from "@/components/bean/editor/nikki-panel";
-import { JazmiiPanel } from "@/components/bean/editor/jazmii-panel";
-import { LaxiiPanel } from "@/components/bean/editor/laxii-panel";
+import { StudioPanel } from "@/components/bean/editor/studio-panel";
+import type { EditToolId } from "@/lib/editor/tools";
+import { subscribeFrame } from "@/lib/editor/playback";
 
-interface ProjectSummary {
-  id: string;
-  name: string;
-}
+const DEFAULT_IMAGE_TIMELINE_SEC = 5;
 
-export function EditorTool({ user, onLogout }: { user: { id: string }; onLogout: () => void }) {
+type Drawer = "ai-studio" | "export" | "settings" | null;
+type LeftTab = "media" | "effects";
+
+export function EditorTool({ user }: { user: { id: string }; onLogout: () => void }) {
   void user;
-  void onLogout;
   const [projects, setProjects] = useState<ProjectSummary[] | null>(null);
   const [projectId, setProjectId] = useState<string | null>(null);
   const [newProjectName, setNewProjectName] = useState("");
@@ -67,29 +50,37 @@ export function EditorTool({ user, onLogout }: { user: { id: string }; onLogout:
   const [playing, setPlaying] = useState(false);
   const [zoom, setZoom] = useState(1.5);
   const [notice, setNotice] = useState<string | null>(null);
+  const [activeTool, setActiveTool] = useState<EditToolId>("select");
+  const [snap, setSnap] = useState(true);
+  const [guides, setGuides] = useState(false);
+  const [drawer, setDrawer] = useState<Drawer>(null);
+  const [leftTab, setLeftTab] = useState<LeftTab>("media");
+  const [leftWidth, setLeftWidth] = useState(260);
+  const [rightWidth, setRightWidth] = useState(300);
+  const [renaming, setRenaming] = useState(false);
+  const [renameValue, setRenameValue] = useState("");
 
   const session = useEditorSession(projectId);
   const sequence = session.sequence;
   const [riisheBusy, setRiisheBusy] = useState(false);
+  const refreshMedia = useCallback(() => {
+    api.listMedia().then((res) => setMedia(res.media)).catch(() => undefined);
+  }, []);
+  const { importing, importFiles } = useMediaImport(refreshMedia, (m) => setNotice(m));
 
-  /**
-   * M4 — RIISHE → timeline: apply approved cut proposals as validated
-   * commands. Finds the newest completed analysis per media asset used in
-   * the sequence, replays its persisted decisions through the SAME
-   * membership rule as the export path (effectiveRemovalSec), maps the
-   * removals to one atomic SplitClip/RippleDelete batch and applies it as a
-   * single undoable step. Honest surfaces: assets without analyses, locked
-   * tracks, sub-frame cuts, and full refusal by the command engine.
-   */
+  // Open a project directly via #/editor?project=<id> (dashboard deep link).
+  useEffect(() => {
+    const wanted = new URLSearchParams(window.location.hash.split("?")[1] ?? "").get("project");
+    if (wanted) setProjectId(wanted);
+  }, []);
+
   const applyRiisheCuts = useCallback(async () => {
     const seq = session.sequence;
     if (!seq || riisheBusy) return;
     setRiisheBusy(true);
     setNotice(null);
     try {
-      const assetIds = [
-        ...new Set(seq.clips.filter((c) => c.sourceAssetId && !c.missingMedia).map((c) => c.sourceAssetId)),
-      ];
+      const assetIds = [...new Set(seq.clips.filter((c) => c.sourceAssetId && !c.missingMedia).map((c) => c.sourceAssetId))];
       const commands: unknown[] = [];
       const reserved: string[] = [];
       const lines: string[] = [];
@@ -98,53 +89,28 @@ export function EditorTool({ user, onLogout }: { user: { id: string }; onLogout:
         const list = await api.analyses(assetId).catch(() => null);
         if (!list?.ok || list.analyses.length === 0) continue;
         assetsWithAnalysis += 1;
-        const jobId = list.analyses[0].jobId; // newest first
-        const result = (await fetch(`/api/autocut/analyze/result/${encodeURIComponent(jobId)}`).then((r) =>
-          r.json(),
-        )) as RiisheAnalyzeResult;
+        const jobId = list.analyses[0].jobId;
+        const result = (await fetch(`/api/autocut/analyze/result/${encodeURIComponent(jobId)}`).then((r) => r.json())) as RiisheAnalyzeResult;
         const decisionRes = await api.decisions(jobId).catch(() => null);
         const decisions: SavedDecisionView[] = decisionRes?.decisions ?? [];
         const removals = effectiveRemovalSec(result.candidates, decisions, result.durationSec);
-        const plan = planRiisheTimelineApply({
-          sequence: seq,
-          removalsSec: removals,
-          sourceAssetId: assetId,
-          reservedIds: reserved,
-        });
-        reserved.push(
-          ...plan.commands
-            .filter((c): c is Extract<(typeof plan.commands)[number], { type: "SplitClip" }> => c.type === "SplitClip")
-            .map((c) => c.newRightId),
-        );
+        const plan = planRiisheTimelineApply({ sequence: seq, removalsSec: removals, sourceAssetId: assetId, reservedIds: reserved });
+        reserved.push(...plan.commands.filter((c): c is Extract<(typeof plan.commands)[number], { type: "SplitClip" }> => c.type === "SplitClip").map((c) => c.newRightId));
         if (plan.commands.length > 0) {
           commands.push(...plan.commands);
-          lines.push(
-            `${result.originalName}: ${plan.stats.cutsPlanned} cut(s) across ${plan.stats.clipsCut} clip(s)` +
-              (plan.stats.clipsRemoved > 0 ? `, ${plan.stats.clipsRemoved} clip(s) fully removed` : "") +
-              (plan.warnings.length > 0 ? ` — ${plan.warnings.length} proposal(s) skipped honestly` : ""),
-          );
+          lines.push(`${result.originalName}: ${plan.stats.cutsPlanned} cut(s) across ${plan.stats.clipsCut} clip(s)` + (plan.stats.clipsRemoved > 0 ? `, ${plan.stats.clipsRemoved} clip(s) fully removed` : "") + (plan.warnings.length > 0 ? ` — ${plan.warnings.length} proposal(s) skipped honestly` : ""));
         } else if (plan.warnings.length > 0) {
           lines.push(`${result.originalName}: nothing applied — ${plan.warnings[0]}`);
         }
       }
       if (commands.length === 0) {
-        setNotice(
-          assetsWithAnalysis === 0
-            ? "No completed RIISHE analysis found for the media used in this sequence — analyze the media in the Auto Cut tool first."
-            : "RIISHE analyses found, but no approved cuts to apply (everything kept, rejected, too small for this timebase, or already applied).",
-        );
+        setNotice(assetsWithAnalysis === 0 ? "No completed RIISHE analysis found for the media used in this sequence — analyze the media in the Auto Cut tool first." : "RIISHE analyses found, but no approved cuts to apply.");
         return;
       }
-      const ok = window.confirm(
-        `Apply RIISHE cuts to the timeline?\n\n${lines.join("\n")}\n\n${commands.length} validated commands, applied atomically as one undoable step.`,
-      );
+      const ok = window.confirm(`Apply RIISHE cuts to the timeline?\n\n${lines.join("\n")}\n\n${commands.length} validated commands, applied atomically as one undoable step.`);
       if (!ok) return;
       const applied = session.apply(commands);
-      setNotice(
-        applied
-          ? `RIISHE cuts applied — ${lines.join(" · ")} — undo with Ctrl+Z.`
-          : "RIISHE apply was refused by the validated command engine (see the error above). Nothing was changed.",
-      );
+      setNotice(applied ? `RIISHE cuts applied — ${lines.join(" · ")} — undo with Ctrl+Z.` : "RIISHE apply was refused by the validated command engine. Nothing was changed.");
     } catch (err) {
       setNotice(err instanceof Error ? err.message : "RIISHE apply failed.");
     } finally {
@@ -152,20 +118,17 @@ export function EditorTool({ user, onLogout }: { user: { id: string }; onLogout:
     }
   }, [session, riisheBusy]);
 
-  // ---- data loading ------------------------------------------------------
+  // ---- data loading --------------------------------------------------------
   useEffect(() => {
     api
       .projects()
       .then((res) => {
         setProjects(res.projects);
-        if (res.projects.length > 0) setProjectId((current) => current ?? res.projects[0].id);
+        setProjectId((current) => current ?? res.projects[0]?.id ?? null);
       })
       .catch((err) => setNotice(err instanceof Error ? err.message : "Failed to load projects."));
-    api
-      .listMedia()
-      .then((res) => setMedia(res.media))
-      .catch(() => setMedia([]));
-  }, []);
+    refreshMedia();
+  }, [refreshMedia]);
 
   const createProject = useCallback(async () => {
     const name = newProjectName.trim();
@@ -181,8 +144,34 @@ export function EditorTool({ user, onLogout }: { user: { id: string }; onLogout:
     }
   }, [newProjectName]);
 
-  // ---- transport + edit actions ------------------------------------------
-  const fpsRational = sequence?.fps ?? { num: 30, den: 1 };
+  const renameProject = useCallback(async () => {
+    if (!projectId || !renameValue.trim()) return;
+    try {
+      await fetch(`/api/projects/${projectId}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name: renameValue.trim().slice(0, 120) }) });
+      setProjects((prev) => prev?.map((p) => (p.id === projectId ? { ...p, name: renameValue.trim().slice(0, 120) } : p)) ?? prev);
+      setRenaming(false);
+      setNotice(null);
+    } catch {
+      setNotice("Rename failed.");
+    }
+  }, [projectId, renameValue]);
+
+  const duplicateProject = useCallback(async () => {
+    if (!projectId) return;
+    try {
+      const res = await fetch(`/api/projects/${projectId}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({}) }).then((r) => r.json());
+      const created = res.project as { id: string; name: string } | undefined;
+      if (created) {
+        setProjects((prev) => [{ id: created.id, name: created.name }, ...(prev ?? [])]);
+        setNotice(`Duplicated as "${created.name}" (editing state carried over when the project had a sequence).`);
+      }
+    } catch {
+      setNotice("Duplicate failed.");
+    }
+  }, [projectId]);
+
+  // ---- transport + edit actions --------------------------------------------
+  const fpsRational = sequence?.fps ?? ({ num: 30, den: 1 } as Rational);
   const end = sequence ? sequenceEndFrame(sequence) : 0;
 
   const togglePlay = useCallback(() => {
@@ -198,10 +187,7 @@ export function EditorTool({ user, onLogout }: { user: { id: string }; onLogout:
     [session, end],
   );
 
-  const selectedClip = useMemo(
-    () => sequence?.clips.find((c) => c.id === session.selectedClipId) ?? null,
-    [sequence, session.selectedClipId],
-  );
+  const selectedClip = useMemo(() => sequence?.clips.find((c) => c.id === session.selectedClipId) ?? null, [sequence, session.selectedClipId]);
 
   const splitAtPlayhead = useCallback(() => {
     if (!sequence || !selectedClip) {
@@ -213,15 +199,7 @@ export function EditorTool({ user, onLogout }: { user: { id: string }; onLogout:
       setNotice("The playhead is outside the selected clip — move it inside first.");
       return;
     }
-    const ok = session.apply([
-      {
-        type: "SplitClip",
-        clipId: selectedClip.id,
-        atTimelineFrame: at,
-        newLeftId: selectedClip.id,
-        newRightId: session.newId("clip"),
-      },
-    ]);
+    const ok = session.apply([{ type: "SplitClip", clipId: selectedClip.id, atTimelineFrame: at, newLeftId: selectedClip.id, newRightId: session.newId("clip") }]);
     if (ok) setNotice(null);
   }, [sequence, selectedClip, session]);
 
@@ -244,7 +222,6 @@ export function EditorTool({ user, onLogout }: { user: { id: string }; onLogout:
       setNotice("No caption track available.");
       return;
     }
-    const start = session.playheadFrame;
     session.apply([
       {
         type: "AddCaption",
@@ -255,7 +232,7 @@ export function EditorTool({ user, onLogout }: { user: { id: string }; onLogout:
           sourceInFrame: 0,
           sourceOutFrame: Math.round(2 * (sequence.fps.num / sequence.fps.den)),
           sourceFps: sequence.fps,
-          timelineStartFrame: start,
+          timelineStartFrame: session.playheadFrame,
           missingMedia: true,
           captionText: "New caption",
         },
@@ -263,9 +240,6 @@ export function EditorTool({ user, onLogout }: { user: { id: string }; onLogout:
     ]);
   }, [sequence, session]);
 
-  /** Place a library asset on the first compatible, unlocked track at the playhead.
-   *  M3: freshly uploaded assets are analyzed by the background worker — the
-   *  import action waits for that probe (bounded) before placing the clip. */
   const addMediaAtPlayhead = useCallback(
     async (asset: MediaMeta) => {
       if (!sequence) return;
@@ -285,8 +259,6 @@ export function EditorTool({ user, onLogout }: { user: { id: string }; onLogout:
         setNotice(`Media analysis failed: ${placed.probeError ?? "the file may be corrupt or unsupported."}`);
         return;
       }
-      // Images are stills: no intrinsic duration — they take a fixed 5 s slot
-      // on a VIDEO track (trim to taste), timebased 1:1 with the sequence.
       const isImage = placed.kind === "IMAGE";
       if (!isImage && (placed.durationSec == null || placed.durationSec <= 0)) {
         setNotice("This asset has no measurable duration — it cannot be placed.");
@@ -294,9 +266,7 @@ export function EditorTool({ user, onLogout }: { user: { id: string }; onLogout:
       }
       const seqFps = sequence.fps.num / sequence.fps.den;
       const srcFps = isImage ? seqFps : placed.fps && placed.fps > 0 ? placed.fps : seqFps;
-      const sourceDurationFrames = isImage
-        ? Math.round(DEFAULT_IMAGE_TIMELINE_SEC * seqFps)
-        : Math.round((placed.durationSec as number) * srcFps);
+      const sourceDurationFrames = isImage ? Math.round(DEFAULT_IMAGE_TIMELINE_SEC * seqFps) : Math.round((placed.durationSec as number) * srcFps);
       const ok = session.apply([
         {
           type: "AddClip",
@@ -306,9 +276,6 @@ export function EditorTool({ user, onLogout }: { user: { id: string }; onLogout:
             sourceAssetId: placed.id,
             sourceInFrame: 0,
             sourceOutFrame: sourceDurationFrames,
-            // Broadcast-exact rationals for the SMPTE families (29.97 →
-            // 30000/1001 …) instead of a 1000-based approximation; stills use
-            // the sequence timebase 1:1.
             sourceFps: isImage ? sequence.fps : rationalFromFps(srcFps),
             timelineStartFrame: session.playheadFrame,
             label: placed.originalName,
@@ -323,11 +290,11 @@ export function EditorTool({ user, onLogout }: { user: { id: string }; onLogout:
     [sequence, session],
   );
 
-  // ---- keyboard shortcuts (skipped while typing) -------------------------
+  // ---- keyboard: transport + tool shortcuts --------------------------------
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      const target = e.target as HTMLElement | null;
-      if (target && (target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.isContentEditable)) return;
+      const target = e.target as HTMLElement;
+      if (target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.isContentEditable) return;
       if (e.code === "Space") {
         e.preventDefault();
         togglePlay();
@@ -337,8 +304,9 @@ export function EditorTool({ user, onLogout }: { user: { id: string }; onLogout:
       } else if (e.key === "ArrowRight") {
         e.preventDefault();
         step(e.shiftKey ? 12 : 1);
-      } else if (e.key === "s" || e.key === "S") {
-        splitAtPlayhead();
+      } else if ((e.key === "s" || e.key === "S") && !e.metaKey && !e.ctrlKey) {
+        if (snap) setSnap(false);
+        else splitAtPlayhead();
       } else if (e.key === "Delete" || e.key === "Backspace") {
         e.preventDefault();
         deleteSelection(false);
@@ -346,11 +314,58 @@ export function EditorTool({ user, onLogout }: { user: { id: string }; onLogout:
         e.preventDefault();
         if (e.shiftKey) session.redo();
         else session.undo();
+      } else if ((e.metaKey || e.ctrlKey) && (e.key === "s" || e.key === "S")) {
+        // Ctrl/Cmd+S — flush the autosave NOW (M16 reliability).
+        e.preventDefault();
+        void session.flushNow().then(() => setNotice(null));
+      } else if (!e.metaKey && !e.ctrlKey) {
+        const toolKeys: Record<string, EditToolId> = { v: "select", a: "track-select", c: "razor", y: "slip", u: "slide", h: "hand", z: "zoom", t: "text", r: "transform" };
+        const tool = toolKeys[e.key.toLowerCase()];
+        if (tool) setActiveTool(tool);
       }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [togglePlay, step, splitAtPlayhead, deleteSelection, session]);
+  }, [togglePlay, step, splitAtPlayhead, deleteSelection, session, snap]);
+
+  // Unsaved-changes guard: never discard a pending autosave silently.
+  useEffect(() => {
+    const guard = (e: BeforeUnloadEvent) => {
+      if (session.saveState === "saved" || session.saveState === "loading") return;
+      e.preventDefault();
+    };
+    window.addEventListener("beforeunload", guard);
+    return () => window.removeEventListener("beforeunload", guard);
+  }, [session.saveState]);
+
+  // ---- resizable docks ------------------------------------------------------
+  const dragRef = useRef<{ side: "left" | "right"; startX: number; startWidth: number } | null>(null);
+  const onDockDown = (side: "left" | "right") => (e: React.PointerEvent) => {
+    dragRef.current = { side, startX: e.clientX, startWidth: side === "left" ? leftWidth : rightWidth };
+    (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+  };
+  const onDockMove = (e: React.PointerEvent) => {
+    if (!dragRef.current) return;
+    const { side, startX, startWidth } = dragRef.current;
+    const delta = side === "left" ? e.clientX - startX : startX - e.clientX;
+    const next = Math.max(200, Math.min(480, startWidth + delta));
+    if (side === "left") setLeftWidth(next);
+    else setRightWidth(next);
+  };
+  const onDockUp = () => {
+    dragRef.current = null;
+  };
+
+  // M16: real asset durations (frames at the sequence rate) for roll/slide
+  // extension decisions — from the media library's probe data only.
+  const assetFrameDurations = useMemo(() => {
+    const map = new Map<string, number>();
+    const fps = sequence ? sequence.fps.num / sequence.fps.den : 30;
+    for (const m of media ?? []) {
+      if (m.durationSec && m.durationSec > 0) map.set(m.id, Math.floor(m.durationSec * fps));
+    }
+    return map;
+  }, [media, sequence?.fps]);
 
   const saveBadge = {
     saved: { icon: <Check className="h-3 w-3" />, text: session.version ? `Saved v${session.version}` : "Saved", cls: "text-[#4cc47f]" },
@@ -362,196 +377,289 @@ export function EditorTool({ user, onLogout }: { user: { id: string }; onLogout:
 
   const toolButton =
     "flex items-center justify-center rounded border border-[#2a2a2a] px-2 py-1.5 text-[#d8d8d2] transition-colors hover:border-[#d4a017] hover:text-[#d4a017] disabled:opacity-40 disabled:hover:border-[#2a2a2a] disabled:hover:text-[#d8d8d2]";
+  const currentProject = projects?.find((p) => p.id === projectId);
 
   return (
-    <div className="flex min-h-screen flex-col bg-[#050505] text-[#d8d8d2]">
-      {/* Toolbar */}
-      <div className="flex flex-wrap items-center gap-2 border-b border-[#2a2a2a] px-3 py-2">
-        <span className="bean-label text-[10px] text-[#d4a017]">BEAN EDITOR</span>
-        <select
-          value={projectId ?? ""}
-          onChange={(e) => {
-            setPlaying(false);
-            setProjectId(e.target.value || null);
-          }}
-          className="rounded border border-[#2a2a2a] bg-[#111110] px-2 py-1 text-xs text-[#e6e6e0] outline-none max-w-[200px]"
-          aria-label="Project"
-        >
+    <div className="flex h-screen flex-col overflow-hidden bg-[#050505] text-[#d8d8d2]">
+      {/* ── Application header ─────────────────────────────────────────── */}
+      <header className="flex items-center gap-2 border-b border-[#2a2a2a] bg-[#0d0d0c] px-3 py-1.5">
+        <a href="#/studio" className="bean-label shrink-0 text-[11px] text-[#d4a017] hover:text-[#e6b93a]">BEAN FX</a>
+        <span className="mx-1 h-5 w-px bg-[#2a2a2a]" />
+        {renaming ? (
+          <input
+            value={renameValue}
+            onChange={(e) => setRenameValue(e.target.value.slice(0, 120))}
+            onKeyDown={(e) => e.key === "Enter" && void renameProject()}
+            onBlur={() => setRenaming(false)}
+            autoFocus
+            className="w-40 rounded border border-[#d4a017]/60 bg-[#111110] px-1.5 py-0.5 text-xs outline-none"
+          />
+        ) : (
+          <button type="button" onClick={() => { setRenameValue(currentProject?.name ?? ""); setRenaming(true); }} className="max-w-[220px] truncate rounded px-1.5 py-0.5 text-xs text-[#e6e6e0] hover:bg-[#181816]" title="Click to rename the project">
+            {currentProject?.name ?? "No project selected"}
+          </button>
+        )}
+        <select value={projectId ?? ""} onChange={(e) => { setPlaying(false); setProjectId(e.target.value || null); }} className="max-w-[160px] rounded border border-[#2a2a2a] bg-[#111110] px-1.5 py-1 text-xs text-[#e6e6e0] outline-none" aria-label="Switch project">
+          <option value="">— select —</option>
           {(projects ?? []).map((p) => (
-            <option key={p.id} value={p.id}>
-              {p.name}
-            </option>
+            <option key={p.id} value={p.id}>{p.name}</option>
           ))}
         </select>
-        <div className="flex items-center gap-1">
-          <input
-            value={newProjectName}
-            onChange={(e) => setNewProjectName(e.target.value.slice(0, 120))}
-            onKeyDown={(e) => {
-              if (e.key === "Enter") void createProject();
-            }}
-            placeholder="New project name…"
-            className="w-36 rounded border border-[#2a2a2a] bg-[#111110] px-2 py-1 text-xs outline-none placeholder:text-[#5a5a55] focus:border-[#d4a017]"
-          />
-          <button type="button" onClick={() => void createProject()} disabled={!newProjectName.trim()} className={toolButton} title="Create project">
-            <Plus className="h-3.5 w-3.5" />
-          </button>
-        </div>
-
-        <span className="mx-1 h-5 w-px bg-[#2a2a2a]" />
-
-        <button type="button" onClick={() => step(-1)} className={toolButton} title="Step back one frame (←)">
-          <ChevronLeft className="h-4 w-4" />
-        </button>
-        <button type="button" onClick={togglePlay} disabled={!sequence || end === 0} className={toolButton} title="Play / pause (Space)">
-          {playing ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4" />}
-        </button>
-        <button type="button" onClick={() => step(1)} className={toolButton} title="Step forward one frame (→)">
-          <ChevronRight className="h-4 w-4" />
-        </button>
-        <span className="rounded bg-[#111110] px-2 py-1 font-mono text-xs text-[#d4a017]">{formatTimecode(session.playheadFrame, fpsRational)}</span>
-
-        <span className="mx-1 h-5 w-px bg-[#2a2a2a]" />
-
-        <button type="button" onClick={splitAtPlayhead} disabled={!selectedClip} className={toolButton} title="Split at playhead (S)">
-          <Scissors className="h-4 w-4" />
-        </button>
-        <button type="button" onClick={() => deleteSelection(false)} disabled={!selectedClip} className={toolButton} title="Delete clip (Del)">
-          <Trash2 className="h-4 w-4" />
-        </button>
-        <button
-          type="button"
-          onClick={() => deleteSelection(true)}
-          disabled={!selectedClip}
-          className={toolButton}
-          title="Ripple delete (removes the clip and closes the gap)"
-        >
-          <RotateCcw className="h-4 w-4" />
-        </button>
-        <button type="button" onClick={addCaptionAtPlayhead} disabled={!sequence} className={toolButton} title="Add caption at playhead">
-          <Type className="h-4 w-4" />
-        </button>
-        <button
-          type="button"
-          onClick={() => void applyRiisheCuts()}
-          disabled={!sequence || riisheBusy}
-          className={toolButton}
-          title="Apply RIISHE cuts as validated timeline commands (M4)"
-        >
-          {riisheBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
-        </button>
-
-        <span className="mx-1 h-5 w-px bg-[#2a2a2a]" />
-
-        <button type="button" onClick={() => session.undo()} disabled={!session.canUndo} className={toolButton} title="Undo (Ctrl+Z)">
-          <Undo2 className="h-4 w-4" />
-        </button>
-        <button type="button" onClick={() => session.redo()} disabled={!session.canRedo} className={toolButton} title="Redo (Ctrl+Shift+Z)">
-          <Redo2 className="h-4 w-4" />
-        </button>
-
-        <span className={`ml-auto flex items-center gap-1.5 text-[11px] ${saveBadge.cls}`}>
+        <span className={`flex items-center gap-1 text-[10px] ${saveBadge.cls}`}>
           {saveBadge.icon}
           {saveBadge.text}
         </span>
-      </div>
+
+        <span className="mx-1 h-5 w-px bg-[#2a2a2a]" />
+        <button type="button" onClick={() => session.undo()} disabled={!session.canUndo} className={toolButton} title="Undo (Ctrl+Z)"><Undo2 className="h-4 w-4" /></button>
+        <button type="button" onClick={() => session.redo()} disabled={!session.canRedo} className={toolButton} title="Redo (Ctrl+Shift+Z)"><Redo2 className="h-4 w-4" /></button>
+
+        <span className="mx-1 h-5 w-px bg-[#2a2a2a]" />
+        <div className="flex items-center gap-1">
+          <input value={newProjectName} onChange={(e) => setNewProjectName(e.target.value.slice(0, 120))} onKeyDown={(e) => e.key === "Enter" && void createProject()} placeholder="New project…" className="w-32 rounded border border-[#2a2a2a] bg-[#111110] px-1.5 py-1 text-xs outline-none placeholder:text-[#5a5a55] focus:border-[#d4a017]" />
+          <button type="button" onClick={() => void createProject()} disabled={!newProjectName.trim()} className={toolButton} title="Create project">+</button>
+        </div>
+
+        <div className="ml-auto flex items-center gap-1.5">
+          <button type="button" onClick={() => setDrawer(drawer === "ai-studio" ? null : "ai-studio")} className={`flex items-center gap-1.5 rounded border px-2.5 py-1.5 text-[11px] ${drawer === "ai-studio" ? "border-[#d4a017] text-[#d4a017]" : "border-[#2a2a2a] text-[#d8d8d2] hover:border-[#d4a017] hover:text-[#d4a017]"}`}>
+            <Bot className="h-3.5 w-3.5" /> AI STUDIO
+          </button>
+          <button type="button" onClick={() => setDrawer(drawer === "export" ? null : "export")} className={`flex items-center gap-1.5 rounded border px-2.5 py-1.5 text-[11px] ${drawer === "export" ? "border-[#d4a017] text-[#d4a017]" : "border-[#2a2a2a] text-[#d8d8d2] hover:border-[#d4a017] hover:text-[#d4a017]"}`}>
+            <Download className="h-3.5 w-3.5" /> EXPORT
+          </button>
+          <button type="button" onClick={() => setDrawer(drawer === "settings" ? null : "settings")} className={toolButton} title="Project settings & history"><Settings className="h-4 w-4" /></button>
+          <a href="#/studio" className="flex items-center gap-1 rounded border border-[#2a2a2a] px-2 py-1.5 text-[11px] text-[#d8d8d2] hover:border-[#d4a017] hover:text-[#d4a017]" title="Project dashboard">
+            <LayoutGrid className="h-3.5 w-3.5" />
+          </a>
+        </div>
+      </header>
 
       {(notice || session.error || session.conflictMessage) && (
         <div className="flex items-center gap-2 border-b border-[#2a2a2a] bg-[#1a1206] px-3 py-1.5 text-xs text-[#d4a017]">
           <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
           <span className="min-w-0 flex-1 truncate">{session.conflictMessage ?? session.error ?? notice}</span>
-          <button type="button" onClick={() => setNotice(null)} className="text-[#8f8f8a] hover:text-[#d8d8d2]">
-            dismiss
-          </button>
+          <button type="button" onClick={() => setNotice(null)} className="text-[#8f8f8a] hover:text-[#d8d8d2]">dismiss</button>
         </div>
       )}
 
-      {/* Main workspace: media rail · monitor · inspector */}
-      <div className="flex min-h-0 flex-1 gap-2 p-2" style={{ minHeight: 360 }}>
-        {/* Media rail */}
-        <div className="flex w-56 shrink-0 flex-col overflow-hidden rounded-lg border border-[#2a2a2a] bg-[#0b0b0a]">
-          <div className="flex items-center justify-between border-b border-[#2a2a2a] px-3 py-1.5">
-            <span className="bean-label text-[10px] text-[#8f8f8a]">MEDIA</span>
-            <button type="button" onClick={() => api.listMedia().then((r) => setMedia(r.media)).catch(() => undefined)} className="text-[10px] text-[#8f8f8a] hover:text-[#d4a017]">
-              refresh
-            </button>
+      {/* ── Main workspace: browser · monitor · inspector ─────────────── */}
+      <div className="flex min-h-0 flex-1">
+        {/* Left dock */}
+        <div className="flex shrink-0 flex-col overflow-hidden border-r border-[#2a2a2a] bg-[#0b0b0a]" style={{ width: leftWidth }}>
+          <div className="flex items-center gap-1 border-b border-[#2a2a2a] px-2 py-1.5">
+            {(["media", "effects"] as const).map((t) => (
+              <button key={t} type="button" onClick={() => setLeftTab(t)} className={`rounded px-2 py-1 text-[10px] uppercase tracking-wide ${leftTab === t ? "bg-[#d4a017]/15 text-[#d4a017]" : "text-[#8f8f8a] hover:text-[#d8d8d2]"}`}>
+                {t}
+              </button>
+            ))}
+            <SlidersHorizontal className="ml-auto h-3 w-3 text-[#5a5a55]" />
           </div>
-          <div className="min-h-0 flex-1 overflow-y-auto p-2">
-            {media === null ? (
-              <div className="flex items-center justify-center py-6">
-                <Loader2 className="h-4 w-4 animate-spin text-[#d4a017]" />
+          {leftTab === "media" ? (
+            <MediaBrowser media={media} onRefresh={refreshMedia} onPlace={(a) => void addMediaAtPlayhead(a)} importing={importing} onImport={(files) => void importFiles(files)} />
+          ) : (
+            <EffectsBrowser sequence={sequence} session={session} notice={setNotice} />
+          )}
+        </div>
+        <div className="w-1 cursor-col-resize bg-transparent transition-colors hover:bg-[#d4a017]/30" onPointerDown={onDockDown("left")} onPointerMove={onDockMove} onPointerUp={onDockUp} />
+
+        {/* Center: monitor + transport + timeline */}
+        <div className="flex min-w-0 flex-1 flex-col">
+          <div className="relative flex min-h-0 flex-1">
+            <ProgramMonitor sequence={sequence} playhead={session.playheadFrame} playing={playing} onPlayhead={session.setPlayhead} onPlayingChange={setPlaying} session={session} activeTool={activeTool} guides={guides} snapEnabled={snap} onDecodeError={setNotice} />
+          </div>
+          {/* Transport bar */}
+          <div className="flex items-center gap-2 border-y border-[#2a2a2a] bg-[#0d0d0c] px-3 py-1">
+            <button type="button" onClick={() => step(-1)} className={toolButton} title="Step back one frame (←)"><ChevronLeft className="h-4 w-4" /></button>
+            <button type="button" onClick={togglePlay} disabled={!sequence || end === 0} className={toolButton} title="Play / pause (Space)">{playing ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4" />}</button>
+            <button type="button" onClick={() => step(1)} className={toolButton} title="Step forward one frame (→)"><ChevronRight className="h-4 w-4" /></button>
+            <BusTimecode fpsRational={fpsRational} fallback={session.playheadFrame} />
+            <button type="button" onClick={splitAtPlayhead} disabled={!selectedClip} className={toolButton} title="Split at playhead"><Sparkles className="h-4 w-4" /></button>
+            <button type="button" onClick={() => deleteSelection(false)} disabled={!selectedClip} className={toolButton} title="Delete clip (Del)">✕</button>
+            <button type="button" onClick={() => deleteSelection(true)} disabled={!selectedClip} className={toolButton} title="Ripple delete (closes the gap)">⇤</button>
+            <button type="button" onClick={addCaptionAtPlayhead} disabled={!sequence} className={toolButton} title="Add caption at playhead">T</button>
+            <button type="button" onClick={() => void applyRiisheCuts()} disabled={!sequence || riisheBusy} className={toolButton} title="Apply RIISHE cuts (M4)">{riisheBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}</button>
+            <label className="ml-auto flex items-center gap-1.5 text-[10px] text-[#8f8f8a]">
+              <input type="checkbox" checked={guides} onChange={(e) => setGuides(e.target.checked)} className="accent-[#d4a017]" />
+              guides
+            </label>
+            <span className="font-mono text-[10px] text-[#5a5a55]">{sequence ? `${sequence.width}×${sequence.height} @${sequence.fps.num}/${sequence.fps.den}` : ""}</span>
+          </div>
+          {/* Editing tools + timeline */}
+          <EditingToolbar activeTool={activeTool} onToolChange={setActiveTool} snap={snap} onSnapChange={setSnap} />
+          <div className="flex min-h-[220px] flex-1 flex-col p-2 pt-0">
+            {sequence ? (
+              <EditorTimeline sequence={sequence} playhead={session.playheadFrame} session={session} zoom={zoom} onZoomChange={setZoom} activeTool={activeTool} snap={snap} notice={setNotice} assetDurations={assetFrameDurations} />
+            ) : (
+              <div className="flex flex-1 items-center justify-center rounded-lg border border-[#2a2a2a] bg-[#0b0b0a]">
+                {session.saveState === "loading" ? <Loader2 className="h-5 w-5 animate-spin text-[#d4a017]" /> : <p className="text-sm text-[#8f8f8a]">Create or select a project to start editing.</p>}
               </div>
-            ) : media.length === 0 ? (
-              <p className="px-1 text-[11px] leading-relaxed text-[#8f8f8a]">
-                No media yet. Upload through any tool (Auto Cut, Captions…) — the library is shared with the editor.
-              </p>
-            ) : (
-              <ul className="flex flex-col gap-1">
-                {media.map((m) => (
-                  <li key={m.id} className="rounded border border-[#1c1c1a] bg-[#111110] px-2 py-1.5">
-                    <div className="flex items-center gap-1.5">
-                      {m.kind === "VIDEO" ? <VideoIcon className="h-3 w-3 shrink-0 text-[#d4a017]" /> : m.kind === "AUDIO" ? <Music className="h-3 w-3 shrink-0 text-[#3fa7c4]" /> : null}
-                      <span className="min-w-0 flex-1 truncate text-[11px] text-[#e6e6e0]" title={m.originalName}>
-                        {m.originalName}
-                      </span>
-                    </div>
-                    <div className="mt-1 flex items-center justify-between">
-                      <span className="font-mono text-[9px] text-[#5a5a55]">
-                        {m.durationSec ? `${m.durationSec.toFixed(1)}s` : "?"} · {m.fps ? `${m.fps.toFixed(2)}fps` : m.kind}
-                      </span>
-                      <button
-                        type="button"
-                        onClick={() => addMediaAtPlayhead(m)}
-                        className="rounded border border-[#2a2a2a] px-1.5 py-0.5 text-[10px] text-[#d8d8d2] hover:border-[#d4a017] hover:text-[#d4a017]"
-                        title="Place at playhead on the first compatible track"
-                      >
-                        + place
-                      </button>
-                    </div>
-                  </li>
-                ))}
-              </ul>
             )}
           </div>
         </div>
 
-        {/* Monitor */}
-        <ProgramMonitor
-          sequence={sequence}
-          playhead={session.playheadFrame}
-          playing={playing}
-          onPlayhead={session.setPlayhead}
-          onPlayingChange={setPlaying}
-        />
-
-        {/* Inspector + GANGZII audio intelligence */}
-        <div className="w-72 shrink-0 space-y-2 overflow-y-auto">
+        <div className="w-1 cursor-col-resize bg-transparent transition-colors hover:bg-[#d4a017]/30" onPointerDown={onDockDown("right")} onPointerMove={onDockMove} onPointerUp={onDockUp} />
+        {/* Right dock: inspector */}
+        <div className="flex shrink-0 flex-col overflow-y-auto border-l border-[#2a2a2a] bg-[#0b0b0a]" style={{ width: rightWidth }}>
+          <div className="border-b border-[#2a2a2a] px-3 py-1.5 bean-label text-[10px] text-[#8f8f8a]">PROPERTIES INSPECTOR</div>
           {sequence && <ClipInspector sequence={sequence} session={session} />}
-          {sequence && <GangziiPanel sequence={sequence} session={session} />}
-          <StudioPanel onProjectCreated={(id) => setProjectId(id)} />
-          {projectId && <PublishingPanel projectId={projectId} />}
-          {projectId && <CreativeDirectorPanel projectId={projectId} onSeekSec={(sec) => session.setPlayhead(Math.max(0, Math.round(sec * (fpsRational.num / fpsRational.den))))} />}
-          {sequence && <MyAiPanel sequence={sequence} session={session} projectId={projectId} />}
-          {sequence && <NikkiPanel sequence={sequence} session={session} />}
-          {sequence && <JazmiiPanel sequence={sequence} session={session} />}
-          {sequence && <LaxiiPanel sequence={sequence} session={session} />}
+          {sequence && selectedClip && selectedClip.keyframes.length > 0 && (
+            <div className="border-t border-[#2a2a2a] px-3 py-2 text-[10px] text-[#8f8f8a]">
+              {selectedClip.keyframes.length} keyframe(s) — diamonds on the timeline block; edit via NIIKI (AI STUDIO) or effect parameters.
+            </div>
+          )}
+          {sequence && <StudioPanel onProjectCreated={(id) => setProjectId(id)} />}
         </div>
       </div>
 
-      {/* Timeline */}
-      <div className="flex min-h-[260px] flex-col p-2 pt-0">
-        {sequence ? (
-          <EditorTimeline sequence={sequence} playhead={session.playheadFrame} session={session} zoom={zoom} onZoomChange={setZoom} />
-        ) : (
-          <div className="flex flex-1 items-center justify-center rounded-lg border border-[#2a2a2a] bg-[#0b0b0a]">
-            {session.saveState === "loading" ? (
-              <Loader2 className="h-5 w-5 animate-spin text-[#d4a017]" />
-            ) : (
-              <p className="text-sm text-[#8f8f8a]">Create or select a project to start editing.</p>
-            )}
+      {/* ── Drawers ────────────────────────────────────────────────────── */}
+      {drawer === "ai-studio" && projectId && sequence && (
+        <AiStudio
+          sequence={sequence}
+          session={session}
+          projectId={projectId}
+          onClose={() => setDrawer(null)}
+          onSeekSec={(sec) => session.setPlayhead(Math.max(0, Math.round(sec * (fpsRational.num / fpsRational.den))))}
+        />
+      )}
+      {drawer === "export" && projectId && (
+        <div className="absolute inset-0 z-40 flex justify-end bg-black/50" role="dialog" aria-label="Export workspace">
+          <div className="h-full w-full max-w-[520px] overflow-y-auto border-l border-[#2a2a2a] bg-[#0b0b0a] p-3">
+            <div className="mb-2 flex items-center justify-between">
+              <span className="bean-label text-[10px] text-[#d4a017]">EXPORT &amp; PUBLISH</span>
+              <button type="button" onClick={() => setDrawer(null)} className="text-[#8f8f8a] hover:text-[#d8d8d2]">✕</button>
+            </div>
+            <PublishingPanel projectId={projectId} />
+            <TimelineRenderPanel projectId={projectId} onNotice={setNotice} />
           </div>
-        )}
+        </div>
+      )}
+      {drawer === "settings" && projectId && (
+        <div className="absolute inset-0 z-40 flex justify-end bg-black/50" role="dialog" aria-label="Project settings">
+          <div className="h-full w-full max-w-[440px] overflow-y-auto border-l border-[#2a2a2a] bg-[#0b0b0a] p-3">
+            <div className="mb-2 flex items-center justify-between">
+              <span className="bean-label text-[10px] text-[#d4a017]">PROJECT SETTINGS &amp; HISTORY</span>
+              <button type="button" onClick={() => setDrawer(null)} className="text-[#8f8f8a] hover:text-[#d8d8d2]">✕</button>
+            </div>
+            <ProjectSettings projectId={projectId} onNotice={setNotice} onDuplicate={() => void duplicateProject()} />
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/**
+ * M16 — timeline render panel: enqueues the durable RENDER_TIMELINE job
+ * (real FFmpeg graph from the canonical sequence) and shows real job/ExportFile
+ * state. No fake progress — the durable worker drives the stages.
+ */
+function TimelineRenderPanel({ projectId, onNotice }: { projectId: string; onNotice: (m: string | null) => void }) {
+  const [state, setState] = useState<{ jobs: { id: string; status: string; stage: string | null; progress: number; message: string | null; createdAt: string }[]; exports: { id: string; filename: string; sizeBytes: number; durationSec: number; createdAt: string }[] } | null>(null);
+  const [busy, setBusy] = useState(false);
+  const load = useCallback(() => {
+    fetch(`/api/editor/projects/${projectId}/render`).then((r) => r.json()).then((d) => setState(d)).catch(() => undefined);
+  }, [projectId]);
+  useEffect(() => {
+    load();
+    const id = window.setInterval(load, 3000);
+    return () => window.clearInterval(id);
+  }, [load]);
+  const render = async () => {
+    setBusy(true);
+    try {
+      const res = await fetch(`/api/editor/projects/${projectId}/render`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({}) });
+      const body = (await res.json()) as { jobId?: string; error?: string };
+      if (body.jobId) onNotice(`Render job queued — ${body.jobId}`);
+      else onNotice(body.error ?? "Render enqueue failed.");
+      load();
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <div className="mt-4 border-t border-[#2a2a2a] pt-3">
+      <div className="mb-1.5 flex items-center justify-between">
+        <span className="bean-label text-[10px] text-[#d4a017]">RENDER TIMELINE (FFmpeg)</span>
+        <button type="button" onClick={() => void render()} disabled={busy} className="rounded border border-[#d4a017] px-2 py-1 text-[10px] font-bold text-[#d4a017] hover:bg-[#d4a017] hover:text-[#0c0c0c] disabled:opacity-40">
+          {busy ? "…" : "RENDER SEQUENCE"}
+        </button>
       </div>
+      <p className="mb-2 text-[9px] leading-relaxed text-[#6a6a64]">
+        Renders the CURRENT sequence: every visual clip (effects, fades), captions, graphics and the full audio mix through the durable worker; output validated with FFprobe before it appears below.
+      </p>
+      {state?.jobs?.map((j) => (
+        <div key={j.id} className="mb-1 rounded bg-[#111110] px-2 py-1.5 text-[10px]">
+          <div className="flex items-center justify-between">
+            <span className={j.status === "COMPLETED" ? "text-[#4cc47f]" : j.status === "FAILED" ? "text-[#c45c4c]" : "text-[#d4a017]"}>{j.status}</span>
+            <span className="font-mono text-[9px] text-[#6a6a64]">{Math.round(j.progress)}%</span>
+          </div>
+          <div className="text-[9px] text-[#8f8f8a]">{j.stage ?? ""}{j.message ? ` — ${j.message.slice(0, 160)}` : ""}</div>
+        </div>
+      ))}
+      {state?.exports?.map((e) => (
+        <a key={e.id} href={`/api/exports/${e.id}/file`} className="mt-1 flex items-center justify-between rounded border border-[#1c1c1a] bg-[#111110] px-2 py-1.5 text-[10px] text-[#d8d8d2] hover:border-[#d4a017]">
+          <span className="min-w-0 flex-1 truncate">{e.filename}</span>
+          <span className="font-mono text-[9px] text-[#4cc47f]">{(e.sizeBytes / 1024 / 1024).toFixed(1)}MB · {e.durationSec?.toFixed?.(1) ?? "?"}s</span>
+        </a>
+      ))}
+    </div>
+  );
+}
+
+/** Transport timecode that paints from the frame bus (no per-frame render). */
+function BusTimecode({ fpsRational, fallback }: { fpsRational: Rational; fallback: number }) {
+  const ref = useRef<HTMLSpanElement | null>(null);
+  useEffect(() => {
+    return subscribeFrame((frame) => {
+      if (ref.current) ref.current.textContent = formatTimecode(frame, fpsRational);
+    });
+  }, [fpsRational]);
+  return (
+    <span ref={ref} className="rounded bg-[#111110] px-2 py-1 font-mono text-xs text-[#d4a017]">
+      {formatTimecode(fallback, fpsRational)}
+    </span>
+  );
+}
+
+/** Settings drawer body: real project detail + version history + duplicate. */
+function ProjectSettings({ projectId, onNotice, onDuplicate }: { projectId: string; onNotice: (m: string | null) => void; onDuplicate: () => void }) {
+  const [detail, setDetail] = useState<{ project: { id: string; name: string; description: string | null; createdAt: string }; versions: { versionNo: number; autosave: boolean; createdAt: string }[] } | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  useEffect(() => {
+    let live = true;
+    fetch(`/api/projects/${projectId}`)
+      .then((r) => r.json())
+      .then((d) => live && setDetail(d.project ? d : null))
+      .catch(() => live && setError("Could not load project detail."));
+    return () => {
+      live = false;
+    };
+  }, [projectId]);
+  if (error) return <p className="text-[11px] text-[#c45c4c]">{error}</p>;
+  if (!detail) return <Loader2 className="h-4 w-4 animate-spin text-[#d4a017]" />;
+  return (
+    <div className="space-y-3 text-[11px]">
+      <div className="rounded border border-[#2a2a2a] p-2">
+        <div className="text-[#e6e6e0]">{detail.project.name}</div>
+        <div className="text-[9px] text-[#6a6a64]">created {new Date(detail.project.createdAt).toLocaleString()}</div>
+        <button type="button" onClick={onDuplicate} className="mt-2 rounded border border-[#2a2a2a] px-2 py-1 text-[10px] text-[#d8d8d2] hover:border-[#d4a017] hover:text-[#d4a017]">
+          Duplicate project (with editing state)
+        </button>
+      </div>
+      <div>
+        <div className="bean-label mb-1 text-[9px] text-[#8f8f8a]">VERSION HISTORY (last 30)</div>
+        <ul className="space-y-0.5">
+          {detail.versions.map((v) => (
+            <li key={v.versionNo} className="flex items-center justify-between rounded bg-[#111110] px-2 py-1">
+              <span className="font-mono text-[10px] text-[#d4a017]">v{v.versionNo}</span>
+              <span className="text-[9px] text-[#6a6a64]">{v.autosave ? "autosave" : "manual"} · {new Date(v.createdAt).toLocaleTimeString()}</span>
+            </li>
+          ))}
+          {detail.versions.length === 0 && <li className="text-[10px] text-[#6a6a64]">No versions yet.</li>}
+        </ul>
+      </div>
+      <p className="text-[9px] text-[#6a6a64]">Recovery: the newest version reloads automatically when the project is reopened; undo/redo steps remain available in-session. Conflict handling reloads the authoritative version and tells you honestly.</p>
+      <button type="button" onClick={() => onNotice(null)} className="text-[9px] text-[#8f8f8a]">close</button>
     </div>
   );
 }

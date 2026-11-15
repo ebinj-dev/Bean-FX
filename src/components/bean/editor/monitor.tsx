@@ -1,22 +1,25 @@
 "use client";
 
 /**
- * BEAN FX — Program monitor (Milestone 2, editor integration).
+ * BEAN FX — Program monitor (M2 core; M16 real-time playback engine).
  *
- * REAL playback, not a simulation: actual media elements are driven by the
- * timeline model. At every playhead frame the pure preview resolver decides
- * which media is active; this component maps that decision onto real
- * <video>/<audio> elements (source, currentTime, playbackRate, volume) and
- * renders caption overlays. The playhead itself is advanced by a
- * requestAnimationFrame clock in sequence frames — the authoritative editing
- * clock stays integer frames.
- *
- * Audio pool: up to 4 simultaneous audio contributors are previewed (audio
- * tracks plus video clips' own audio); contributors beyond the pool are
- * documented preview limitations, never silently mixed wrong — the export
- * path renders the full mix (M9).
+ * M16 architecture:
+ * - `PlaybackController` (lib/editor/playback.ts) owns the clock: anchor-based
+ *   projection (no accumulated rounding drift), seek generations, dropped-frame
+ *   telemetry. React re-renders happen on transport/seek/edits; the per-frame
+ *   picture is painted by subscribing to the controller and imperatively
+ *   updating the video/audio/canvas overlays — NOT by re-rendering the tree.
+ * - Double-buffered video pool: the inactive element PRELOADS the next clip
+ *   (same-track adjacency), so clip boundaries swap instantly instead of
+ *   re-loading a source mid-playback.
+ * - `AudioPreviewMixer` schedules the full audible mix on the Web Audio clock
+ *   (clip gain × fade ramps, pan, track mute/solo, master clamp). Falls back
+ *   to the M15 element pool when Web Audio is unavailable — honestly labeled.
+ * - Effects: the preview filter chain comes from lib/editor/filters.ts — the
+ *   SAME module that generates the FFmpeg chain for export (preview/export
+ *   parity by construction).
  */
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { Sequence } from "@/lib/editor/model";
 import { activeAudioAt, activeCaptionAt, activeVideoClipAt, fadeMultiplierAt, sequenceEndFrame, sourceSecondsAt } from "@/lib/editor/preview";
 import { activeGraphicsAt } from "@/lib/nikki/state";
@@ -24,10 +27,28 @@ import { drawGraphicsLayer, ensureNikkiFonts } from "@/lib/nikki/canvas";
 import { formatTimecode } from "@/lib/editor/time";
 import { api } from "@/lib/client-api";
 import type { Rational } from "@/lib/editor/time";
+import { PlaybackController, publishFrame, subscribeFrame } from "@/lib/editor/playback";
+import { AudioPreviewMixer } from "@/lib/editor/audio-mixer";
+import { cssEffectFilter } from "@/lib/editor/filters";
+import { CompositionCanvas } from "@/components/bean/editor/composition-canvas";
+import type { EditToolId } from "@/lib/editor/tools";
+import type { EditorSession } from "@/hooks/use-editor-session";
 
-const AUDIO_POOL_SIZE = 4;
-/** Seek the media element when drift exceeds this many seconds. */
+const AUDIO_POOL_SIZE = 4; // element-pool FALLBACK only (Web Audio removes the cap)
+/** Seek the active video element when drift exceeds this many seconds. */
 const DRIFT_THRESHOLD = 0.08;
+
+/** Next same-track clip (for preloading) — adjacency by start frame. */
+function nextClipOnTrack(sequence: Sequence, clipId: string) {
+  const clip = sequence.clips.find((c) => c.id === clipId);
+  if (!clip) return null;
+  const end = clip.timelineStartFrame + clip.timelineDurationFrames;
+  return (
+    sequence.clips
+      .filter((c) => c.trackId === clip.trackId && c.timelineStartFrame === end && !c.missingMedia && c.sourceAssetId)
+      .sort((a, b) => a.timelineStartFrame - b.timelineStartFrame)[0] ?? null
+  );
+}
 
 export function ProgramMonitor({
   sequence,
@@ -35,69 +56,151 @@ export function ProgramMonitor({
   playing,
   onPlayhead,
   onPlayingChange,
+  session,
+  activeTool = "select",
+  guides = false,
+  snapEnabled = true,
+  onDecodeError,
 }: {
   sequence: Sequence | null;
   playhead: number;
   playing: boolean;
   onPlayhead: (frame: number) => void;
   onPlayingChange: (playing: boolean) => void;
+  /** M15: present only in the editing workspace — enables the interactive
+   *  composition canvas (selection boxes + transform handles). */
+  session?: EditorSession;
+  activeTool?: EditToolId;
+  guides?: boolean;
+  snapEnabled?: boolean;
+  /** M16: real decode failures surface to the workspace notice bar. */
+  onDecodeError?: (message: string | null) => void;
 }) {
-  const videoRef = useRef<HTMLVideoElement | null>(null);
+  // ---- element refs --------------------------------------------------------
+  const videoARef = useRef<HTMLVideoElement | null>(null);
+  const videoBRef = useRef<HTMLVideoElement | null>(null);
   const audioRefs = useRef<Array<HTMLAudioElement | null>>([]);
-  const playheadRef = useRef(playhead);
   const seqRef = useRef(sequence);
-  const rafRef = useRef<number | null>(null);
-  const lastTickRef = useRef<number | null>(null);
+  const playheadRef = useRef(playhead);
 
-  // Mirror the latest props into refs for the playback clock callbacks.
-  // (Assignment happens after render, never during render — the clock only
-  // reads these from rAF/event callbacks, which always run post-render.)
+  // ---- playback controller (owns the clock) --------------------------------
+  const end = sequence ? sequenceEndFrame(sequence) : 0;
+  const controller = useMemo(
+    () => new PlaybackController(sequence?.fps ?? { num: 30, den: 1 }, playhead, end),
+    // Recreate only when the sequence's timebase changes — frame continuity
+    // survives ordinary edits.
+    [sequence?.fps.num, sequence?.fps.den],
+  );
+  useEffect(() => {
+    controller.setEnd(end);
+  }, [controller, end]);
+  useEffect(() => () => controller.dispose(), [controller]);
+
+  // Controller events → React state (TRANSPORT-level only, never per-frame):
+  // pause/settled frames sync the session; per-frame painting rides the bus.
+  const wasPlayingRef = useRef(false);
+  useEffect(() => {
+    return controller.subscribe((clock) => {
+      if (clock.playing !== wasPlayingRef.current) {
+        wasPlayingRef.current = clock.playing;
+        onPlayingChange(clock.playing);
+      }
+      if (!clock.playing) onPlayhead(clock.frame);
+    });
+  }, [controller, onPlayhead, onPlayingChange]);
+
+  // Seek/play props → controller (session state remains the source of truth
+  // for paused navigation; the controller projects while playing).
+  useEffect(() => {
+    const clock = controller.clock;
+    if (!clock.playing && clock.frame !== playhead) controller.seek(playhead);
+  }, [playhead, controller]);
+  useEffect(() => {
+    if (playing && !controller.clock.playing) controller.play();
+    if (!playing && controller.clock.playing) controller.pause();
+  }, [playing, controller]);
+
+  // Per-frame paint: bus subscription drives the NIIKI/caption canvas layer
+  // without React re-renders.
+  const nikkiCanvasRef = useRef<HTMLCanvasElement | null>(null);
+  const nikkiCtxRef = useRef<CanvasRenderingContext2D | null>(null);
+  useEffect(() => {
+    void ensureNikkiFonts().then(() => {
+      const seq = seqRef.current;
+      if (seq && nikkiCanvasRef.current) {
+        nikkiCtxRef.current = nikkiCanvasRef.current.getContext("2d");
+        const ctx = nikkiCtxRef.current;
+        if (ctx) drawGraphicsLayer(ctx, seq, playheadRef.current, activeGraphicsAt(seq, playheadRef.current));
+      }
+    });
+    return subscribeFrame((frame, isPlaying) => {
+      const seq = seqRef.current;
+      const ctx = nikkiCtxRef.current;
+      if (!seq || !ctx) return;
+      const graphics = activeGraphicsAt(seq, frame);
+      if (graphics.length === 0) {
+        if (isPlaying || frame !== playheadRef.current) ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
+        return;
+      }
+      drawGraphicsLayer(ctx, seq, frame, graphics);
+    });
+  }, []);
+  // Pause path: repaint the graphics layer for the settled frame (React render).
+  useEffect(() => {
+    if (playing) return;
+    const seq = sequence;
+    const ctx = nikkiCtxRef.current;
+    if (!seq || !ctx) return;
+    const graphics = activeGraphicsAt(seq, playhead);
+    if (graphics.length === 0) ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
+    else drawGraphicsLayer(ctx, seq, playhead, graphics);
+  }, [playhead, sequence, playing]);
+
+  // Keep refs mirrored for controller callbacks.
   useEffect(() => {
     playheadRef.current = playhead;
     seqRef.current = sequence;
   }, [playhead, sequence]);
 
-  // ---- playback clock: rAF advances the integer-frame playhead ----------
-  useEffect(() => {
-    if (!playing || !sequence) {
-      if (rafRef.current !== null) cancelAnimationFrame(rafRef.current);
-      rafRef.current = null;
-      lastTickRef.current = null;
-      return;
-    }
-    const fps = sequence.fps.num / sequence.fps.den;
-    const end = sequenceEndFrame(sequence);
-    const tick = (now: number) => {
-      if (lastTickRef.current === null) {
-        lastTickRef.current = now;
-        rafRef.current = requestAnimationFrame(tick);
-        return;
-      }
-      const elapsed = (now - lastTickRef.current) / 1000;
-      lastTickRef.current = now;
-      const next = Math.round(playheadRef.current + elapsed * fps);
-      if (next >= end) {
-        onPlayhead(end);
-        onPlayingChange(false);
-        return;
-      }
-      onPlayhead(next);
-      rafRef.current = requestAnimationFrame(tick);
-    };
-    rafRef.current = requestAnimationFrame(tick);
-    return () => {
-      if (rafRef.current !== null) cancelAnimationFrame(rafRef.current);
-      rafRef.current = null;
-      lastTickRef.current = null;
-    };
-  }, [playing, sequence, onPlayhead, onPlayingChange]);
+  // ---- audio mixer (master when available) ---------------------------------
+  const mixer = useMemo(() => new AudioPreviewMixer(), []);
+  useEffect(() => () => mixer.dispose(), [mixer]);
+  const mixerReady = mixer.available;
 
-  // ---- video element follows the resolved active clip -------------------
+  // Transport events → mixer schedule/refill.
+  const frameRef = useRef(playhead);
+  frameRef.current = playhead;
+  useEffect(() => {
+    if (!sequence) return;
+    if (playing && mixerReady) {
+      void mixer.play(sequence, frameRef.current);
+    } else {
+      mixer.stop();
+    }
+  }, [playing, mixerReady, sequence, mixer]);
+  // Horizon refill while playing (checked at transport-level frequency).
+  useEffect(() => {
+    if (!playing || !mixerReady || !sequence) return;
+    const id = window.setInterval(() => {
+      if (mixer.needsRefill(controller.clock.frame)) void mixer.reschedule(sequence, controller.clock.frame);
+    }, 2000);
+    return () => window.clearInterval(id);
+  }, [playing, mixerReady, sequence, mixer, controller]);
+  // Seek while playing → reschedule the mix from the new point.
+  const lastSeekGenRef = useRef(-1);
+  useEffect(() => {
+    const clock = controller.clock;
+    if (clock.generation !== lastSeekGenRef.current) {
+      lastSeekGenRef.current = clock.generation;
+      if (clock.playing && mixerReady && sequence) void mixer.reschedule(sequence, clock.frame);
+    }
+  }, [playhead, controller, mixer, mixerReady, sequence]);
+
+  // ---- resolved active media (per render — React only sees state changes) --
   const activeVideo = sequence ? activeVideoClipAt(sequence, playhead) : null;
   const videoAssetId = activeVideo && !activeVideo.clip.missingMedia && activeVideo.clip.sourceAssetId ? activeVideo.clip.sourceAssetId : null;
   const videoSrc = videoAssetId ? api.mediaUrl(videoAssetId) : null;
-  // IMAGE assets render as stills, not through the <video> decoder: the kind
-  // comes from the owner-scoped asset detail (fetched once per asset id).
+  const [activeAssetId, setActiveAssetId] = useState<string | null>(null);
   const [imageAssetIds, setImageAssetIds] = useState<Set<string>>(() => new Set());
   useEffect(() => {
     if (!videoAssetId) return;
@@ -105,71 +208,148 @@ export function ProgramMonitor({
       .mediaDetail(videoAssetId)
       .then((r) => {
         if ((r.media as { kind?: string }).kind === "IMAGE") {
-          setImageAssetIds((prev) => {
-            if (prev.has(videoAssetId)) return prev;
-            const next = new Set(prev);
-            next.add(videoAssetId);
-            return next;
-          });
+          setImageAssetIds((prev) => (prev.has(videoAssetId) ? prev : new Set(prev).add(videoAssetId)));
         }
       })
       .catch(() => undefined);
   }, [videoAssetId]);
   const isImageAsset = videoAssetId !== null && imageAssetIds.has(videoAssetId);
-  const loadedAssetRef = useRef<string | null>(null);
-  const pendingSeekRef = useRef<number | null>(null);
 
+  // Preview filter chain from the SAME module the export path uses.
+  const previewFilter = useMemo(() => (activeVideo ? cssEffectFilter(activeVideo.clip.effects) : null), [activeVideo]);
+  // Visibility + filter for the ACTIVE pool element (imperative, but driven
+  // by real state changes — asset swaps and effect edits — not per-frame).
   useEffect(() => {
-    const video = videoRef.current;
-    if (!video || !sequence || !activeVideo || !videoSrc || isImageAsset) {
-      if (video && (!videoSrc || isImageAsset)) {
-        // Also stop a previously-playing clip when an image still takes over —
-        // the <img> covers the picture but would leave its audio running.
-        video.pause();
-        video.removeAttribute("src");
-        video.load();
-        loadedAssetRef.current = null;
-      }
-      return;
+    const slots = [videoARef.current, videoBRef.current];
+    for (const el of slots) {
+      if (!el) continue;
+      const isActive = el.dataset.asset === activeAssetId && activeAssetId !== null && !isImageAsset;
+      el.className = isActive ? "max-h-full max-w-full" : "hidden";
+      el.style.filter = isActive ? previewFilter ?? "" : "";
     }
-    const { clip } = activeVideo;
-    const desiredTime = sourceSecondsAt(clip, playhead, sequence.fps as Rational);
-    if (loadedAssetRef.current !== videoAssetId) {
-      loadedAssetRef.current = videoAssetId;
-      pendingSeekRef.current = desiredTime;
-      video.src = videoSrc;
-      video.load();
-    } else {
-      pendingSeekRef.current = null;
-      if (Math.abs(video.currentTime - desiredTime) > (playing ? DRIFT_THRESHOLD : 0.001)) {
-        try {
-          video.currentTime = desiredTime;
-        } catch {
-          /* not seekable yet */
+  }, [activeAssetId, isImageAsset, previewFilter]);
+
+  // ---- double-buffered video element driver --------------------------------
+  // Which pool slot is active. Effect deps intentionally coarse: the driver
+  // reads the resolver state per frame tick, not per render.
+  const activeSlotRef = useRef<0 | 1>(0);
+  const loadedAssetRef = useRef<[string | null, string | null]>([null, null]);
+  const videoGenRef = useRef(0);
+  useEffect(() => {
+    const controller2 = controller;
+    return controller2.subscribe((clock) => {
+      const seq = seqRef.current;
+      if (!seq) return;
+      const frame = clock.playing ? clock.frame : frameRef.current;
+      const active = activeVideoClipAt(seq, frame);
+      const genAtStart = controller2.clock.generation;
+      const slots = [videoARef.current, videoBRef.current];
+      const currentSlot = slots[activeSlotRef.current];
+      const idleSlot = slots[1 - activeSlotRef.current];
+      const desiredAsset = active && !active.clip.missingMedia && active.clip.sourceAssetId ? active.clip.sourceAssetId : null;
+
+      // Decode error surfacing (per element).
+      // (Element error handlers are attached via JSX onError.)
+
+      if (!active || !desiredAsset) {
+        for (const el of slots) {
+          if (el && !el.paused) el.pause();
+        }
+        return;
+      }
+      if (!currentSlot) return;
+      const desiredTime = sourceSecondsAt(active.clip, frame, seq.fps as Rational);
+      const slotIndex = activeSlotRef.current;
+
+      // Clip change on the ACTIVE slot → swap to the preloaded idle slot when
+      // it already holds the next asset; otherwise load in place.
+      if (loadedAssetRef.current[slotIndex] !== desiredAsset) {
+        const otherIndex = (1 - slotIndex) as 0 | 1;
+        if (loadedAssetRef.current[otherIndex] === desiredAsset && idleSlot) {
+          // Swap to the preloaded slot: hide the old element, show the new.
+          activeSlotRef.current = otherIndex;
+          const swapped = idleSlot;
+          swapped.dataset.asset = desiredAsset;
+          swapped.currentTime = desiredTime;
+          if (clock.playing) void swapped.play().catch(() => undefined);
+          const prev = currentSlot;
+          if (prev && !prev.paused) prev.pause();
+          setActiveAssetId(desiredAsset);
+          return;
+        }
+        // In-place load (no preload available — e.g. the first clip).
+        const gen = controller2.clock.generation;
+        currentSlot.dataset.asset = desiredAsset;
+        currentSlot.src = api.mediaUrl(desiredAsset);
+        currentSlot.load();
+        loadedAssetRef.current[slotIndex] = desiredAsset;
+        setActiveAssetId(desiredAsset);
+        const onReady = () => {
+          // Stale-seek guard: only the latest generation may paint.
+          if (controller2.clock.generation !== gen) return;
+          try {
+            currentSlot.currentTime = desiredTime;
+          } catch {
+            /* not seekable yet */
+          }
+          currentSlot.playbackRate = Math.min(4, Math.max(0.25, active.clip.playbackSpeed));
+          const fade = 1; // fades apply to audio; picture fade rides the export path
+          currentSlot.volume = Math.min(1, Math.max(0, active.clip.volume * fade * (active.track.muted ? 0 : 1)));
+          if (clock.playing) void currentSlot.play().catch(() => undefined);
+        };
+        if (currentSlot.readyState >= 2) onReady();
+        else currentSlot.addEventListener("loadeddata", onReady, { once: true });
+        return;
+      }
+      // Same asset: drift correction + rate + volume (generation-guarded).
+      const gen = controller2.clock.generation;
+      if (Math.abs(currentSlot.currentTime - desiredTime) > (clock.playing ? DRIFT_THRESHOLD : 0.001)) {
+        if (controller2.clock.generation === genAtStart) {
+          try {
+            currentSlot.currentTime = desiredTime;
+          } catch {
+            /* seek in flight — next tick corrects */
+          }
         }
       }
-    }
-    video.playbackRate = Math.min(4, Math.max(0.25, clip.playbackSpeed));
-    const fade = fadeMultiplierAt(clip, playhead);
-    video.volume = Math.min(1, Math.max(0, clip.volume * fade));
-    if (playing) {
-      void video.play().catch(() => {
-        // Autoplay/decode refusal is surfaced by the stopped picture, not a fake playing state.
-      });
-    } else {
-      video.pause();
-      try {
-        video.currentTime = desiredTime;
-      } catch {
-        /* not seekable yet */
+      currentSlot.playbackRate = Math.min(4, Math.max(0.25, active.clip.playbackSpeed));
+      currentSlot.volume = Math.min(1, Math.max(0, active.clip.volume * (active.track.muted ? 0 : 1)));
+      if (clock.playing && currentSlot.paused) void currentSlot.play().catch(() => undefined);
+      if (!clock.playing && !currentSlot.paused) {
+        currentSlot.pause();
+        if (controller2.clock.generation === gen) {
+          try {
+            currentSlot.currentTime = desiredTime;
+          } catch {
+            /* not seekable yet */
+          }
+        }
       }
-    }
-  }, [videoSrc, playhead, playing, sequence]);
+      // PRELOAD: the idle slot takes the next same-track clip's source.
+      const next = nextClipOnTrack(seq, active.clip.id);
+      const idleIndex = (1 - slotIndex) as 0 | 1;
+      if (next && idleSlot && loadedAssetRef.current[idleIndex] !== next.sourceAssetId) {
+        loadedAssetRef.current[idleIndex] = next.sourceAssetId;
+        // dataset.asset is set at SWAP time — preloading stays invisible.
+        idleSlot.src = api.mediaUrl(next.sourceAssetId);
+        idleSlot.load();
+      }
+    });
+  }, [controller]);
 
-  // ---- audio pool follows the resolved mix ------------------------------
+  // Publish every projected frame on the bus (for imperative painters) —
+  // driven by the controller subscription above; publish here so ALL subscribers
+  // (timeline playhead, timecode) stay in step with the same tick.
+  useEffect(() => {
+    return controller.subscribe((clock) => {
+      publishFrame(clock.frame, clock.playing);
+    });
+  }, [controller]);
+
+  // ---- element-pool audio FALLBACK (Web Audio unavailable) ------------------
   const activeAudio = sequence ? activeAudioAt(sequence, playhead) : [];
   useEffect(() => {
-    if (!sequence) return;
+    if (!sequence || mixerReady) return; // Web Audio owns the mix when available
     for (let i = 0; i < AUDIO_POOL_SIZE; i++) {
       const el = audioRefs.current[i];
       if (!el) continue;
@@ -182,7 +362,6 @@ export function ProgramMonitor({
       const src = api.mediaUrl(contributor.clip.sourceAssetId);
       const isVideoClipAudio = contributor.track.kind === "VIDEO";
       if (isVideoClipAudio) {
-        // Video clips' own audio plays through the video element — skip here.
         el.pause();
         continue;
       }
@@ -200,80 +379,53 @@ export function ProgramMonitor({
           /* not seekable yet */
         }
       }
-      if (playing) {
-        void el.play().catch(() => {
-          /* decode refusal → silent, honest */
-        });
-      } else {
-        el.pause();
-      }
+      if (playing) void el.play().catch(() => undefined);
+      else el.pause();
     }
-  }, [activeAudio.map((a) => `${a.clip.id}:${a.clip.sourceAssetId}:${a.gain.toFixed(3)}`).join("|"), playhead, playing, sequence]);
+    // Dependency intentionally the resolved-mix signature (see M15).
+  }, [activeAudio.map((a) => `${a.clip.id}:${a.clip.sourceAssetId}:${a.gain.toFixed(3)}`).join("|"), playhead, playing, sequence, mixerReady]);
 
   // ---- caption overlay ----------------------------------------------------
   const caption = sequence ? activeCaptionAt(sequence, playhead) : null;
   const fpsRational = sequence?.fps ?? { num: 30, den: 1 };
 
-  // ---- NIIKI motion graphics layer (real canvas preview) ------------------
-  const nikkiCanvasRef = useRef<HTMLCanvasElement | null>(null);
-  useEffect(() => {
-    void ensureNikkiFonts().then(() => {
-      if (nikkiCanvasRef.current) {
-        // Redraw once fonts arrive (first frames may render with fallback).
-        const seq = seqRef.current;
-        if (!seq) return;
-        const ctx = nikkiCanvasRef.current.getContext("2d");
-        if (!ctx) return;
-        drawGraphicsLayer(ctx, seq, playheadRef.current, activeGraphicsAt(seq, playheadRef.current));
-      }
-    });
-  }, []);
-  useEffect(() => {
-    const canvas = nikkiCanvasRef.current;
-    if (!canvas || !sequence) return;
-    const ctx = canvas.getContext("2d");
-    if (!ctx) return;
-    const graphics = activeGraphicsAt(sequence, playhead);
-    if (graphics.length === 0) {
-      // Clear a previously drawn layer so stale graphics never linger.
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
-      return;
-    }
-    drawGraphicsLayer(ctx, sequence, playhead, graphics);
-  }, [playhead, sequence]);
-
   return (
     <div className="relative flex min-h-0 flex-1 flex-col rounded-lg border border-[#2a2a2a] bg-black">
+      {/* SVG filter defs for temperature/tint (same semantics as the export
+          colorbalance mapping — see lib/editor/filters.ts). */}
+      <svg width="0" height="0" className="absolute" aria-hidden="true">
+        <defs>
+          <filter id="beanfx-temperature-warm">
+            <feColorMatrix type="linear" values="1.25,0,0,0,0  0,1,0,0,0  0,0,0.75,0,0  0,0,0,1,0" />
+          </filter>
+          <filter id="beanfx-temperature-cool">
+            <feColorMatrix type="linear" values="0.75,0,0,0,0  0,1,0,0,0  0,0,1.25,0,0  0,0,0,1,0" />
+          </filter>
+          <filter id="beanfx-tint-green">
+            <feColorMatrix type="linear" values="1,0,0,0,0  0,1.25,0,0,0  0,0,1,0,0  0,0,0,1,0" />
+          </filter>
+          <filter id="beanfx-tint-magenta">
+            <feColorMatrix type="linear" values="1.25,0,0,0,0  0,0.75,0,0,0  0,0,1.25,0,0  0,0,0,1,0" />
+          </filter>
+        </defs>
+      </svg>
       <div className="flex items-center justify-between border-b border-[#2a2a2a] px-3 py-1.5">
         <span className="bean-label text-[10px] text-[#8f8f8a]">PROGRAM MONITOR</span>
-        <span className="font-mono text-xs text-[#d4a017]">{formatTimecode(playhead, fpsRational)}</span>
+        <MonitorTimecode fpsRational={fpsRational} fallback={playhead} />
       </div>
       <div className="relative flex min-h-[220px] flex-1 items-center justify-center overflow-hidden bg-black">
-        <video
-          ref={videoRef}
-          playsInline
-          preload="auto"
-          className="max-h-full max-w-full"
-          onEnded={() => onPlayingChange(false)}
-        />
-        {/* NIIKI motion graphics: a transparent canvas sized to the sequence,
-            CSS-scaled over the video — redrawn per playhead frame from the
-            SAME state the FFmpeg render path evaluates. */}
-        {sequence && (
-          <canvas
-            ref={nikkiCanvasRef}
-            width={sequence.width}
-            height={sequence.height}
-            className="pointer-events-none absolute inset-0 h-full w-full object-contain"
-          />
-        )}
+        <video ref={videoARef} playsInline preload="auto" className="hidden" onEnded={() => onPlayingChange(false)} onError={() => onDecodeError?.("Video decode error — the source may be unsupported or corrupted.")} />
+        <video ref={videoBRef} playsInline preload="auto" className="hidden" onEnded={() => onPlayingChange(false)} onError={() => onDecodeError?.("Video decode error — the source may be unsupported or corrupted.")} />
         {/* IMAGE assets are stills on VIDEO tracks — rendered as an <img>,
-            never fed to the <video> decoder. */}
-        {isImageAsset && videoSrc && (
-           
-          <img src={videoSrc} alt="" className="max-h-full max-w-full object-contain" />
+            never fed to the <video> decoder. Same preview filter chain. */}
+        {isImageAsset && videoAssetId && (
+          <img src={api.mediaUrl(videoAssetId)} alt="" className="max-h-full max-w-full object-contain" style={{ filter: previewFilter ?? "" }} />
         )}
-        {/* Audio pool (audio tracks only — video clips' audio rides the video element) */}
+        {/* NIIKI motion graphics canvas (per-frame bus painting above). */}
+        {sequence && (
+          <canvas ref={nikkiCanvasRef} width={sequence.width} height={sequence.height} className="pointer-events-none absolute inset-0 h-full w-full object-contain" />
+        )}
+        {/* Audio fallback pool */}
         {Array.from({ length: AUDIO_POOL_SIZE }).map((_, i) => (
           <audio key={i} ref={(el) => { audioRefs.current[i] = el; }} preload="auto" className="hidden" />
         ))}
@@ -283,15 +435,10 @@ export function ProgramMonitor({
               {sequence && sequence.clips.length > 0 ? "MEDIA OFFLINE" : "NO CLIP AT PLAYHEAD"}
             </span>
             <span className="text-xs text-[#8f8f8a]">
-              {sequence && sequence.clips.length > 0
-                ? "The source asset for this clip is not in the media library."
-                : "Move the playhead over a clip, or add media from the library."}
+              {sequence && sequence.clips.length > 0 ? "The source asset for this clip is not in the media library." : "Move the playhead over a clip, or add media from the library."}
             </span>
           </div>
         )}
-        {/* Captions render whenever one is active at the playhead — a
-            caption-only timeline (no video clip) is still a valid composition
-            and must not silently show nothing. */}
         {caption?.captionText && (
           <div
             className="pointer-events-none absolute inset-x-0 flex justify-center px-6 text-center"
@@ -306,13 +453,32 @@ export function ProgramMonitor({
             <span>{caption.captionText}</span>
           </div>
         )}
+        {sequence && session && (
+          <CompositionCanvas sequence={sequence} playhead={playhead} session={session} activeTool={activeTool} guides={guides} snapEnabled={snapEnabled} />
+        )}
         {activeVideo && (
           <div className="pointer-events-none absolute left-3 top-2 rounded bg-black/60 px-2 py-0.5 text-[10px] text-[#8f8f8a]">
             {activeVideo.clip.label || activeVideo.clip.id} · {activeVideo.track.name}
+            {mixerReady && playing ? " · web-audio mix" : !mixerReady ? " · element mix (Web Audio unavailable)" : ""}
           </div>
         )}
         {playing && <div className="pointer-events-none absolute right-3 top-2 rounded bg-[#d4a017]/20 px-2 py-0.5 text-[10px] text-[#d4a017]">PLAYING</div>}
       </div>
     </div>
+  );
+}
+
+/** Timecode that follows the frame bus imperatively (no re-render per tick). */
+function MonitorTimecode({ fpsRational, fallback }: { fpsRational: Rational; fallback: number }) {
+  const ref = useRef<HTMLSpanElement | null>(null);
+  useEffect(() => {
+    return subscribeFrame((frame) => {
+      if (ref.current) ref.current.textContent = formatTimecode(frame, fpsRational);
+    });
+  }, [fpsRational]);
+  return (
+    <span ref={ref} className="font-mono text-xs text-[#d4a017]">
+      {formatTimecode(fallback, fpsRational)}
+    </span>
   );
 }

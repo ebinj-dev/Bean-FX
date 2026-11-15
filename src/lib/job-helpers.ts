@@ -18,6 +18,7 @@ export const JOB_TYPE_STUDIO_TOPIC = "STUDIO_TOPIC";
 // ── M9 Professional Publishing ──
 export const JOB_TYPE_PUBLISH_THUMBNAIL = "PUBLISH_THUMBNAIL";
 export const JOB_TYPE_EXPORT_VARIANT = "EXPORT_VARIANT";
+export const JOB_TYPE_RENDER_TIMELINE = "RENDER_TIMELINE";
 export const JOB_TYPE_PUBLISH_PACKAGE = "PUBLISH_PACKAGE";
 // ── M10 AI Creative Director ──
 export const JOB_TYPE_CREATIVE_REVIEW = "CREATIVE_REVIEW";
@@ -26,6 +27,9 @@ export const JOB_TYPE_CREATIVE_MULTIMODAL = "CREATIVE_MULTIMODAL";
 export const JOB_TYPE_TRANSCRIBE_PROJECT = "TRANSCRIBE_PROJECT";
 // ── M12 Visual Intelligence ──
 export const JOB_TYPE_VISUAL_INTELLIGENCE = "VISUAL_INTELLIGENCE";
+// ── M13 Temporal Visual Intelligence ──
+export const JOB_TYPE_TEMPORAL_INTELLIGENCE = "TEMPORAL_INTELLIGENCE";
+export const JOB_TYPE_COMPOSITION_RENDER = "COMPOSITION_RENDER";
 /** Worker-owned job types: M3 media pipeline + M5 GANGZII + M6 NIIKI + M7 engines + M8.1 studio + M9 publishing; legacy job types keep their existing behavior. */
 export const MEDIA_JOB_TYPES = [
   JOB_TYPE_MEDIA_PROBE,
@@ -45,10 +49,14 @@ export const MEDIA_JOB_TYPES = [
   JOB_TYPE_CREATIVE_MULTIMODAL,
   JOB_TYPE_TRANSCRIBE_PROJECT,
   JOB_TYPE_VISUAL_INTELLIGENCE,
+  JOB_TYPE_TEMPORAL_INTELLIGENCE,
+  JOB_TYPE_COMPOSITION_RENDER,
+  JOB_TYPE_RENDER_TIMELINE,
 ] as const;
 
 /** Default hard wall-clock limits per job type (seconds). */
 export const DEFAULT_TIMEOUT_SEC: Record<string, number> = {
+  [JOB_TYPE_RENDER_TIMELINE]: 900,
   [JOB_TYPE_MEDIA_PROBE]: 120,
   [JOB_TYPE_MEDIA_PROXY]: 45 * 60,
   [JOB_TYPE_GANGZII_ANALYZE]: 15 * 60,
@@ -66,6 +74,8 @@ export const DEFAULT_TIMEOUT_SEC: Record<string, number> = {
   [JOB_TYPE_CREATIVE_MULTIMODAL]: 30 * 60,
   [JOB_TYPE_TRANSCRIBE_PROJECT]: 15 * 60,
   [JOB_TYPE_VISUAL_INTELLIGENCE]: 45 * 60,
+  [JOB_TYPE_TEMPORAL_INTELLIGENCE]: 45 * 60,
+  [JOB_TYPE_COMPOSITION_RENDER]: 30 * 60,
 };
 
 export const MAX_ATTEMPTS_DEFAULT = 3;

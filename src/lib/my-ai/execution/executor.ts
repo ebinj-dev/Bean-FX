@@ -287,6 +287,30 @@ async function runStep(step: PlanStep, projectId: string, userId: string, seq: S
       const jobId = await jobManager.createJob(userId, JOB_TYPE_LAXII_GENERATE, parsed.data);
       return { ...base, status: "COMPLETED", detail: "LAXII generation job queued (metered external provider).", jobId };
     }
+    case "M14_ART_DIRECTION": {
+      const brief = typeof step.args.brief === "string" ? step.args.brief : String(step.args.guidance ?? "");
+      return { ...base, status: "ROUTED", detail: `Art direction runs through POST /api/creative/m14/direction with a structured brief (3 candidates; creator APPROVAL required before any asset generation or timeline mutation). Brief received: ${brief.slice(0, 140)}` };
+    }
+    case "M14_SCENE_PLAN": {
+      return { ...base, status: "ROUTED", detail: "Scene planning runs through POST /api/creative/m14/scenes (RIISHE-verbatim timings + AI concept suggestions; interactive editing required)." };
+    }
+    case "M14_SCENE_ASSET": {
+      if (typeof step.args.prompt !== "string" || typeof step.args.sceneId !== "string") return { ...base, status: "FAILED", detail: "M14_SCENE_ASSET requires sceneId + prompt; assets generate ONLY under an APPROVED art direction." };
+      return { ...base, status: "ROUTED", detail: `Scene asset generation routed to POST /api/creative/m14/assets (scene ${String(step.args.sceneId).slice(0, 40)}); approval-gated LAXII call.` };
+    }
+    case "M14_COMPOSE_APPLY": {
+      if (typeof step.args.compositionId !== "string") return { ...base, status: "FAILED", detail: "M14_COMPOSE_APPLY requires compositionId." };
+      return { ...base, status: "ROUTED", detail: "Composition edits go through PATCH /api/creative/m14/compose with optimistic concurrency (every commit is a version — undo/redo preserved)." };
+    }
+    case "M14_TRACK_ATTACH": {
+      if (typeof step.args.compositionId !== "string" || typeof step.args.layerId !== "string") return { ...base, status: "FAILED", detail: "M14_TRACK_ATTACH requires compositionId + layerId." };
+      return { ...base, status: "ROUTED", detail: "Track attachment requires a completed M13 temporal index; use PATCH /api/creative/m14/compose (attach payload). Gaps HOLD per M13 policy." };
+    }
+    case "M14_RENDER": {
+      if (typeof step.args.compositionId !== "string") return { ...base, status: "FAILED", detail: "M14_RENDER requires compositionId." };
+      const renderJob = await jobManager.createJob(userId, "COMPOSITION_RENDER", { projectId, compositionId: step.args.compositionId });
+      return { ...base, status: "COMPLETED", detail: "COMPOSITION_RENDER queued through the existing durable worker (bounded resources; deterministic compositor).", jobId: renderJob };
+    }
     case "EXPORT": {
       // Full-timeline render through the EXISTING M6 pipeline (validated head sequence).
       if (seq.clips.length === 0) throw new Error("Nothing to render: the sequence has no clips.");

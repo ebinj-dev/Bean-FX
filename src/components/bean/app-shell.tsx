@@ -15,7 +15,9 @@ import { EditorTool } from "@/components/bean/tools/editor";
 import type { SessionUser } from "@/lib/types";
 
 function currentHashRoute(): string {
-  const h = window.location.hash.replace(/^#/, "");
+  // M15: hash routes may carry query params (e.g. #/editor?project=<id>) —
+  // the route id is everything before the query separator.
+  const h = window.location.hash.replace(/^#/, "").split("?")[0];
   if (!h || h === "/") return "/";
   return h.startsWith("/") ? h : `/${h}`;
 }
@@ -59,7 +61,7 @@ export function AppShell() {
 
   const onAuthed = useCallback((u: SessionUser) => {
     setUser(u);
-    window.location.hash = "#/studio";
+    window.location.hash = "#/editor";
   }, []);
 
   const onLogout = useCallback(async () => {
@@ -72,7 +74,7 @@ export function AppShell() {
   }, []);
 
   const openStudio = useCallback(() => {
-    window.location.hash = "#/studio";
+    window.location.hash = "#/editor";
   }, []);
 
   const openLogin = useCallback(() => {
@@ -103,7 +105,7 @@ export function AppShell() {
 
   if (route === "/login" || route === "/register") {
     if (user) {
-      return <RedirectToStudio />;
+      return <RedirectToEditor />;
     }
     return <AuthView initialMode={route === "/register" ? "register" : "login"} onAuthed={onAuthed} />;
   }
@@ -190,9 +192,9 @@ export function AppShell() {
 }
 
 /** Renders the same redirecting spinner while moving an authed user out of /login. */
-function RedirectToStudio() {
+function RedirectToEditor() {
   useEffect(() => {
-    window.location.hash = "#/studio";
+    window.location.hash = "#/editor";
   }, []);
   return (
     <div className="flex min-h-screen items-center justify-center bg-[#050505]">

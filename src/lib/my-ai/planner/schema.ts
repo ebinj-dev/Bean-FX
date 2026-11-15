@@ -30,6 +30,12 @@ export const PlanOperation = z.enum([
   "LAXII_GENERATE",
   "INSERT_ASSET",
   "EXPORT",
+  "M14_ART_DIRECTION",
+  "M14_SCENE_PLAN",
+  "M14_SCENE_ASSET",
+  "M14_COMPOSE_APPLY",
+  "M14_TRACK_ATTACH",
+  "M14_RENDER",
 ]);
 
 export const PlanStepSchema = z
@@ -104,6 +110,29 @@ export const PlanStepSchema = z
       case "LAXII_GENERATE": {
         if (typeof a.prompt !== "string" || (a.prompt as string).length < 3) ctx.addIssue({ code: "custom", message: "LAXII_GENERATE requires prompt" });
         if (a.count !== undefined && (!Number.isInteger(a.count) || (a.count as number) < 1 || (a.count as number) > 4)) ctx.addIssue({ code: "custom", message: "LAXII count must be 1..4" });
+        break;
+      }
+      case "M14_ART_DIRECTION": {
+        if (typeof a.brief !== "string" && typeof a.guidance !== "string") ctx.addIssue({ code: "custom", message: "M14_ART_DIRECTION requires brief or guidance" });
+        break;
+      }
+      case "M14_SCENE_PLAN": {
+        break;
+      }
+      case "M14_SCENE_ASSET": {
+        if (typeof a.prompt !== "string" || (a.prompt as string).length < 3) ctx.addIssue({ code: "custom", message: "M14_SCENE_ASSET requires prompt" });
+        break;
+      }
+      case "M14_COMPOSE_APPLY": {
+        if (typeof a.compositionId !== "string") ctx.addIssue({ code: "custom", message: "M14_COMPOSE_APPLY requires compositionId" });
+        break;
+      }
+      case "M14_TRACK_ATTACH": {
+        if (typeof a.compositionId !== "string" || typeof a.layerId !== "string") ctx.addIssue({ code: "custom", message: "M14_TRACK_ATTACH requires compositionId and layerId" });
+        break;
+      }
+      case "M14_RENDER": {
+        if (typeof a.compositionId !== "string") ctx.addIssue({ code: "custom", message: "M14_RENDER requires compositionId" });
         break;
       }
       case "EXPORT": {
