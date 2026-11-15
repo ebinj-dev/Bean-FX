@@ -24,6 +24,9 @@ import { drawGraphicsLayer, ensureNikkiFonts } from "@/lib/nikki/canvas";
 import { formatTimecode } from "@/lib/editor/time";
 import { api } from "@/lib/client-api";
 import type { Rational } from "@/lib/editor/time";
+import { CompositionCanvas } from "@/components/bean/editor/composition-canvas";
+import type { EditToolId } from "@/lib/editor/tools";
+import type { EditorSession } from "@/hooks/use-editor-session";
 
 const AUDIO_POOL_SIZE = 4;
 /** Seek the media element when drift exceeds this many seconds. */
@@ -35,12 +38,22 @@ export function ProgramMonitor({
   playing,
   onPlayhead,
   onPlayingChange,
+  session,
+  activeTool = "select",
+  guides = false,
+  snapEnabled = true,
 }: {
   sequence: Sequence | null;
   playhead: number;
   playing: boolean;
   onPlayhead: (frame: number) => void;
   onPlayingChange: (playing: boolean) => void;
+  /** M15: present only in the editing workspace — enables the interactive
+   *  composition canvas (selection boxes + transform handles). */
+  session?: EditorSession;
+  activeTool?: EditToolId;
+  guides?: boolean;
+  snapEnabled?: boolean;
 }) {
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const audioRefs = useRef<Array<HTMLAudioElement | null>>([]);
@@ -305,6 +318,9 @@ export function ProgramMonitor({
           >
             <span>{caption.captionText}</span>
           </div>
+        )}
+        {sequence && session && (
+          <CompositionCanvas sequence={sequence} playhead={playhead} session={session} activeTool={activeTool} guides={guides} snapEnabled={snapEnabled} />
         )}
         {activeVideo && (
           <div className="pointer-events-none absolute left-3 top-2 rounded bg-black/60 px-2 py-0.5 text-[10px] text-[#8f8f8a]">

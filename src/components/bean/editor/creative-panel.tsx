@@ -115,8 +115,8 @@ const inputCls = "w-full rounded border border-[#2a2a2a] bg-[#141413] px-2 py-1.
 const btnCls = "inline-flex items-center gap-1 rounded border border-[#2a2a2a] px-2 py-1 text-[11px] text-[#d8d8d2] hover:border-[#d4a017] hover:text-[#d4a017] disabled:opacity-40";
 const labelCls = "text-[10px] uppercase tracking-wide text-[#8a8a84]";
 
-export function CreativeDirectorPanel({ projectId, onSeekSec }: { projectId: string; onSeekSec?: (sec: number) => void }) {
-  const [tab, setTab] = useState<Tab>("assistant");
+export function CreativeDirectorPanel({ projectId, onSeekSec, initialTab }: { projectId: string; onSeekSec?: (sec: number) => void; /** M15 AI Studio: open directly on a workspace tab. */ initialTab?: Tab }) {
+  const [tab, setTab] = useState<Tab>(initialTab ?? "assistant");
   const [notice, setNotice] = useState<{ kind: "ok" | "err"; text: string } | null>(null);
   const [tick, setTick] = useState(0);
   const flash = useCallback((kind: "ok" | "err", text: string) => {

@@ -136,6 +136,13 @@ export function StudioDashboard({ user, onLogout }: { user: SessionUser; onLogou
                     {p.mediaCount} media · updated {formatDateTime(p.updatedAt)}
                   </p>
                 </div>
+                <a
+                  href={`#/editor?project=${p.id}`}
+                  className="inline-flex h-8 items-center gap-1.5 rounded-md border border-[#d4a017] px-2.5 text-[10px] font-extrabold uppercase tracking-wider text-[#d4a017] hover:bg-[#d4a017] hover:text-[#0c0c0c]"
+                  aria-label={`Open ${p.name} in the editor`}
+                >
+                  <Film className="h-3 w-3" /> Edit
+                </a>
                 <button
                   type="button"
                   onClick={async () => {

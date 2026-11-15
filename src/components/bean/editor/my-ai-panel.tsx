@@ -41,7 +41,7 @@ async function jfetch<T>(url: string, init?: RequestInit): Promise<T> {
   return body;
 }
 
-export function MyAiPanel({ sequence, session, projectId }: { sequence: Sequence; session: EditorSession; projectId: string | null }) {
+export function MyAiPanel({ sequence, session, projectId, selectionContext }: { sequence: Sequence; session: EditorSession; projectId: string | null; /** M15 AI Studio: the current selection/playhead, injected into the plan request so MY AI is contextual. */ selectionContext?: string }) {
   const [messages, setMessages] = useState<ChatMsg[]>([]);
   const [input, setInput] = useState("");
   const [conversationId, setConversationId] = useState<string | null>(null);
@@ -98,7 +98,8 @@ export function MyAiPanel({ sequence, session, projectId }: { sequence: Sequence
     setBusy("plan");
     setNotice(null);
     try {
-      const req = request ?? input.trim() ?? "Improve this edit";
+      const base = request ?? input.trim() ?? "Improve this edit";
+      const req = selectionContext ? `${base} (current selection: ${selectionContext})` : base;
       const res = await jfetch<PlanSummary>("/api/my-ai/plans", {
         method: "POST",
         headers: { "content-type": "application/json" },
