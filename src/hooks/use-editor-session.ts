@@ -49,6 +49,8 @@ export interface EditorSession extends EditorSessionState {
   setPlayhead: (frame: number) => void;
   /** Create a fresh id for command payloads (unique per session). */
   newId: (prefix: string) => string;
+  /** M16: flush pending autosave immediately (Ctrl+S / unload guard). */
+  flushNow: () => Promise<void>;
 }
 
 export function useEditorSession(projectId: string | null): EditorSession {
@@ -317,7 +319,8 @@ export function useEditorSession(projectId: string | null): EditorSession {
       select,
       setPlayhead,
       newId,
+      flushNow,
     }),
-    [state, apply, undo, redo, reload, select, setPlayhead, newId],
+    [state, apply, undo, redo, reload, select, setPlayhead, newId, flushNow],
   );
 }

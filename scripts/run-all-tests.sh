@@ -39,6 +39,7 @@ SUITES=(
   scripts/test-m14-core.test.ts
   scripts/test-m14-live.test.ts
   scripts/test-m15-core.test.ts
+  scripts/test-m16-core.test.ts
   scripts/test-riishe-timeline.test.ts
   scripts/test-editor-regressions.test.ts
   scripts/test-media-pipeline.test.ts

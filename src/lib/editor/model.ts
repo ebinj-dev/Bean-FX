@@ -22,7 +22,25 @@ export type TrackKind = z.infer<typeof TrackKind>;
 
 export const RationalSchema = z.object({ num: z.number().int().positive(), den: z.number().int().positive() });
 
-export const EffectType = z.enum(["opacity", "volume", "flipH", "flipV", "grayscale", "blur"]);
+// M16 Phase F: additive extension — color correction + sharpening. Old
+// sequences with the original six types keep parsing unchanged.
+export const EffectType = z.enum([
+  "opacity",
+  "volume",
+  "flipH",
+  "flipV",
+  "grayscale",
+  "blur",
+  "brightness",
+  "contrast",
+  "saturation",
+  "exposure",
+  "temperature",
+  "tint",
+  "highlights",
+  "shadows",
+  "sharpen",
+]);
 export type EffectType = z.infer<typeof EffectType>;
 
 export const EffectSchema = z.object({

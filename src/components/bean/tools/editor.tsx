@@ -34,6 +34,7 @@ import { AiStudio } from "@/components/bean/editor/ai-studio";
 import { PublishingPanel } from "@/components/bean/editor/publishing-panel";
 import { StudioPanel } from "@/components/bean/editor/studio-panel";
 import type { EditToolId } from "@/lib/editor/tools";
+import { subscribeFrame } from "@/lib/editor/playback";
 
 const DEFAULT_IMAGE_TIMELINE_SEC = 5;
 
@@ -313,6 +314,10 @@ export function EditorTool({ user }: { user: { id: string }; onLogout: () => voi
         e.preventDefault();
         if (e.shiftKey) session.redo();
         else session.undo();
+      } else if ((e.metaKey || e.ctrlKey) && (e.key === "s" || e.key === "S")) {
+        // Ctrl/Cmd+S — flush the autosave NOW (M16 reliability).
+        e.preventDefault();
+        void session.flushNow().then(() => setNotice(null));
       } else if (!e.metaKey && !e.ctrlKey) {
         const toolKeys: Record<string, EditToolId> = { v: "select", a: "track-select", c: "razor", y: "slip", u: "slide", h: "hand", z: "zoom", t: "text", r: "transform" };
         const tool = toolKeys[e.key.toLowerCase()];
@@ -322,6 +327,16 @@ export function EditorTool({ user }: { user: { id: string }; onLogout: () => voi
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [togglePlay, step, splitAtPlayhead, deleteSelection, session, snap]);
+
+  // Unsaved-changes guard: never discard a pending autosave silently.
+  useEffect(() => {
+    const guard = (e: BeforeUnloadEvent) => {
+      if (session.saveState === "saved" || session.saveState === "loading") return;
+      e.preventDefault();
+    };
+    window.addEventListener("beforeunload", guard);
+    return () => window.removeEventListener("beforeunload", guard);
+  }, [session.saveState]);
 
   // ---- resizable docks ------------------------------------------------------
   const dragRef = useRef<{ side: "left" | "right"; startX: number; startWidth: number } | null>(null);
@@ -340,6 +355,17 @@ export function EditorTool({ user }: { user: { id: string }; onLogout: () => voi
   const onDockUp = () => {
     dragRef.current = null;
   };
+
+  // M16: real asset durations (frames at the sequence rate) for roll/slide
+  // extension decisions — from the media library's probe data only.
+  const assetFrameDurations = useMemo(() => {
+    const map = new Map<string, number>();
+    const fps = sequence ? sequence.fps.num / sequence.fps.den : 30;
+    for (const m of media ?? []) {
+      if (m.durationSec && m.durationSec > 0) map.set(m.id, Math.floor(m.durationSec * fps));
+    }
+    return map;
+  }, [media, sequence?.fps]);
 
   const saveBadge = {
     saved: { icon: <Check className="h-3 w-3" />, text: session.version ? `Saved v${session.version}` : "Saved", cls: "text-[#4cc47f]" },
@@ -439,14 +465,14 @@ export function EditorTool({ user }: { user: { id: string }; onLogout: () => voi
         {/* Center: monitor + transport + timeline */}
         <div className="flex min-w-0 flex-1 flex-col">
           <div className="relative flex min-h-0 flex-1">
-            <ProgramMonitor sequence={sequence} playhead={session.playheadFrame} playing={playing} onPlayhead={session.setPlayhead} onPlayingChange={setPlaying} session={session} activeTool={activeTool} guides={guides} snapEnabled={snap} />
+            <ProgramMonitor sequence={sequence} playhead={session.playheadFrame} playing={playing} onPlayhead={session.setPlayhead} onPlayingChange={setPlaying} session={session} activeTool={activeTool} guides={guides} snapEnabled={snap} onDecodeError={setNotice} />
           </div>
           {/* Transport bar */}
           <div className="flex items-center gap-2 border-y border-[#2a2a2a] bg-[#0d0d0c] px-3 py-1">
             <button type="button" onClick={() => step(-1)} className={toolButton} title="Step back one frame (←)"><ChevronLeft className="h-4 w-4" /></button>
             <button type="button" onClick={togglePlay} disabled={!sequence || end === 0} className={toolButton} title="Play / pause (Space)">{playing ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4" />}</button>
             <button type="button" onClick={() => step(1)} className={toolButton} title="Step forward one frame (→)"><ChevronRight className="h-4 w-4" /></button>
-            <span className="rounded bg-[#111110] px-2 py-1 font-mono text-xs text-[#d4a017]">{formatTimecode(session.playheadFrame, fpsRational)}</span>
+            <BusTimecode fpsRational={fpsRational} fallback={session.playheadFrame} />
             <button type="button" onClick={splitAtPlayhead} disabled={!selectedClip} className={toolButton} title="Split at playhead"><Sparkles className="h-4 w-4" /></button>
             <button type="button" onClick={() => deleteSelection(false)} disabled={!selectedClip} className={toolButton} title="Delete clip (Del)">✕</button>
             <button type="button" onClick={() => deleteSelection(true)} disabled={!selectedClip} className={toolButton} title="Ripple delete (closes the gap)">⇤</button>
@@ -462,7 +488,7 @@ export function EditorTool({ user }: { user: { id: string }; onLogout: () => voi
           <EditingToolbar activeTool={activeTool} onToolChange={setActiveTool} snap={snap} onSnapChange={setSnap} />
           <div className="flex min-h-[220px] flex-1 flex-col p-2 pt-0">
             {sequence ? (
-              <EditorTimeline sequence={sequence} playhead={session.playheadFrame} session={session} zoom={zoom} onZoomChange={setZoom} activeTool={activeTool} snap={snap} notice={setNotice} />
+              <EditorTimeline sequence={sequence} playhead={session.playheadFrame} session={session} zoom={zoom} onZoomChange={setZoom} activeTool={activeTool} snap={snap} notice={setNotice} assetDurations={assetFrameDurations} />
             ) : (
               <div className="flex flex-1 items-center justify-center rounded-lg border border-[#2a2a2a] bg-[#0b0b0a]">
                 {session.saveState === "loading" ? <Loader2 className="h-5 w-5 animate-spin text-[#d4a017]" /> : <p className="text-sm text-[#8f8f8a]">Create or select a project to start editing.</p>}
@@ -503,6 +529,7 @@ export function EditorTool({ user }: { user: { id: string }; onLogout: () => voi
               <button type="button" onClick={() => setDrawer(null)} className="text-[#8f8f8a] hover:text-[#d8d8d2]">✕</button>
             </div>
             <PublishingPanel projectId={projectId} />
+            <TimelineRenderPanel projectId={projectId} onNotice={setNotice} />
           </div>
         </div>
       )}
@@ -518,6 +545,79 @@ export function EditorTool({ user }: { user: { id: string }; onLogout: () => voi
         </div>
       )}
     </div>
+  );
+}
+
+/**
+ * M16 — timeline render panel: enqueues the durable RENDER_TIMELINE job
+ * (real FFmpeg graph from the canonical sequence) and shows real job/ExportFile
+ * state. No fake progress — the durable worker drives the stages.
+ */
+function TimelineRenderPanel({ projectId, onNotice }: { projectId: string; onNotice: (m: string | null) => void }) {
+  const [state, setState] = useState<{ jobs: { id: string; status: string; stage: string | null; progress: number; message: string | null; createdAt: string }[]; exports: { id: string; filename: string; sizeBytes: number; durationSec: number; createdAt: string }[] } | null>(null);
+  const [busy, setBusy] = useState(false);
+  const load = useCallback(() => {
+    fetch(`/api/editor/projects/${projectId}/render`).then((r) => r.json()).then((d) => setState(d)).catch(() => undefined);
+  }, [projectId]);
+  useEffect(() => {
+    load();
+    const id = window.setInterval(load, 3000);
+    return () => window.clearInterval(id);
+  }, [load]);
+  const render = async () => {
+    setBusy(true);
+    try {
+      const res = await fetch(`/api/editor/projects/${projectId}/render`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({}) });
+      const body = (await res.json()) as { jobId?: string; error?: string };
+      if (body.jobId) onNotice(`Render job queued — ${body.jobId}`);
+      else onNotice(body.error ?? "Render enqueue failed.");
+      load();
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <div className="mt-4 border-t border-[#2a2a2a] pt-3">
+      <div className="mb-1.5 flex items-center justify-between">
+        <span className="bean-label text-[10px] text-[#d4a017]">RENDER TIMELINE (FFmpeg)</span>
+        <button type="button" onClick={() => void render()} disabled={busy} className="rounded border border-[#d4a017] px-2 py-1 text-[10px] font-bold text-[#d4a017] hover:bg-[#d4a017] hover:text-[#0c0c0c] disabled:opacity-40">
+          {busy ? "…" : "RENDER SEQUENCE"}
+        </button>
+      </div>
+      <p className="mb-2 text-[9px] leading-relaxed text-[#6a6a64]">
+        Renders the CURRENT sequence: every visual clip (effects, fades), captions, graphics and the full audio mix through the durable worker; output validated with FFprobe before it appears below.
+      </p>
+      {state?.jobs?.map((j) => (
+        <div key={j.id} className="mb-1 rounded bg-[#111110] px-2 py-1.5 text-[10px]">
+          <div className="flex items-center justify-between">
+            <span className={j.status === "COMPLETED" ? "text-[#4cc47f]" : j.status === "FAILED" ? "text-[#c45c4c]" : "text-[#d4a017]"}>{j.status}</span>
+            <span className="font-mono text-[9px] text-[#6a6a64]">{Math.round(j.progress)}%</span>
+          </div>
+          <div className="text-[9px] text-[#8f8f8a]">{j.stage ?? ""}{j.message ? ` — ${j.message.slice(0, 160)}` : ""}</div>
+        </div>
+      ))}
+      {state?.exports?.map((e) => (
+        <a key={e.id} href={`/api/exports/${e.id}/file`} className="mt-1 flex items-center justify-between rounded border border-[#1c1c1a] bg-[#111110] px-2 py-1.5 text-[10px] text-[#d8d8d2] hover:border-[#d4a017]">
+          <span className="min-w-0 flex-1 truncate">{e.filename}</span>
+          <span className="font-mono text-[9px] text-[#4cc47f]">{(e.sizeBytes / 1024 / 1024).toFixed(1)}MB · {e.durationSec?.toFixed?.(1) ?? "?"}s</span>
+        </a>
+      ))}
+    </div>
+  );
+}
+
+/** Transport timecode that paints from the frame bus (no per-frame render). */
+function BusTimecode({ fpsRational, fallback }: { fpsRational: Rational; fallback: number }) {
+  const ref = useRef<HTMLSpanElement | null>(null);
+  useEffect(() => {
+    return subscribeFrame((frame) => {
+      if (ref.current) ref.current.textContent = formatTimecode(frame, fpsRational);
+    });
+  }, [fpsRational]);
+  return (
+    <span ref={ref} className="rounded bg-[#111110] px-2 py-1 font-mono text-xs text-[#d4a017]">
+      {formatTimecode(fallback, fpsRational)}
+    </span>
   );
 }
 

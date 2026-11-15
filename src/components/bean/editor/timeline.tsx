@@ -36,6 +36,9 @@ import {
 } from "@/lib/editor/interaction";
 import { sequenceEndFrame } from "@/lib/editor/preview";
 import { slipCommand, slideCommands, type EditToolId } from "@/lib/editor/tools";
+import { compileRoll, compileLift, compileExtract, compileGroupMove } from "@/lib/editor/edits";
+import { subscribeFrame } from "@/lib/editor/playback";
+import { thumbnailFor } from "@/lib/editor/thumbnails";
 import type { EditorSession } from "@/hooks/use-editor-session";
 
 const KIND_COLORS: Record<Track["kind"], { block: string; edge: string; text: string }> = {
@@ -93,6 +96,20 @@ function Waveform({ clip, width }: { clip: Clip; width: number }) {
   );
 }
 
+/** Clip thumbnail: a REAL decoded frame (LRU-cached), only for VIDEO blocks. */
+function ClipThumbnail({ assetId, width }: { assetId: string; width: number }) {
+  const [url, setUrl] = useState<string | null>(null);
+  useEffect(() => {
+    let live = true;
+    void thumbnailFor(assetId).then((u) => live && setUrl(u));
+    return () => {
+      live = false;
+    };
+  }, [assetId]);
+  if (!url || width < 40) return null;
+  return <img src={url} alt="" className="pointer-events-none absolute inset-0 h-full w-full rounded object-cover opacity-40" />;
+}
+
 interface DragState {
   kind: "move" | "trim" | "slip" | "slide";
   clipId: string;
@@ -114,6 +131,7 @@ export function EditorTimeline({
   activeTool = "select",
   snap = true,
   notice,
+  assetDurations,
 }: {
   sequence: Sequence;
   playhead: number;
@@ -123,6 +141,9 @@ export function EditorTimeline({
   activeTool?: EditToolId;
   snap?: boolean;
   notice?: (message: string | null) => void;
+  /** M16: real asset durations (frames) from the media library — enables
+   *  roll/slide extensions beyond the used window when media allows it. */
+  assetDurations?: Map<string, number>;
 }) {
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const [scrollFrames, setScrollFrames] = useState(0);
@@ -458,10 +479,19 @@ export function EditorTimeline({
   );
 
   // Keyboard: copy/paste (tool shortcuts live in the workspace shell).
+  // Shift+Left/Right: group-move the multi-selection by ±1 frame (M16).
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       const target = e.target as HTMLElement;
       if (target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.isContentEditable) return;
+      if (e.shiftKey && (e.key === "ArrowLeft" || e.key === "ArrowRight") && multiSelect.size > 1) {
+        e.preventDefault();
+        const delta = e.key === "ArrowRight" ? 1 : -1;
+        const op = compileGroupMove(sequence, [...multiSelect], delta);
+        if (op && session.apply(op.commands)) notice?.(null);
+        else notice?.("Group move refused (overlap or locked track).");
+        return;
+      }
       if ((e.metaKey || e.ctrlKey) && (e.key === "c" || e.key === "C")) {
         const clip = sequence.clips.find((c) => c.id === session.selectedClipId);
         if (clip) {
@@ -482,6 +512,18 @@ export function EditorTimeline({
     for (let f = 0; f <= end; f += majorFrames) list.push(f);
     return list;
   }, [end, majorFrames]);
+
+  // M16: the playhead line paints from the frame bus while playing — the
+  // timeline component does NOT re-render per frame. Re-subscribes with
+  // fresh zoom/fps mappings when they change.
+  const playheadLineRef = useRef<HTMLDivElement | null>(null);
+  useEffect(() => {
+    return subscribeFrame((frame, isPlaying) => {
+      const el = playheadLineRef.current;
+      if (!el || !isPlaying) return;
+      el.style.left = `${frameToX(frame, zoom, fps, 0)}px`;
+    });
+  }, [zoom, fps]);
 
   const lanePointerDown = useCallback(
     (e: ReactPointerEvent, track: Track) => {
@@ -672,6 +714,7 @@ export function EditorTimeline({
                                 {clip.playbackSpeed !== 1 ? ` · ${clip.playbackSpeed}×` : ""}
                               </div>
                             </div>
+                            {track.kind === "VIDEO" && !clip.missingMedia && clip.sourceAssetId && <ClipThumbnail assetId={clip.sourceAssetId} width={rect.width} />}
                             {isAudio && <Waveform clip={clip} width={rect.width} />}
                             {/* Keyframe markers (timeline-mapped) */}
                             {clip.keyframes.length > 0 && (
@@ -688,8 +731,9 @@ export function EditorTimeline({
                 </div>
               );
             })}
-            {/* Playhead */}
-            <div className="pointer-events-none absolute top-0 bottom-0 z-30 w-px bg-[#d4a017]" style={{ left: frameToX(playhead, zoom, fps, 0), height: totalTrackHeight + RULER_HEIGHT }}>
+            {/* Playhead — follows the frame bus imperatively while playing
+                (no re-render per tick); the `playhead` prop anchors paused. */}
+            <div ref={playheadLineRef} className="pointer-events-none absolute top-0 bottom-0 z-30 w-px bg-[#d4a017]" style={{ left: frameToX(playhead, zoom, fps, 0), height: totalTrackHeight + RULER_HEIGHT }}>
               <div className="absolute -left-1.5 top-0 h-2.5 w-3 bg-[#d4a017]" style={{ clipPath: "polygon(0 0, 100% 0, 50% 100%)" }} />
             </div>
           </div>
@@ -735,6 +779,62 @@ export function EditorTimeline({
                 groupDelete([menu.clipId!], true);
               }}>
                 <Trash2 className="mr-1.5 inline h-3 w-3" /> Ripple delete (close gap)
+              </button>
+              <button type="button" className="block w-full px-3 py-1 text-left text-[11px] text-[#d8d8d2] hover:bg-[#22221f]" onClick={() => {
+                setMenu(null);
+                // Lift = remove selection (or this clip) leaving a gap.
+                const ids = multiSelect.size > 1 && multiSelect.has(menu.clipId!) ? [...multiSelect] : [menu.clipId!];
+                const op = compileLift(sequence, ids);
+                if (op && session.apply(op.commands)) notice?.(null);
+                else notice?.("Lift refused (locked track).");
+              }}>
+                Lift (leave gap)
+              </button>
+              <button type="button" className="block w-full px-3 py-1 text-left text-[11px] text-[#d8d8d2] hover:bg-[#22221f]" onClick={() => {
+                setMenu(null);
+                const ids = multiSelect.size > 1 && multiSelect.has(menu.clipId!) ? [...multiSelect] : [menu.clipId!];
+                const op = compileExtract(sequence, ids);
+                if (op && session.apply(op.commands)) notice?.(null);
+                else notice?.("Extract refused (locked track).");
+              }}>
+                Extract (remove + close gap)
+              </button>
+              <button type="button" className="block w-full px-3 py-1 text-left text-[11px] text-[#d8d8d2] hover:bg-[#22221f]" onClick={() => {
+                setMenu(null);
+                // Roll: nudge the boundary between this clip and its right
+                // neighbor by 1 frame toward the right (Shift+click via menu
+                // entries below give ±1 / ±5).
+                const clip = sequence.clips.find((c) => c.id === menu.clipId);
+                if (!clip) return;
+                const right = sequence.clips
+                  .filter((c) => c.trackId === clip.trackId && c.id !== clip.id && c.timelineStartFrame === clip.timelineStartFrame + clip.timelineDurationFrames)
+                  .sort((a, b) => a.timelineStartFrame - b.timelineStartFrame)[0];
+                if (!right) {
+                  notice?.("Roll needs an adjacent right neighbor.");
+                  return;
+                }
+                const op = compileRoll(sequence, clip.id, right.id, 1, assetDurations);
+                if (op && session.apply(op.commands)) notice?.(null);
+                else notice?.("Roll refused (source bounds).");
+              }}>
+                Roll edge right +1f (with neighbor)
+              </button>
+              <button type="button" className="block w-full px-3 py-1 text-left text-[11px] text-[#d8d8d2] hover:bg-[#22221f]" onClick={() => {
+                setMenu(null);
+                const clip = sequence.clips.find((c) => c.id === menu.clipId);
+                if (!clip) return;
+                const right = sequence.clips
+                  .filter((c) => c.trackId === clip.trackId && c.id !== clip.id && c.timelineStartFrame === clip.timelineStartFrame + clip.timelineDurationFrames)
+                  .sort((a, b) => a.timelineStartFrame - b.timelineStartFrame)[0];
+                if (!right) {
+                  notice?.("Roll needs an adjacent right neighbor.");
+                  return;
+                }
+                const op = compileRoll(sequence, clip.id, right.id, -1, assetDurations);
+                if (op && session.apply(op.commands)) notice?.(null);
+                else notice?.("Roll refused (source bounds).");
+              }}>
+                Roll edge left −1f (with neighbor)
               </button>
             </>
           ) : (

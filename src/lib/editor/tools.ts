@@ -63,7 +63,7 @@ export function slipCommand(clip: Clip, deltaSourceFrames: number): Record<strin
  * (classic slide). Returns one atomic command batch, or null when the
  * neighbors cannot absorb the delta.
  */
-export function slideCommands(seq: Sequence, clip: Clip, deltaTimelineFrames: number): Record<string, unknown>[] | null {
+export function slideCommands(seq: Sequence, clip: Clip, deltaTimelineFrames: number, sourceDurations?: Map<string, number>): Record<string, unknown>[] | null {
   if (deltaTimelineFrames === 0) return null;
   const track = seq.tracks.find((t) => t.id === clip.trackId);
   if (!track || track.locked) return null;
@@ -90,7 +90,11 @@ export function slideCommands(seq: Sequence, clip: Clip, deltaTimelineFrames: nu
       const deltaSource = toSource(deltaFrames, prev);
       const newOut = prev.sourceOutFrame + deltaSource;
       if (deltaSource < 0 && newOut - prev.sourceInFrame < 1) return null; // window too short
-      if (deltaSource > 0 && newOut > prev.sourceOutFrame) return null; // beyond the analyzed source window — honest refusal
+      if (deltaSource > 0 && newOut > prev.sourceOutFrame) {
+        // Extension needs KNOWN media beyond the used window (probe durations).
+        const known = sourceDurations?.get(prev.sourceAssetId);
+        if (prev.missingMedia || typeof known !== "number" || known <= 0 || newOut > known) return null;
+      }
       commands.push({ type: "TrimClip", clipId: prev.id, newSourceOutFrame: newOut });
     }
   } else if (deltaTimelineFrames < 0) return null; // nothing on the left to absorb
@@ -101,7 +105,7 @@ export function slideCommands(seq: Sequence, clip: Clip, deltaTimelineFrames: nu
       const deltaSource = toSource(deltaFrames, next);
       const newIn = next.sourceInFrame - deltaSource;
       const newNextStart = next.timelineStartFrame - deltaFrames;
-      if (newIn < 0) return null; // before the analyzed source window — honest refusal
+      if (newIn < 0) return null; // before the media start — honest refusal
       if (newIn >= next.sourceOutFrame) return null; // window would invert
       commands.push({ type: "TrimClip", clipId: next.id, newSourceInFrame: newIn, newTimelineStartFrame: newNextStart });
     } else {

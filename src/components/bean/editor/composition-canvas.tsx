@@ -81,6 +81,8 @@ export function CompositionCanvas({
   // synthetic dispatches and very fast real drags both hit this).
   const gestureRef = useRef<null | { clipId: string; mode: "move" | "scale" | "rotate"; startClientX: number; startClientY: number; base: Transform; baseW: number; baseH: number; live: Transform }>(null);
   const [gestureLive, setGestureLive] = useState<null | { clipId: string; mode: "move" | "scale" | "rotate"; base: Transform; live: Transform }>(null);
+  // M16 Phase E: multi-selection + group moves + keyboard nudge + Escape cancel.
+  const [multiIds, setMultiIds] = useState<Set<string>>(new Set());
 
   useLayoutEffect(() => {
     const el = wrapRef.current;
@@ -166,6 +168,11 @@ export function CompositionCanvas({
       e.stopPropagation();
       const clip = sequence.clips.find((c) => c.id === layer.clipId);
       if (!clip) return;
+      if (e.shiftKey) {
+        setMultiIds((prev) => new Set([...prev, clip.id]));
+      } else if (multiIds.size > 1 && !multiIds.has(clip.id)) {
+        setMultiIds(new Set([clip.id]));
+      }
       session.select(clip.id);
       gestureRef.current = { clipId: clip.id, mode, startClientX: e.clientX, startClientY: e.clientY, base: { ...clip.transform }, baseW: layer.w, baseH: layer.h, live: { ...clip.transform } };
       setGestureLive({ clipId: clip.id, mode, base: { ...clip.transform }, live: { ...clip.transform } });
@@ -176,7 +183,7 @@ export function CompositionCanvas({
         // optional (real drags capture; automation dispatches skip it).
       }
     },
-    [sequence, session],
+    [sequence, session, multiIds],
   );
 
   const onGestureMove = useCallback(
@@ -220,13 +227,58 @@ export function CompositionCanvas({
     const base = g.base;
     const changed = Math.abs(g.live.x - base.x) > 0.5 || Math.abs(g.live.y - base.y) > 0.5 || Math.abs(g.live.scale - base.scale) > 0.005 || Math.abs(g.live.rotation - base.rotation) > 0.5;
     if (!changed) return;
-    session.apply([{ type: "UpdateClipProperties", clipId: g.clipId, transform: g.live }]);
-  }, [session]);
+    // Multi-selection: the same DELTA applies to every selected visual layer
+    // (scale/rotate stay single-layer — a shared pivot is not modeled).
+    const ids = g.mode === "move" && multiIds.size > 1 && multiIds.has(g.clipId) ? [...multiIds] : [g.clipId];
+    const dx = g.live.x - base.x;
+    const dy = g.live.y - base.y;
+    const batch = ids.map((id) => {
+      const clip = sequence.clips.find((c) => c.id === id);
+      if (!clip) return null;
+      if (id === g.clipId) return { type: "UpdateClipProperties", clipId: id, transform: g.live };
+      return { type: "UpdateClipProperties", clipId: id, transform: { ...clip.transform, x: clip.transform.x + dx, y: clip.transform.y + dy } };
+    }).filter(Boolean);
+    if (batch.length > 0) session.apply(batch);
+  }, [session, multiIds, sequence]);
 
   const display = (layer: { cx: number; cy: number; w: number; h: number }) =>
     fit
       ? { left: fit.left + (layer.cx - layer.w / 2) * fit.scale, top: fit.top + (layer.cy - layer.h / 2) * fit.scale, width: layer.w * fit.scale, height: layer.h * fit.scale }
       : { left: 0, top: 0, width: 0, height: 0 };
+
+  // Escape: cancel the active gesture (ghost reverts, nothing committed).
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== "Escape") return;
+      gestureRef.current = null;
+      setGestureLive(null);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
+
+  // Arrow-key nudging of the selected visual layer(s): 1 px, Shift = 10 px.
+  // Lives on the canvas so it follows the transform-tool focus semantics.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (activeTool !== "transform" || !session.selectedClipId) return;
+      const target = e.target as HTMLElement;
+      if (target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.isContentEditable) return;
+      const deltas: Record<string, [number, number]> = { ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, -1], ArrowDown: [0, 1] };
+      const d = deltas[e.key];
+      if (!d) return;
+      e.preventDefault();
+      const step = e.shiftKey ? 10 : 1;
+      const ids = multiIds.size > 1 && multiIds.has(session.selectedClipId) ? [...multiIds] : [session.selectedClipId];
+      const batch = ids
+        .map((id) => sequence.clips.find((c) => c.id === id))
+        .filter((c): c is NonNullable<typeof c> => Boolean(c))
+        .map((c) => ({ type: "UpdateClipProperties", clipId: c.id, transform: { ...c.transform, x: c.transform.x + d[0] * step, y: c.transform.y + d[1] * step } }));
+      if (batch.length > 0) session.apply(batch);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [activeTool, session, multiIds, sequence]);
 
   const interactive = activeTool === "transform";
   const shown = gestureLive

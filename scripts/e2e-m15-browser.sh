@@ -9,6 +9,7 @@ PROJECT="${M15_PROJECT:?}"
 SHOTS="${M15_SHOTS:-/home/z/my-project/download/m15-screenshots}"
 EMAIL="${M15_EMAIL:?}"
 PASS="${M15_PASS:-e2e-pass-1234}"
+CLIP_NAME="${M15_CLIP_NAME:-$CLIP_NAME}"
 mkdir -p "$SHOTS"
 AB="agent-browser"
 
@@ -35,7 +36,7 @@ $AB screenshot "$SHOTS/01-workspace.png" >/dev/null || fail "screenshot workspac
 echo "screenshot: 01-workspace.png"
 
 step "place the imported video at the playhead (media browser → timeline)"
-$AB eval "(() => { const items = [...document.querySelectorAll('li')]; const item = items.find((i) => i.textContent?.includes('m15-clip.mp4')); const btn = item?.querySelector('button'); if (!btn) return 'NOBTN'; btn.click(); return 'OK'; })()" 2>/dev/null | grep -aq OK || fail "place button"
+$AB eval "(() => { const items = [...document.querySelectorAll('li')]; const item = items.find((i) => i.textContent?.includes('$CLIP_NAME')); const btn = item?.querySelector('button'); if (!btn) return 'NOBTN'; btn.click(); return 'OK'; })()" 2>/dev/null | grep -aq OK || fail "place button"
 # Placement is probe-aware and lands through the autosave — wait until the
 # sequence REALLY has the clip (API check, not the media-list text).
 PLACED=0
@@ -134,7 +135,7 @@ $AB reload >/dev/null
 sleep 3
 $AB wait --load networkidle >/dev/null 2>&1
 $AB snapshot -c >/tmp/m15-rl.txt 2>&1
-grep -qi "m15-clip.mp4" /tmp/m15-rl.txt || fail "clip missing after reload"
+grep -qi "$CLIP_NAME" /tmp/m15-rl.txt || fail "clip missing after reload"
 $AB screenshot "$SHOTS/08-reloaded.png" >/dev/null
 echo "persistence verified"
 

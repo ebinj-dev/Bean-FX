@@ -51,11 +51,29 @@ export function AiStudio({
   const [tab, setTab] = useState<StudioTab>("myai");
   const selectedClip = sequence.clips.find((c) => c.id === session.selectedClipId) ?? null;
   const context = useMemo(() => {
+    // M16 Phase G: the full editing context — selection, effects, captions,
+    // audio and track structure — so MY AI proposals reference real objects.
     const parts: string[] = [];
-    if (selectedClip) parts.push(`clip "${selectedClip.label || selectedClip.captionText || selectedClip.id}" on ${sequence.tracks.find((t) => t.id === selectedClip.trackId)?.name ?? "?"} at ${selectedClip.timelineStartFrame}f`);
-    else parts.push("no clip selected");
+    if (selectedClip) {
+      const track = sequence.tracks.find((t) => t.id === selectedClip.trackId);
+      parts.push(`clip "${selectedClip.label || selectedClip.captionText || selectedClip.id}" on ${track?.name ?? "?"} (${track?.kind}) at ${selectedClip.timelineStartFrame}f–${selectedClip.timelineStartFrame + selectedClip.timelineDurationFrames}f`);
+      if (selectedClip.effects.length > 0) parts.push(`effects: ${selectedClip.effects.map((e) => `${e.type}${e.enabled ? "" : " (off)"}`).join(", ")}`);
+      if (selectedClip.captionText) parts.push(`caption text: "${selectedClip.captionText.slice(0, 60)}"`);
+      if (selectedClip.volume !== 1) parts.push(`volume ${selectedClip.volume.toFixed(2)}`);
+      if (selectedClip.fadeInFrames || selectedClip.fadeOutFrames) parts.push(`fades in/out ${selectedClip.fadeInFrames}/${selectedClip.fadeOutFrames}f`);
+    } else {
+      parts.push("no clip selected");
+    }
     parts.push(`playhead ${session.playheadFrame}f of ${sequenceEndFrame(sequence)}f`);
-    parts.push(`${sequence.tracks.length} tracks / ${sequence.clips.length} clips`);
+    const kinds = sequence.tracks.map((t) => t.kind[0]).join("");
+    parts.push(`${sequence.tracks.length} tracks [${kinds}] / ${sequence.clips.length} clips`);
+    const captionCount = sequence.clips.filter((c) => c.captionText).length;
+    if (captionCount > 0) parts.push(`${captionCount} caption clip(s)`);
+    const audioClips = sequence.clips.filter((c) => {
+      const t = sequence.tracks.find((x) => x.id === c.trackId);
+      return t?.kind === "AUDIO";
+    }).length;
+    if (audioClips > 0) parts.push(`${audioClips} audio clip(s)`);
     return parts.join(" · ");
   }, [sequence, session.playheadFrame, session.selectedClipId, selectedClip]);
 

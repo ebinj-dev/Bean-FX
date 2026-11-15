@@ -16,6 +16,7 @@ import {
   JOB_TYPE_STUDIO_TOPIC,
   JOB_TYPE_PUBLISH_THUMBNAIL,
   JOB_TYPE_EXPORT_VARIANT,
+  JOB_TYPE_RENDER_TIMELINE,
   JOB_TYPE_PUBLISH_PACKAGE,
   JOB_TYPE_CREATIVE_REVIEW,
   JOB_TYPE_CREATIVE_VARIANTS,
@@ -39,6 +40,7 @@ import { runJazmiiGenerateJob, runJazmiiAnalyzeJob } from "@/lib/jazmii/jobs";
 import { runLaxiiGenerateJob } from "@/lib/laxii/jobs";
 import { runStudioTopicJob } from "@/lib/studio/jobs";
 import { runPublishThumbnailJob, runExportVariantJob, runPublishPackageJob } from "@/lib/publish/jobs";
+import { runTimelineRenderJob } from "@/lib/publish/timeline-render";
 import { runCreativeReviewJob, runCreativeVariantsJob } from "@/lib/creative/jobs";
 import { runCreativeMultimodalJob, runTranscribeProjectJob } from "@/lib/creative/multimodal-jobs";
 import { runVisualIntelligenceJob } from "@/lib/creative/visual/jobs";
@@ -85,6 +87,7 @@ const USER_MAX_ACTIVE: Record<string, number> = {
   [JOB_TYPE_STUDIO_TOPIC]: 1,
   [JOB_TYPE_PUBLISH_THUMBNAIL]: 1,
   [JOB_TYPE_EXPORT_VARIANT]: 1,
+  [JOB_TYPE_RENDER_TIMELINE]: 1,
   [JOB_TYPE_PUBLISH_PACKAGE]: 1,
   [JOB_TYPE_CREATIVE_REVIEW]: 1,
   [JOB_TYPE_CREATIVE_VARIANTS]: 1,
@@ -119,6 +122,7 @@ const HANDLERS: Record<string, MediaJobHandler> = {
   [JOB_TYPE_STUDIO_TOPIC]: runStudioTopicJob,
   [JOB_TYPE_PUBLISH_THUMBNAIL]: runPublishThumbnailJob,
   [JOB_TYPE_EXPORT_VARIANT]: runExportVariantJob,
+  [JOB_TYPE_RENDER_TIMELINE]: runTimelineRenderJob,
   [JOB_TYPE_PUBLISH_PACKAGE]: runPublishPackageJob,
   [JOB_TYPE_CREATIVE_REVIEW]: runCreativeReviewJob,
   [JOB_TYPE_CREATIVE_VARIANTS]: runCreativeVariantsJob,
