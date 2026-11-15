@@ -9,7 +9,7 @@
  * Uses the BEAN FX visual language; no separate editor is created.
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Loader2, Sparkles, ClipboardList, Timer, Gauge, Wrench, GitCompareArrows, History, RefreshCw, Check, X, Send, Ban, Eye, Search, Activity } from "lucide-react";
+import { Loader2, Sparkles, ClipboardList, Timer, Gauge, Wrench, GitCompareArrows, History, RefreshCw, Check, X, Send, Ban, Eye, Search, Activity, Layers } from "lucide-react";
 
 interface ReviewRow {
   id: string;
@@ -87,7 +87,7 @@ interface VariantRow {
   evaluationNote?: string;
 }
 
-type Tab = "assistant" | "review" | "retention" | "scorecard" | "recommendations" | "ab" | "visual" | "motion" | "history";
+type Tab = "assistant" | "review" | "retention" | "scorecard" | "recommendations" | "ab" | "visual" | "motion" | "compose" | "history";
 
 async function jfetch<T>(url: string, init?: RequestInit): Promise<T> {
   const res = await fetch(url, init);
@@ -137,6 +137,7 @@ export function CreativeDirectorPanel({ projectId, onSeekSec }: { projectId: str
     ["ab", "A/B", GitCompareArrows],
     ["visual", "Visual", Eye],
     ["motion", "Motion", Activity],
+    ["compose", "Compose", Layers],
     ["history", "History", History],
   ];
 
@@ -161,6 +162,7 @@ export function CreativeDirectorPanel({ projectId, onSeekSec }: { projectId: str
       {tab === "ab" && <AbTab projectId={projectId} tick={tick} flash={flash} />}
       {tab === "visual" && <VisualTab projectId={projectId} tick={tick} flash={flash} onSeekSec={onSeekSec} />}
       {tab === "motion" && <MotionTab projectId={projectId} tick={tick} flash={flash} onSeekSec={onSeekSec} />}
+      {tab === "compose" && <ComposeTab projectId={projectId} tick={tick} flash={flash} />}
       {tab === "history" && <HistoryTab projectId={projectId} tick={tick} flash={flash} />}
     </div>
   );
@@ -1366,6 +1368,337 @@ function MotionTab({ projectId, tick, flash, onSeekSec }: { projectId: string; t
         </>
       )}
       {!index && !running && <div className="text-[11px] text-[#6a6a64]">No temporal index yet — run Motion Analysis to sample consecutive frames and track real subjects{consent ? " (provider labeling on)" : ""}.</div>}
+    </div>
+  );
+}
+
+// ── M14 COMPOSE WORKSPACE (§10) ─────────────────────────────────────────────
+interface M14Candidate { id: string; name?: string; direction: M14Direction }
+interface M14Direction {
+  name: string;
+  rationale: string;
+  styleProfile: { palette: { hex: string; role: string; source: string }[]; medium: string; composition: string; consistencyRules: string[] };
+  typography: string;
+  motionLanguage: string;
+  constraints: string[];
+}
+interface M14Scene { sceneId: string; startSec: number; endSec: number; timingSource: string; visualConcept: string; onScreenText: string; approvalStatus: string; evidence: string }
+interface M14Plan { id: string; version: number; doc: { scenes: M14Scene[]; notes: string[] } }
+interface M14Layer {
+  id: string; name: string; kind: string; sourceAssetId: string | null; color: string | null; text: string | null;
+  visible: boolean; locked: boolean; blend: string;
+  transform: { x: number; y: number; scale: number; rotation: number; opacity: number };
+  startFrame: number; endFrame: number;
+  keyframes: { id: string; property: string; frame: number; value: number; interpolation: string }[];
+  trackBinding: { temporalTrackId: string; attachedFrameRange: { startFrame: number; endFrame: number } } | null;
+}
+interface M14Doc { width: number; height: number; fps: number; durationFrames: number; layers: M14Layer[] }
+interface M14Composition { id: string; name: string; version: number; doc: M14Doc; versions: { version: number; note: string | null }[] }
+
+function ComposeTab({ projectId, tick, flash }: { projectId: string; tick: number; flash: (k: "ok" | "err", t: string) => void }) {
+  const [section, setSection] = useState<"direction" | "scenes" | "assets" | "composition" | "motion" | "review">("direction");
+  const [candidates, setCandidates] = useState<{ id: string; name: string; direction: M14Direction }[]>([]);
+  const [approved, setApproved] = useState<{ id: string; direction: M14Direction } | null>(null);
+  const [story, setStory] = useState("");
+  const [style, setStyle] = useState("");
+  const [intensity, setIntensity] = useState("moderate");
+  const [busy, setBusy] = useState(false);
+  const [plan, setPlan] = useState<M14Plan | null>(null);
+  const [assets, setAssets] = useState<{ assetId: string; role: string; hasAlpha: boolean }[]>([]);
+  const [comps, setComps] = useState<{ id: string; name: string; version: number }[]>([]);
+  const [comp, setComp] = useState<M14Composition | null>(null);
+  const [renderMsg, setRenderMsg] = useState<string | null>(null);
+
+  const loadAll = useCallback(() => {
+    jfetch<{ candidates: { id: string; name: string; direction: M14Direction }[]; approved: { id: string; direction: M14Direction } | null }>(`/api/creative/m14/direction?projectId=${projectId}`).then((d) => { setCandidates(d.candidates); setApproved(d.approved); }).catch(() => undefined);
+    jfetch<{ plan: M14Plan | null }>(`/api/creative/m14/scenes?projectId=${projectId}`).then((d) => setPlan(d.plan)).catch(() => undefined);
+    jfetch<{ compositions: { id: string; name: string; version: number }[] }>(`/api/creative/m14/compose?projectId=${projectId}`).then((d) => setComps(d.compositions)).catch(() => undefined);
+  }, [projectId]);
+  useEffect(() => {
+    loadAll();
+  }, [loadAll, tick]);
+
+  const run = async (fn: () => Promise<void>) => {
+    setBusy(true);
+    try {
+      await fn();
+    } catch (e) {
+      flash("err", e instanceof Error ? e.message.slice(0, 220) : "Failed");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const openComp = (id: string) => {
+    void run(async () => {
+      const d = await jfetch<M14Composition>(`/api/creative/m14/compose?projectId=${projectId}&compositionId=${id}`);
+      setComp(d);
+    });
+  };
+
+  const commitDoc = (doc: M14Doc, note: string) => {
+    if (!comp) return;
+    void run(async () => {
+      const d = await jfetch<{ version: number; issues: string[] }>("/api/creative/m14/compose", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ projectId, compositionId: comp.id, expectedVersion: comp.version, doc, note }),
+      });
+      setComp({ ...comp, version: d.version, doc });
+      if (d.issues.length > 0) flash("err", `Committed v${d.version} with warnings: ${d.issues[0]}`);
+      else flash("ok", `Committed v${d.version} (undo = switch to v${d.version - 1}).`);
+    });
+  };
+
+  const mutateLayer = (layerId: string, mut: (l: M14Layer) => void, note: string) => {
+    if (!comp) return;
+    const doc = JSON.parse(JSON.stringify(comp.doc)) as M14Doc;
+    const layer = doc.layers.find((l) => l.id === layerId);
+    if (!layer || layer.locked) {
+      if (layer?.locked) flash("err", "Layer is locked.");
+      return;
+    }
+    mut(layer);
+    commitDoc(doc, note);
+  };
+
+  return (
+    <div className="space-y-2.5">
+      <div className="flex flex-wrap gap-1">
+        {(["direction", "scenes", "assets", "composition", "motion", "review"] as const).map((s) => (
+          <button key={s} type="button" onClick={() => setSection(s)} className={`rounded border px-2 py-0.5 text-[10px] uppercase ${section === s ? "border-[#d4a017] text-[#d4a017]" : "border-[#2a2a2a] text-[#8a8a84] hover:text-[#d8d8d2]"}`}>
+            {s}
+          </button>
+        ))}
+      </div>
+
+      {/* ART DIRECTION */}
+      {section === "direction" && (
+        <div className="space-y-2">
+          <div className={labelCls}>Art Direction — 3 candidates, approval-gated</div>
+          <input className={inputCls} placeholder="Story/product brief" value={story} onChange={(e) => setStory(e.target.value)} />
+          <div className="flex gap-1.5">
+            <input className={inputCls} placeholder="Requested style (optional)" value={style} onChange={(e) => setStyle(e.target.value)} />
+            <select className={`${inputCls} max-w-[110px]`} value={intensity} onChange={(e) => setIntensity(e.target.value)}>
+              {["subtle", "moderate", "dynamic"].map((v) => <option key={v} value={v}>{v}</option>)}
+            </select>
+            <button type="button" className={btnCls} disabled={busy || !story.trim()} onClick={() => void run(async () => {
+              const d = await jfetch<{ directions: { id: string; direction: M14Direction }[]; disclosure: string }>("/api/creative/m14/direction", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ projectId, brief: { storyOrProduct: story, requestedStyle: style, motionIntensity: intensity, format: "16:9" } }),
+              });
+              setCandidates(d.directions.map((x) => ({ id: x.id, name: x.direction.name, direction: x.direction })));
+              flash("ok", d.disclosure.slice(0, 200));
+            })}>
+              {busy ? <Loader2 className="h-3 w-3 animate-spin" /> : <Sparkles className="h-3 w-3" />} Generate 3
+            </button>
+          </div>
+          {candidates.map((c) => (
+            <div key={c.id} className="rounded border border-[#2a2a2a] p-2 text-[10px]">
+              <div className="flex items-center gap-1">
+                <span className="text-[#d4a017]">{c.direction.name}</span>
+                <div className="flex gap-0.5">{c.direction.styleProfile.palette.slice(0, 6).map((p, i) => <span key={i} className="h-3 w-3 rounded-sm border border-[#2a2a2a]" style={{ background: p.hex }} title={`${p.role} (${p.source})`} />)}</div>
+                <button type="button" className="ml-auto text-[#7fb069] hover:underline" onClick={() => void run(async () => {
+                  await jfetch("/api/creative/m14/direction", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ projectId, directionId: c.id, action: "approve" }) });
+                  flash("ok", `"${c.direction.name}" approved — asset generation now unlocked.`);
+                  loadAll();
+                })}>approve</button>
+              </div>
+              <div className="text-[#a8a8a0]">{c.direction.rationale.slice(0, 180)}</div>
+              <div className="text-[#6a6a64]">{c.direction.styleProfile.medium} · {c.direction.styleProfile.composition}</div>
+              {c.direction.constraints.slice(0, 1).map((x, i) => <div key={i} className="text-[#e0a094]">{x}</div>)}
+            </div>
+          ))}
+          {approved && <div className="text-[10px] text-[#7fb069]">Approved: {approved.direction.name} — assets may now derive from its style profile.</div>}
+        </div>
+      )}
+
+      {/* SCENE PLAN */}
+      {section === "scenes" && (
+        <div className="space-y-2">
+          <div className={labelCls}>Scene Plan — RIISHE-verbatim timings, editable</div>
+          <button type="button" className={btnCls} disabled={busy} onClick={() => void run(async () => {
+            const d = await jfetch<{ plan: M14Plan["doc"] }>("/api/creative/m14/scenes", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ projectId, artDirectionId: approved?.id ?? null, brief: { language: "en" } }) });
+            flash("ok", `Scene plan built (${d.plan.scenes.length} scenes).`);
+            loadAll();
+          })}>
+            Build plan from narration
+          </button>
+          {plan?.doc.scenes.map((s) => (
+            <div key={s.sceneId} className="rounded border border-[#2a2a2a] p-1.5 text-[10px]">
+              <div className="flex flex-wrap items-center gap-1">
+                <span className="text-[#d4a017]">{s.sceneId}</span>
+                <span className="text-[#a8a8a0]">{s.startSec.toFixed(1)}–{s.endSec.toFixed(1)}s</span>
+                <span className={s.timingSource === "riishe-verbatim" ? "text-[#7fb069]" : "text-[#d4a017]"}>{s.timingSource === "riishe-verbatim" ? "verbatim" : "ESTIMATE"}</span>
+                <span className="text-[#6a6a64]">{s.approvalStatus}</span>
+                <button type="button" className="text-[#7fb069] hover:underline" onClick={() => void run(async () => {
+                  await jfetch("/api/creative/m14/scenes", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ projectId, planId: plan.id, approve: [s.sceneId] }) });
+                  loadAll();
+                })}>approve</button>
+                <button type="button" className="text-[#6aa9c9] hover:underline" onClick={() => void run(async () => {
+                  await jfetch("/api/creative/m14/scenes", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ projectId, planId: plan.id, sceneId: s.sceneId }) });
+                  flash("ok", `Scene ${s.sceneId} regenerated (approved scenes untouched).`);
+                  loadAll();
+                })}>regenerate</button>
+              </div>
+              <div className="text-[#a8a8a0]">{s.visualConcept.slice(0, 160) || "(no concept yet)"}</div>
+              {s.onScreenText && <div className="text-[#d8d8d2]">on-screen: {s.onScreenText}</div>}
+            </div>
+          ))}
+          {plan?.doc.notes.slice(0, 2).map((n, i) => <div key={i} className="text-[9px] text-[#6a6a64]">{n}</div>)}
+        </div>
+      )}
+
+      {/* VISUAL ASSETS */}
+      {section === "assets" && (
+        <div className="space-y-2">
+          <div className={labelCls}>Visual Assets — LAXII, approved direction required</div>
+          {!approved && <div className="text-[10px] text-[#e0a094]">Approve an art direction first — nothing is generated without approval.</div>}
+          {approved && plan && (
+            <button type="button" className={btnCls} disabled={busy} onClick={() => void run(async () => {
+              const scene = plan.doc.scenes[0];
+              const d = await jfetch<{ assets: { assetId: string; hasAlpha: boolean }[]; disclosure: string; limitations: string[] }>("/api/creative/m14/assets", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ projectId, sceneId: scene?.sceneId ?? "sc1", role: "background", prompt: `Scene artwork following the approved direction: ${approved.direction.name}. ${scene?.visualConcept.slice(0, 200)}`, alternatives: 1 }),
+              });
+              setAssets((a) => [...a, ...d.assets.map((x) => ({ ...x, role: "background" }))]);
+              flash("ok", d.disclosure.slice(0, 180));
+              if (d.limitations[0]) flash("err", d.limitations[0].slice(0, 160));
+            })}>
+              Generate scene artwork (scene 1)
+            </button>
+          )}
+          {assets.map((a, i) => (
+            <div key={i} className="text-[10px] text-[#a8a8a0]">{a.role} asset {a.assetId.slice(0, 12)}… · alpha: {a.hasAlpha ? "verified RGBA" : "none (provider returns opaque pixels)"}</div>
+          ))}
+        </div>
+      )}
+
+      {/* COMPOSITION */}
+      {section === "composition" && (
+        <div className="space-y-2">
+          <div className={labelCls}>Composition — layers, masks, versioned</div>
+          <button type="button" className={btnCls} disabled={busy} onClick={() => void run(async () => {
+            const d = await jfetch<{ id: string; version: number; issues: string[] }>("/api/creative/m14/compose", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                projectId,
+                name: `Compose ${new Date().toISOString().slice(11, 19)}`,
+                doc: {
+                  width: 640, height: 360, fps: 30, durationFrames: 90,
+                  layers: [
+                    { id: "bg1", name: "Background", kind: "background", color: approved?.direction.styleProfile.palette[0]?.hex ?? "#101010", visible: true, locked: false, blend: "normal", transform: { x: 320, y: 180, scale: 1, rotation: 0, opacity: 1 }, anchor: { x: 0.5, y: 0.5 }, startFrame: 0, endFrame: 90, keyframes: [], mask: null, trackBinding: null },
+                    { id: "fg1", name: "Foreground", kind: "shape", color: approved?.direction.styleProfile.palette[1]?.hex ?? "#d4a017", visible: true, locked: false, blend: "normal", transform: { x: 320, y: 180, scale: 1, rotation: 0, opacity: 1 }, anchor: { x: 0.5, y: 0.5 }, startFrame: 0, endFrame: 90, keyframes: [{ id: "k1", property: "opacity", frame: 0, value: 0, interpolation: "EASE_OUT" }, { id: "k2", property: "opacity", frame: 20, value: 1, interpolation: "EASE_OUT" }, { id: "k3", property: "x", frame: 0, value: 260, interpolation: "EASE_OUT" }, { id: "k4", property: "x", frame: 25, value: 320, interpolation: "EASE_OUT" }], mask: null, trackBinding: null },
+                  ],
+                },
+              }),
+            });
+            flash("ok", `Composition created (v${d.version})${d.issues.length ? ` — ${d.issues[0]}` : ""}.`);
+            loadAll();
+          })}>
+            New composition (direction palette)
+          </button>
+          {comps.map((c) => (
+            <button key={c.id} type="button" className="block rounded border border-[#2a2a2a] p-1.5 text-left text-[10px] text-[#a8a8a0] hover:text-[#d4a017]" onClick={() => openComp(c.id)}>
+              {c.name} · v{c.version}
+            </button>
+          ))}
+          {comp && (
+            <div className="space-y-1">
+              <div className="text-[10px] text-[#d4a017]">{comp.name} v{comp.version} · {comp.doc.width}×{comp.doc.height} @{comp.doc.fps}fps · {comp.doc.layers.length} layers</div>
+              {comp.doc.layers.map((l) => (
+                <div key={l.id} className="rounded border border-[#2a2a2a] p-1.5 text-[10px]">
+                  <div className="flex flex-wrap items-center gap-1">
+                    <span className="text-[#d8d8d2]">{l.name}</span>
+                    <span className="text-[#6a6a64]">{l.kind} · {l.blend}</span>
+                    {l.trackBinding && <span className="text-[#6aa9c9]">bound→{l.trackBinding.temporalTrackId.split(":").pop()}</span>}
+                    <button type="button" className="text-[#a8a8a0] hover:underline" onClick={() => mutateLayer(l.id, (x) => { x.visible = !x.visible; }, `toggle ${l.id}`)}>{l.visible ? "hide" : "show"}</button>
+                    <button type="button" className="text-[#a8a8a0] hover:underline" onClick={() => mutateLayer(l.id, (x) => { x.transform.opacity = x.transform.opacity > 0.5 ? 0.3 : 1; }, `opacity ${l.id}`)}>opacity {l.transform.opacity.toFixed(1)}</button>
+                    <button type="button" className="text-[#a8a8a0] hover:underline" onClick={() => mutateLayer(l.id, (x) => { x.locked = !x.locked; }, `lock ${l.id}`)}>{l.locked ? "unlock" : "lock"}</button>
+                  </div>
+                  <div className="text-[9px] text-[#6a6a64]">x {l.transform.x} · y {l.transform.y} · scale {l.transform.scale} · {l.keyframes.length} keyframes</div>
+                </div>
+              ))}
+              <button type="button" className={btnCls} disabled={busy || comp.version < 2} onClick={() => void run(async () => {
+                const d = await jfetch<{ version: number; doc: M14Doc }>("/api/creative/m14/compose", {
+                  method: "PATCH",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({ projectId, compositionId: comp.id, targetVersion: comp.version - 1 }),
+                });
+                setComp({ ...comp, version: d.version, doc: d.doc });
+                flash("ok", `Undo → now at v${d.version}.`);
+              })}>
+                Undo (switch to previous version)
+              </button>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* MOTION */}
+      {section === "motion" && (
+        <div className="space-y-2">
+          <div className={labelCls}>Motion — NIIKI-evaluated presets (deterministic)</div>
+          {!comp && <div className="text-[10px] text-[#6a6a64]">Open a composition first.</div>}
+          {comp && (
+            <div className="flex flex-wrap gap-1">
+              {(["soft-reveal", "cinematic-push-in", "floating-movement", "bounce-entrance", "parallax-drift", "emphasis-pulse"] as const).map((p) => (
+                <button key={p} type="button" className="rounded border border-[#2a2a2a] px-2 py-0.5 text-[10px] text-[#a8a8a0] hover:text-[#d4a017]" disabled={busy} onClick={() => {
+                  const layer = comp.doc.layers.find((l) => l.kind !== "background" && !l.locked);
+                  if (!layer) { flash("err", "No unlocked foreground layer."); return; }
+                  mutateLayer(layer.id, (x) => {
+                    const generated = [
+                      { id: `m14${p}o1`, property: "opacity", frame: 0, value: 0, interpolation: "EASE_OUT" as const },
+                      { id: `m14${p}o2`, property: "opacity", frame: Math.round(comp.doc.fps / 3), value: 1, interpolation: "EASE_OUT" as const },
+                      { id: `m14${p}s1`, property: "scale", frame: 0, value: 0.94, interpolation: "EASE_OUT" as const },
+                      { id: `m14${p}s2`, property: "scale", frame: Math.round(comp.doc.fps / 3), value: 1, interpolation: "EASE_OUT" as const },
+                    ];
+                    x.keyframes = [...x.keyframes, ...generated].slice(0, 400);
+                  }, `${p} on ${layer.id}`);
+                  flash("ok", `${p} applied to ${layer.name} (committed as a new version).`);
+                }}>{p}</button>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* REVIEW */}
+      {section === "review" && (
+        <div className="space-y-2">
+          <div className={labelCls}>Review &amp; Render — validation + durable render job</div>
+          {!comp && <div className="text-[10px] text-[#6a6a64]">Open a composition first.</div>}
+          {comp && (
+            <>
+              <button type="button" className={btnCls} disabled={busy} onClick={() => void run(async () => {
+                const d = await jfetch<{ jobId: string; disclosure: string }>("/api/creative/m14/render", {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({ projectId, compositionId: comp.id }),
+                });
+                setRenderMsg(`${d.disclosure} job=${d.jobId.slice(0, 8)}…`);
+                flash("ok", "Render queued through the durable worker.");
+                const poll = setInterval(() => {
+                  void jfetch<{ job: { status: string; message: string | null; exportId: string | null } }>(`/api/creative/m14/render?compositionId=${comp.id}`).then((r) => {
+                    if (r.job && (r.job.status === "COMPLETED" || r.job.status === "FAILED")) {
+                      clearInterval(poll);
+                      setRenderMsg(`${r.job.status}: ${r.job.message ?? ""}${r.job.exportId ? ` → asset ${r.job.exportId.slice(0, 12)}…` : ""}`);
+                      flash(r.job.status === "COMPLETED" ? "ok" : "err", `Render ${r.job.status}.`);
+                    }
+                  });
+                }, 3000);
+              })}>
+                Render composition (real FFmpeg pipeline)
+              </button>
+              {renderMsg && <div className="text-[10px] text-[#a8a8a0]">{renderMsg}</div>}
+              <div className="text-[9px] text-[#6a6a64]">Preview and export evaluate the SAME canonical composition state; blend modes normal/multiply/screen are pixel-tested on both paths. Resource limits: ≤24 layers, ≤1920px, ≤3600 frames.</div>
+            </>
+          )}
+        </div>
+      )}
     </div>
   );
 }

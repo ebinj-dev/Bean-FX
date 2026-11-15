@@ -136,6 +136,31 @@ def detect_foreground(prev_g, cur_g, warp, min_area_px):
             merged.append(b)
     return merged
 
+def lk_step(prev_gray, gray, box):
+    """Feature-point tracking fallback (§3 approved approach): sparse LK on
+    corners seeded in the box, median flow → new box position. Used when the
+    contrib CSRT tracker is unavailable (base OpenCV) — REAL multi-frame
+    correspondence either way; documented in the track's method field."""
+    x, y, w, h = [int(v) for v in box]
+    roi = prev_gray[max(0, y):y + h, max(0, x):x + w]
+    if roi.size == 0:
+        return None
+    pts = cv2.goodFeaturesToTrack(roi, maxCorners=60, qualityLevel=0.05, minDistance=4)
+    if pts is None or len(pts) < 6:
+        return None
+    pts = pts.reshape(-1, 1, 2).astype(np.float32)
+    pts[:, 0, 0] += max(0, x)
+    pts[:, 0, 1] += max(0, y)
+    nxt, st, _err = cv2.calcOpticalFlowPyrLK(prev_gray, gray, pts, None, winSize=(21, 21), maxLevel=3, criteria=(cv2.TERM_CRITERIA_EPS | cv2.TERM_CRITERIA_COUNT, 30, 0.01))
+    status = st.flatten() == 1
+    if int(status.sum()) < 5:
+        return None
+    good = nxt[status]
+    prev = pts[status]
+    dx = float(np.median(good[:, 0] - prev[:, 0]))
+    dy = float(np.median(good[:, 1] - prev[:, 1]))
+    return [int(round(x + dx)), int(round(y + dy)), int(w), int(h)]
+
 def iou(a, b):
     x1, y1 = max(a[0], b[0]), max(a[1], b[1])
     x2, y2 = min(a[0] + a[2], b[0] + b[2]), min(a[1] + a[3], b[1] + b[3])
@@ -157,7 +182,7 @@ def main():
     frames = spec["frames"]  # [{file, t}] ordered
     min_frac = spec["minBoxAreaFrac"]
     max_tracks = spec["maxTracks"]
-    out_tracks = []
+    out_tracks: list = []
     camera = []
     trackers = []  # {id, csrt, last_box, lost_run, samples: []}
     next_id = 0
@@ -187,11 +212,12 @@ def main():
             for b in sorted(cands, key=lambda b: -(b[2] * b[3])):
                 covered = any(iou(b, tr["last_box"]) > 0.2 for tr in trackers if tr["lost_run"] == 0)
                 if not covered:
+                    cs = None
                     try:
                         cs = cv2.legacy.TrackerCSRT_create()
-                    except AttributeError:
-                        cs = cv2.TrackerCSRT_create()
-                    cs.init(img, tuple(b))
+                        cs.init(img, tuple(b))
+                    except (AttributeError, cv2.error):
+                        cs = None  # base OpenCV — LK feature-point fallback
                     tmpl = None
                     try:
                         tx1, ty1 = max(0, b[0]), max(0, b[1])
@@ -210,8 +236,18 @@ def main():
                 continue
             if tr["born"] == i:
                 continue  # born this frame — init box already recorded conceptually
-            ok, box = tr["csrt"].update(img)
-            bx = [int(round(v)) for v in box]
+            if tr["csrt"] is not None:
+                ok, box = tr["csrt"].update(img)
+                bx = [int(round(v)) for v in box]
+            else:
+                stepped = lk_step(prev_gray, gray, tr["last_box"])
+                if stepped is None:
+                    tr["lost_run"] += 1
+                    if tr["lost_run"] >= 3:
+                        tr["term"] = "tracker-lost"
+                        tr["terminated"] = True
+                    continue
+                bx = stepped
             cx, cy = bx[0] + bx[2] / 2.0, bx[1] + bx[3] / 2.0
             inside = 0 <= cx < W and 0 <= cy < H
             if not ok or not inside or bx[2] < 4 or bx[3] < 4 or bx[2] >= W or bx[3] >= H:
@@ -263,7 +299,7 @@ def main():
     for tr in trackers:
         if len(tr["samples"]) >= 2:
             term = tr.get("term") or ("tracker-lost" if tr.get("terminated") and tr["lost_run"] >= 3 else ("left-frame" if tr.get("terminated") else "window-end"))
-            out_tracks.append({"id": tr["id"], "samples": tr["samples"], "termination": term, "occlusions": tr["occl"]})
+            out_tracks.append({"id": tr["id"], "samples": tr["samples"], "termination": term, "occlusions": tr["occl"], "method": "csrt" if tr["csrt"] is not None else "lk-flow"})
     # WINDOW-CUMULATIVE scale: first vs last frame center patch across scales
     # 0.6..1.6 — the cumulative effect separates a real zoom from per-pair
     # texture noise. Texture guard: near-constant patches are skipped (scale
@@ -299,6 +335,7 @@ export interface RawTrack {
   samples: { t: number; x: number; y: number; w: number; h: number; conf: number; vis: string; term?: string }[];
   termination: string;
   occlusions: number[];
+  method?: string;
 }
 
 export interface RawCameraPair {
@@ -385,7 +422,7 @@ export function buildTracks(assetId: string, windowIndex: number, raw: TrackingR
       category: providerLabel?.category ?? "moving-object",
       categoryProvenance: providerLabel ? "provider" : "detector",
       method: TRACKING_METHOD,
-      model: `${raw.cv_version ?? "opencv"} (Apache-2.0) — CSRT + registered-difference detection`,
+      model: `${raw.cv_version ?? "opencv"} (Apache-2.0) — ${rt.method === "lk-flow" ? "LK feature-point tracking (base-OpenCV fallback)" : "CSRT"} + registered-difference detection`,
       samples,
       entrySourceSec: samples[0].sourceSec,
       exitSourceSec: samples[samples.length - 1].sourceSec,

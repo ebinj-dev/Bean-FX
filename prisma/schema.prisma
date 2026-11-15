@@ -897,3 +897,82 @@ model CreativeScorecard {
   overallNote  String?
   createdAt    DateTime @default(now())
 }
+
+// ── M14 — AI Art Direction & Motion Composition ─────────────────────────────
+/// Approved art direction (§4). payloadJson = the full typed direction (name,
+/// rationale, palette with provenance, typography, motion language, style
+/// profile...). status: PROPOSED (one of a 3-candidate comparison) → APPROVED
+/// (creator-approved; assets/composition may derive from it) → DISCARDED.
+/// fingerprint prevents direction homogenization across proposals.
+model ArtDirection {
+  id           String   @id @default(cuid())
+  userId       String
+  projectId    String
+  name         String
+  status       String   @default("PROPOSED")
+  payloadJson  String
+  fingerprint  String
+  batchId      String?
+  provider     String?
+  model        String?
+  consentVisual Boolean @default(false)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@index([userId, projectId, status])
+  @@index([projectId, batchId])
+}
+
+/// Narration-aware scene plan (§5) — the single structured source shared by
+/// art direction, asset generation, composition and motion. scenesJson holds
+/// the typed scene array (stable ids, RIISHE segment refs, VERBATIM
+/// timestamps, estimated flags, approval status per scene, assets, motion).
+model ScenePlan {
+  id             String   @id @default(cuid())
+  userId         String
+  projectId      String
+  artDirectionId String?
+  language       String   @default("en")
+  version        Int      @default(1)
+  scenesJson     String
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@index([userId, projectId])
+}
+
+/// Versioned composition document (§8) — additive, non-destructive.
+/// docJson = canonical composition (canvas, layers with transforms/masks/
+/// blend, track bindings). Every approved edit writes a new CompositionVersion
+/// row (M1 timeline versioning pattern): undo/redo and reopen by version.
+model Composition {
+  id        String   @id @default(cuid())
+  userId    String
+  projectId String
+  name      String
+  width     Int
+  height    Int
+  fps       Int
+  docJson   String
+  version   Int      @default(1)
+  status    String   @default("DRAFT")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  versions  CompositionVersion[]
+
+  @@unique([projectId, name])
+  @@index([userId, projectId])
+}
+
+model CompositionVersion {
+  id           String      @id @default(cuid())
+  composition  Composition @relation(fields: [compositionId], references: [id], onDelete: Cascade)
+  compositionId String
+  version      Int
+  docJson      String
+  note         String?
+  createdAt    DateTime    @default(now())
+
+  @@unique([compositionId, version])
+  @@index([compositionId, version])
+}
