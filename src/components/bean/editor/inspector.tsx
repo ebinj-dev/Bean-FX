@@ -7,7 +7,7 @@
  * session — nothing here mutates clip state directly. Readouts use the same
  * integer-frame timecode helpers as the rest of the editor.
  */
-import { useMemo } from "react";
+import { useMemo, useState, useRef, useEffect } from "react";
 import { Volume2, Timer, Move3d, Captions as CaptionsIcon } from "lucide-react";
 import type { Sequence } from "@/lib/editor/model";
 import { formatTimecode } from "@/lib/editor/time";
@@ -300,19 +300,23 @@ function EffectsSection({ clip, session }: { clip: import("@/lib/editor/model").
                 </button>
               </div>
               {spec && effect.enabled && (
-                <label className="mt-1 flex items-center gap-1.5">
-                  <span className="w-10 shrink-0 text-[9px] text-[#6a6a64]">{spec.param.key}{spec.param.unit ? ` (${spec.param.unit})` : ""}</span>
-                  <input
-                    type="range"
-                    min={spec.param.min}
-                    max={spec.param.max}
-                    step={spec.param.step}
-                    value={Number(effect.params[spec.param.key] ?? spec.param.default)}
-                    onChange={(e) => withEffect(effect, (x) => ({ ...x, params: { ...x.params, [spec.param.key]: Number(e.target.value) } }))}
-                    className={sliderClass}
-                  />
-                  <span className="w-9 shrink-0 text-right font-mono text-[9px] text-[#a8a8a0]">{Number(effect.params[spec.param.key] ?? spec.param.default).toFixed(2)}</span>
-                </label>
+                <div className="mt-1 space-y-1">
+                  {[spec.param, ...(spec.paramExtras ?? [])].map((paramDef) => (
+                    <label key={paramDef.key} className="flex items-center gap-1.5">
+                      <span className="w-10 shrink-0 text-[9px] text-[#6a6a64]">{paramDef.key}{paramDef.unit ? ` (${paramDef.unit})` : ""}</span>
+                      <input
+                        type="range"
+                        min={paramDef.min}
+                        max={paramDef.max}
+                        step={paramDef.step}
+                        value={Number(effect.params[paramDef.key] ?? paramDef.default)}
+                        onChange={(e) => withEffect(effect, (x) => ({ ...x, params: { ...x.params, [paramDef.key]: Number(e.target.value) } }))}
+                        className={sliderClass}
+                      />
+                      <span className="w-9 shrink-0 text-right font-mono text-[9px] text-[#a8a8a0]">{Number(effect.params[paramDef.key] ?? paramDef.default).toFixed(2)}</span>
+                    </label>
+                  ))}
+                </div>
               )}
             </li>
           );
@@ -373,5 +377,106 @@ function ParityNote({ effects }: { effects: Effect[] }) {
       preview: {css ?? "—"} · export: {ff ?? "—"}
       {gain !== 1 ? ` · gain ×${gain.toFixed(2)}` : ""}
     </p>
+  );
+}
+
+/**
+ * M17 — editable volume automation (keyframes, property "volume").
+ * Every change is a validated reversible command (SetKeyframe / RemoveKeyframe).
+ */
+function VolumeAutomationStrip({ clip, session }: { clip: import("@/lib/editor/model").Clip; session: EditorSession }) {
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const points = clip.keyframes.filter((k) => k.property === "volume").sort((a, b) => a.frame - b.frame);
+  const duration = Math.max(1, clip.timelineDurationFrames);
+  const stripRef = useRef<HTMLDivElement | null>(null);
+  const localFrameFromEvent = (clientX: number) => {
+    const el = stripRef.current;
+    if (!el) return null;
+    const r = el.getBoundingClientRect();
+    const t = Math.min(1, Math.max(0, (clientX - r.left) / r.width));
+    return Math.round(t * duration);
+  };
+  const valueFromEvent = (clientY: number) => {
+    const el = stripRef.current;
+    if (!el) return null;
+    const r = el.getBoundingClientRect();
+    const t = Math.min(1, Math.max(0, (r.bottom - clientY) / r.height));
+    return Math.round(t * 4 * 20) / 20; // 0..4 in 0.05 steps
+  };
+  const dragRef = useRef<{ id: string } | null>(null);
+  useEffect(() => {
+    const move = (e: PointerEvent) => {
+      const d = dragRef.current;
+      if (!d) return;
+      const frame = localFrameFromEvent(e.clientX);
+      const value = valueFromEvent(e.clientY);
+      if (frame === null || value === null) return;
+      const k = clip.keyframes.find((x) => x.id === d.id);
+      if (!k) return;
+      session.apply([{ type: "SetKeyframe", clipId: clip.id, keyframe: { ...k, frame, value } }]);
+    };
+    const up = () => {
+      dragRef.current = null;
+    };
+    window.addEventListener("pointermove", move);
+    window.addEventListener("pointerup", up);
+    return () => {
+      window.removeEventListener("pointermove", move);
+      window.removeEventListener("pointerup", up);
+    };
+  }, [clip, session]);
+  return (
+    <div className="rounded border border-[#1c1c1a] bg-[#0d0d0c] p-1.5">
+      <div className="flex items-center justify-between">
+        <span className={fieldLabel}>VOLUME AUTOMATION ({points.length})</span>
+        {selectedId && (
+          <button
+            type="button"
+            onClick={() => {
+              session.apply([{ type: "RemoveKeyframe", clipId: clip.id, keyframeId: selectedId }]);
+              setSelectedId(null);
+            }}
+            className="text-[9px] text-[#c45c4c] hover:text-[#e06c55]"
+          >
+            ✕ remove point
+          </button>
+        )}
+      </div>
+      <div
+        ref={stripRef}
+        className="relative mt-1 h-10 cursor-crosshair rounded bg-[#111110]"
+        title="Click to add an automation point; drag a point to move/change it"
+        onPointerDown={(e) => {
+          const target = e.target as HTMLElement;
+          if (target.dataset.kf) {
+            setSelectedId(target.dataset.kf);
+            dragRef.current = { id: target.dataset.kf };
+            (e.target as HTMLElement).setPointerCapture?.(e.pointerId);
+            return;
+          }
+          const frame = localFrameFromEvent(e.clientX);
+          const value = valueFromEvent(e.clientY);
+          if (frame === null || value === null) return;
+          const id = session.newId("kf");
+          session.apply([{ type: "SetKeyframe", clipId: clip.id, keyframe: { id, property: "volume", frame, value, interpolation: "LINEAR", bezier: null } }]);
+          setSelectedId(id);
+        }}
+      >
+        {/* base volume guide line */}
+        <div className="pointer-events-none absolute inset-x-0 border-t border-dashed border-[#2a2a2a]" style={{ bottom: `${(clip.volume / 4) * 100}%` }} />
+        {points.map((k) => (
+          <div
+            key={k.id}
+            data-kf={k.id}
+            title={`frame ${k.frame} · gain ${k.value.toFixed(2)} (${k.interpolation})`}
+            className={`absolute h-2.5 w-2.5 -translate-x-1/2 -translate-y-1/2 rotate-45 border ${selectedId === k.id ? "border-[#e06c55] bg-[#e06c55]" : "border-[#d4a017] bg-[#d4a017]"}`}
+            style={{ left: `${(k.frame / duration) * 100}%`, bottom: `${(k.value / 4) * 100}%` }}
+          />
+        ))}
+        {points.length === 0 && (
+          <span className="pointer-events-none absolute inset-x-0 top-1 text-center text-[8px] text-[#5a5a55]">click to add volume automation points</span>
+        )}
+      </div>
+    </div>
   );
 }

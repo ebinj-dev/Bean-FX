@@ -24,6 +24,8 @@ export interface FilterEffectSpec {
   type: EffectType;
   label: string;
   group: "transform" | "audio" | "color" | "stylize";
+  /** Additional parameter editors beyond the primary `param`. */
+  paramExtras?: { key: string; min: number; max: number; step: number; default: number; unit?: string }[];
   /** FFmpeg filter fragment with `%v` replaced by the computed value. */
   ffmpeg: (params: Record<string, number | string | boolean>) => string | null;
   /** CSS filter fragment for the preview/video element, or null (non-visual). */
@@ -145,6 +147,70 @@ export const FILTER_EFFECTS: FilterEffectSpec[] = [
     param: { key: "value", min: -1, max: 1, step: 0.01, default: 0 },
   },
   {
+    type: "whites",
+    label: "Whites",
+    group: "color",
+    // White-point gain above 0.5 pivot — both paths are the same slope on
+    // the top half (documented approximation of a real tone curve).
+    ffmpeg: (p) => (num(p, "value", 0) === 0 ? null : `eq=brightness=${(num(p, "value", 0) * 0.12).toFixed(4)}`),
+    css: (p) => (num(p, "value", 0) === 0 ? null : `brightness(${(1 + num(p, "value", 0) * 0.12).toFixed(4)})`),
+    param: { key: "value", min: -1, max: 1, step: 0.01, default: 0 },
+  },
+  {
+    type: "blacks",
+    label: "Blacks",
+    group: "color",
+    // Black-point offset — same slope on the bottom half.
+    ffmpeg: (p) => (num(p, "value", 0) === 0 ? null : `eq=brightness=${(num(p, "value", 0) * 0.08).toFixed(4)}`),
+    css: (p) => (num(p, "value", 0) === 0 ? null : `brightness(${(1 + num(p, "value", 0) * 0.08).toFixed(4)})`),
+    param: { key: "value", min: -1, max: 1, step: 0.01, default: 0 },
+  },
+  {
+    type: "vignette",
+    label: "Vignette",
+    group: "stylize",
+    // angle: 0 (none) .. 1 (strong). FFmpeg vignette=PI*angle/2; preview is
+    // an SVG feComponentTransfer-based radial mask referenced by url(#…).
+    ffmpeg: (p) => {
+      const a = num(p, "amount", 0);
+      if (a <= 0.001) return null;
+      return `vignette=PI*${(a / 2).toFixed(4)}`;
+    },
+    css: (p) => {
+      const a = num(p, "amount", 0);
+      if (a <= 0.001) return null;
+      return `url(#beanfx-vignette-${Math.round(a * 10) || 1})`;
+    },
+    param: { key: "amount", min: 0, max: 1, step: 0.05, default: 0 },
+  },
+  {
+    type: "crop",
+    label: "Crop",
+    group: "transform",
+    // Insets in percent (0..45 each side). FFmpeg crop=iw*(1-l/100-r/100):
+    // ...; preview uses object-position+scale on the element (approximate
+    // for asymmetric crops — marked ≈).
+    ffmpeg: (p) => {
+      const l = num(p, "left", 0), r = num(p, "right", 0), t = num(p, "top", 0), b = num(p, "bottom", 0);
+      if (l + r + t + b <= 0.001) return null;
+      const w = 100 - l - r;
+      const h = 100 - t - b;
+      if (w <= 5 || h <= 5) return null;
+      return `crop=iw*${(w / 100).toFixed(4)}:ih*${(h / 100).toFixed(4)}:iw*${(l / 100).toFixed(4)}:ih*${(t / 100).toFixed(4)},scale=OW:OH`;
+    },
+    css: (p) => {
+      const l = num(p, "left", 0), r = num(p, "right", 0), t = num(p, "top", 0), b = num(p, "bottom", 0);
+      if (l + r + t + b <= 0.001) return null;
+      return `inset(${t}% ${r}% ${b}% ${l}%)`;
+    },
+    param: { key: "left", min: 0, max: 45, step: 1, default: 0, unit: "%" },
+    paramExtras: [
+      { key: "right", min: 0, max: 45, step: 1, default: 0, unit: "%" },
+      { key: "top", min: 0, max: 45, step: 1, default: 0, unit: "%" },
+      { key: "bottom", min: 0, max: 45, step: 1, default: 0, unit: "%" },
+    ],
+  },
+  {
     type: "blur",
     label: "Blur",
     group: "stylize",
@@ -177,7 +243,7 @@ export const FILTER_EFFECTS: FilterEffectSpec[] = [
 export const AUDIO_EFFECT_TYPES: EffectType[] = ["volume"];
 
 /** Effects whose preview is an approximation — surfaced honestly in the UI. */
-export const APPROXIMATE_PREVIEW: EffectType[] = ["highlights", "shadows", "sharpen"];
+export const APPROXIMATE_PREVIEW: EffectType[] = ["highlights", "shadows", "sharpen", "vignette", "crop", "whites", "blacks"];
 
 export function filterSpec(type: EffectType): FilterEffectSpec | null {
   return FILTER_EFFECTS.find((f) => f.type === type) ?? null;

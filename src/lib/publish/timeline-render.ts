@@ -23,6 +23,7 @@ import { pathInsideMediaRoot } from "@/lib/media-storage";
 import { clipEndFrame, type Clip, type Sequence } from "@/lib/editor/model";
 import { sequenceEndFrame } from "@/lib/editor/preview";
 import { ffmpegEffectChain } from "@/lib/editor/filters";
+import { ffmpegVolumeArgs } from "@/lib/editor/audio";
 import { buildGraphicFilters } from "@/lib/nikki/render";
 import { jobManager } from "@/lib/job-runner";
 import { probeMediaDeep } from "@/lib/media-analysis";
@@ -102,7 +103,68 @@ function visualSegmentFilters(plan: RenderClipPlan, seq: Sequence, isImage: bool
   return filters;
 }
 
-export function buildTimelineGraph(seq: Sequence, startFrame: number, endFrame: number, assetInputs: Map<string, { index: number; isImage: boolean; hasAudio: boolean }>) {
+/** TransitionKind → ffmpeg xfade transition name; null = not exportable. */
+const XFADE_KINDS: Record<string, string | null> = {
+  CUT: null,
+  CROSS_DISSOLVE: "fade",
+  FADE_TO_BLACK: "fadeblack",
+  FADE_FROM_BLACK: "fade",
+  WIPE_LEFT: "wipeleft",
+  WIPE_RIGHT: "wiperight",
+  SLIDE_LEFT: "slideleft",
+  SLIDE_RIGHT: "slideright",
+  PUSH_LEFT: "pushleft",
+  PUSH_RIGHT: "pushright",
+  ZOOM_IN: null,
+  ZOOM_OUT: null,
+};
+
+export interface TransitionPlanReport {
+  applied: string[];
+  skipped: { id: string; reason: string }[];
+}
+
+/**
+ * M17 §6 — transitions in the EXPORT path. Adjacent same-track pairs with a
+ * transition spanning the boundary render through ffmpeg xfade (real frames
+ * from BOTH clips; no synthesized media). Refusals are counted and disclosed.
+ */
+function planTrackTransitions(seq: Sequence, trackId: string, plans: RenderClipPlan[], report: TransitionPlanReport) {
+  // For each adjacent pair in this track, find a covering transition.
+  const pairs: { a: RenderClipPlan; b: RenderClipPlan; transition: (typeof seq.transitions)[number] | null }[] = [];
+  for (let i = 1; i < plans.length; i++) {
+    const a = plans[i - 1];
+    const b = plans[i];
+    const aEnd = a.clip.timelineStartFrame + a.clip.timelineDurationFrames;
+    const adjacent = aEnd === b.clip.timelineStartFrame;
+    let transition: (typeof seq.transitions)[number] | null = null;
+    if (adjacent) {
+      transition =
+        seq.transitions.find(
+          (t) => t.clipAId === a.clip.id && t.clipBId === b.clip.id && t.trackId === trackId && t.endFrame > aEnd - 1 && t.startFrame < b.clip.timelineStartFrame + 1,
+        ) ?? null;
+      if (transition) {
+        const kindName = XFADE_KINDS[transition.kind];
+        const dur = transition.endFrame - transition.startFrame;
+        if (kindName === undefined) {
+          report.skipped.push({ id: transition.id, reason: `unknown kind ${transition.kind}` });
+          transition = null;
+        } else if (kindName === null) {
+          transition = null; // CUT or unsupported kind — straight boundary
+        } else if (dur < 1 || dur > Math.min(a.clip.timelineDurationFrames, b.clip.timelineDurationFrames)) {
+          report.skipped.push({ id: transition.id, reason: `duration ${dur}f exceeds the shorter clip's window` });
+          transition = null;
+        } else {
+          report.applied.push(`${transition.kind} ${dur}f @${transition.startFrame} (${a.clip.id}→${b.clip.id})`);
+        }
+      }
+    }
+    pairs.push({ a, b, transition });
+  }
+  return pairs;
+}
+
+export function buildTimelineGraph(seq: Sequence, startFrame: number, endFrame: number, assetInputs: Map<string, { index: number; isImage: boolean; hasAudio: boolean }>, report?: TransitionPlanReport) {
   const fps = seq.fps.num / seq.fps.den;
   const totalSec = (endFrame - startFrame) / fps;
   const parts: string[] = [];
@@ -112,25 +174,60 @@ export function buildTimelineGraph(seq: Sequence, startFrame: number, endFrame: 
   // Silence bed — stable base audio so amix always has ≥1 input.
   parts.push(`anullsrc=r=48000:cl=stereo,atrim=duration=${q(totalSec)},asetpts=PTS-STARTPTS[silence]`);
 
-  // Video composite: base = first (lowest) visual plan; overlay the rest.
-  let videoLabel: string;
+  // Video composite: per-track chains (xfade for validated transitions,
+  // enable-window overlays otherwise), overlaid in track order — matching
+  // the preview resolver's top-down track rule.
+  let videoLabel = "[base]";
   if (visualPlans.length === 0) {
     parts.push(`color=c=black:s=${seq.width}x${seq.height}:d=${q(totalSec)},setsar=1[base]`);
     videoLabel = "[base]";
   } else {
-    const seg0 = visualPlans[0];
-    const in0 = assetInputs.get(seg0.clip.sourceAssetId)!;
-    parts.push(`[${in0.index}:v]${visualSegmentFilters(seg0, seq, in0.isImage).join(",")}[vseg0]`);
-    videoLabel = "[vseg0]";
-    for (let i = 1; i < visualPlans.length; i++) {
-      const plan = visualPlans[i];
-      const input = assetInputs.get(plan.clip.sourceAssetId)!;
-      parts.push(`[${input.index}:v]${visualSegmentFilters(plan, seq, input.isImage).join(",")}[vseg${i}]`);
-      const offsetSec = plan.winStartFrame / fps;
-      const endSec = plan.winEndFrame / fps;
-      const out = `[vcomp${i}]`;
-      parts.push(`${videoLabel}[vseg${i}]overlay=eof_action=pass:enable='between(t\\,${q(offsetSec)}\\,${q(endSec)})'${out}`);
-      videoLabel = out;
+    const trackIds = [...new Set(visualPlans.map((p) => p.trackIndex))];
+    let segCounter = 0;
+    let chainCounter = 0;
+    let baseChain: string | null = null;
+    for (const trackIndex of trackIds) {
+      const trackPlans = visualPlans.filter((p) => p.trackIndex === trackIndex);
+      const trackId = seq.tracks[trackIndex]?.id ?? "";
+      const pairs = planTrackTransitions(seq, trackId, trackPlans, report ?? { applied: [], skipped: [] });
+      // Chain the first segment.
+      const first = trackPlans[0];
+      const inFirst = assetInputs.get(first.clip.sourceAssetId)!;
+      const firstLabel = `[tseg${segCounter}]`;
+      parts.push(`[${inFirst.index}:v]${visualSegmentFilters(first, seq, inFirst.isImage).join(",")}${firstLabel}`);
+      segCounter += 1;
+      let chain = firstLabel;
+      for (let i = 1; i < trackPlans.length; i++) {
+        const plan = trackPlans[i];
+        const input = assetInputs.get(plan.clip.sourceAssetId)!;
+        const segLabel = `[tseg${segCounter}]`;
+        parts.push(`[${input.index}:v]${visualSegmentFilters(plan, seq, input.isImage).join(",")}${segLabel}`);
+        segCounter += 1;
+        const out = `[tchain${chainCounter}]`;
+        const transition = pairs[i - 1]?.transition ?? null;
+        if (transition) {
+          // xfade consumes REAL frames from both segments (no synthesized media).
+          const offsetSec = (transition.startFrame - first.clip.timelineStartFrame) / fps;
+          const durSec = (transition.endFrame - transition.startFrame) / fps;
+          parts.push(`${chain}${segLabel}xfade=transition=${XFADE_KINDS[transition.kind]}:duration=${q(durSec)}:offset=${q(Math.max(0, offsetSec))}${out}`);
+        } else {
+          const offsetSec = plan.winStartFrame / fps;
+          const endSec = plan.winEndFrame / fps;
+          parts.push(`${chain}${segLabel}overlay=eof_action=pass:enable='between(t\\,${q(offsetSec)}\\,${q(endSec)})'${out}`);
+        }
+        chainCounter += 1;
+        chain = out;
+      }
+      // Overlay this track's chain onto the running composite (track order).
+      if (baseChain === null) {
+        baseChain = chain;
+        videoLabel = chain;
+      } else {
+        const out = `[tcomp${chainCounter}]`;
+        parts.push(`${baseChain}${chain}overlay=eof_action=pass${out}`);
+        baseChain = out;
+        videoLabel = out;
+      }
     }
   }
 
@@ -184,7 +281,10 @@ export function buildTimelineGraph(seq: Sequence, startFrame: number, endFrame: 
       }
       seg.push(`atempo=${q(speed)}`);
     }
-    seg.push(`adelay=${Math.max(0, Math.round(offsetSec * 1000))}:all=1`, `volume=${q(gain)}`);
+    seg.push(`adelay=${Math.max(0, Math.round(offsetSec * 1000))}:all=1`);
+    const volArgs = ffmpegVolumeArgs(plan.clip, seq.fps);
+    if (volArgs) seg.push(`volume=${volArgs.expr}:eval=frame`);
+    else seg.push(`volume=${q(gain)}`);
     if (plan.clip.fadeInFrames > 0) seg.push(`afade=in:st=0:d=${q(plan.clip.fadeInFrames / fps)}`);
     if (plan.clip.fadeOutFrames > 0) seg.push(`afade=out:st=${q(durSec - plan.clip.fadeOutFrames / fps)}:d=${q(plan.clip.fadeOutFrames / fps)}`);
     parts.push(`[${input.index}:a]${seg.join(",")}[a${i}]`);
@@ -252,7 +352,8 @@ export async function runTimelineRenderJob(job: { id: string; userId: string; pa
     nextIndex += 1;
   }
 
-  const graph = buildTimelineGraph(seq, startFrame, endFrame, used);
+  const transitionReport: TransitionPlanReport = { applied: [], skipped: [] };
+  const graph = buildTimelineGraph(seq, startFrame, endFrame, used, transitionReport);
   const outPath = pathInsideMediaRoot("timeline-renders", `u_${job.userId}`, `seq_${projectId}_${Date.now().toString(36)}.mp4`);
   await mkdir(path.dirname(outPath), { recursive: true });
 
@@ -295,6 +396,7 @@ export async function runTimelineRenderJob(job: { id: string; userId: string; pa
             height: seq.height,
             fps: seq.fps,
             segments: { video: graph.videoPlanCount, audio: graph.audioPlanCount, skippedMissing: graph.skippedMissing },
+            transitions: { applied: transitionReport.applied, skipped: transitionReport.skipped },
           }),
         },
       });

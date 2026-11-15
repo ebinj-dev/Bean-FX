@@ -208,4 +208,22 @@ export function compileGroupMove(seq: Sequence, clipIds: string[], deltaFrames: 
   return { commands, summary: `Group move: ${clipIds.length} clip(s) by ${deltaFrames}f` };
 }
 
+/**
+ * DUPLICATE (§3): place an exact copy of the clip immediately after its
+ * own end — refused when the adjacent space is occupied (honest conflict
+ * detection rather than an unintended overlap).
+ */
+export function compileDuplicate(seq: Sequence, clipId: string): EditCompilation | null {
+  const clip = seq.clips.find((c) => c.id === clipId);
+  if (!clip) return null;
+  const track = findTrack(seq, clip);
+  if (!track || track.locked) return null;
+  const start = clipEndFrame(seq, clip);
+  for (const other of clipsOnTrack(seq, clip.trackId, clipId)) {
+    if (other.timelineStartFrame < start + clip.timelineDurationFrames && start < clipEndFrame(seq, other)) return null;
+  }
+  const copy = { ...clip, id: `${clip.id}__dup${seq.clips.length}`, timelineStartFrame: start };
+  return { commands: [{ type: "AddClip", clip: copy }], summary: `Duplicate: copy of ${clip.id} placed at frame ${start}` };
+}
+
 export { slipCommand, slideCommands };

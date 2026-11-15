@@ -40,6 +40,10 @@ export const EffectType = z.enum([
   "highlights",
   "shadows",
   "sharpen",
+  "vignette",
+  "whites",
+  "blacks",
+  "crop",
 ]);
 export type EffectType = z.infer<typeof EffectType>;
 
