@@ -16,7 +16,7 @@
  * media never modified. Missing media is skipped and disclosed via the job
  * stage/params — never faked.
  */
-import { mkdir, stat } from "fs/promises";
+import { mkdir, stat, writeFile } from "fs/promises";
 import path from "path";
 import { db } from "@/lib/db";
 import { pathInsideMediaRoot } from "@/lib/media-storage";
@@ -179,7 +179,7 @@ export function buildTimelineGraph(seq: Sequence, startFrame: number, endFrame: 
   // the preview resolver's top-down track rule.
   let videoLabel = "[base]";
   if (visualPlans.length === 0) {
-    parts.push(`color=c=black:s=${seq.width}x${seq.height}:d=${q(totalSec)},setsar=1[base]`);
+    parts.push(`color=c=black:s=${seq.width}x${seq.height}:r=${fps}:d=${q(totalSec)},setsar=1[base]`);
     videoLabel = "[base]";
   } else {
     const trackIds = [...new Set(visualPlans.map((p) => p.trackIndex))];
@@ -211,8 +211,9 @@ export function buildTimelineGraph(seq: Sequence, startFrame: number, endFrame: 
           const durSec = (transition.endFrame - transition.startFrame) / fps;
           parts.push(`${chain}${segLabel}xfade=transition=${XFADE_KINDS[transition.kind]}:duration=${q(durSec)}:offset=${q(Math.max(0, offsetSec))}${out}`);
         } else {
-          const offsetSec = plan.winStartFrame / fps;
-          const endSec = plan.winEndFrame / fps;
+          // M18: window-relative times — windowed long-form renders start at t=0.
+          const offsetSec = (plan.winStartFrame - startFrame) / fps;
+          const endSec = (plan.winEndFrame - startFrame) / fps;
           parts.push(`${chain}${segLabel}overlay=eof_action=pass:enable='between(t\\,${q(offsetSec)}\\,${q(endSec)})'${out}`);
         }
         chainCounter += 1;
@@ -265,7 +266,7 @@ export function buildTimelineGraph(seq: Sequence, startFrame: number, endFrame: 
   for (let i = 0; i < audioPlans.length; i++) {
     const plan = audioPlans[i];
     const input = assetInputs.get(plan.clip.sourceAssetId)!;
-    const offsetSec = plan.winStartFrame / fps;
+    const offsetSec = (plan.winStartFrame - startFrame) / fps;
     const durSec = (plan.winEndFrame - plan.winStartFrame) / fps;
     const gain = Math.min(4, Math.max(0, plan.clip.volume));
     const seg: string[] = [`atrim=start=${q(srcStartSec(plan, seq))}:duration=${q(durSec * plan.clip.playbackSpeed)},asetpts=PTS-STARTPTS`];
@@ -281,10 +282,13 @@ export function buildTimelineGraph(seq: Sequence, startFrame: number, endFrame: 
       }
       seg.push(`atempo=${q(speed)}`);
     }
-    seg.push(`adelay=${Math.max(0, Math.round(offsetSec * 1000))}:all=1`);
+    // M18 fix: apply the volume expression BEFORE adelay so its eval=frame
+    // timeline is segment-local (clip-local seconds) — matching the preview
+    // evaluator. After adelay the PTS shift would break the automation map.
     const volArgs = ffmpegVolumeArgs(plan.clip, seq.fps);
     if (volArgs) seg.push(`volume=${volArgs.expr}:eval=frame`);
     else seg.push(`volume=${q(gain)}`);
+    seg.push(`adelay=${Math.max(0, Math.round(offsetSec * 1000))}:all=1`);
     if (plan.clip.fadeInFrames > 0) seg.push(`afade=in:st=0:d=${q(plan.clip.fadeInFrames / fps)}`);
     if (plan.clip.fadeOutFrames > 0) seg.push(`afade=out:st=${q(durSec - plan.clip.fadeOutFrames / fps)}:d=${q(plan.clip.fadeOutFrames / fps)}`);
     parts.push(`[${input.index}:a]${seg.join(",")}[a${i}]`);
@@ -353,10 +357,98 @@ export async function runTimelineRenderJob(job: { id: string; userId: string; pa
   }
 
   const transitionReport: TransitionPlanReport = { applied: [], skipped: [] };
-  const graph = buildTimelineGraph(seq, startFrame, endFrame, used, transitionReport);
   const outPath = pathInsideMediaRoot("timeline-renders", `u_${job.userId}`, `seq_${projectId}_${Date.now().toString(36)}.mp4`);
   await mkdir(path.dirname(outPath), { recursive: true });
 
+  // M18 §3: LONG-FORM WINDOWED RENDERING. One giant filter_complex holds a
+  // frame buffer per segment — the 600s validation OOM-killed ffmpeg at
+  // ~2.5GB RSS on a 4GB host (dmesg evidence). Windows render sequentially
+  // (bounded graph each), then a stream-copy concat stitches them losslessly
+  // (identical encoder settings, frame-aligned boundaries).
+  const LONG_FORM_THRESHOLD_SEC = 240;
+  const WINDOW_SEC = 60;
+  const totalWindows = Math.ceil(totalSec / WINDOW_SEC);
+  if (totalSec > LONG_FORM_THRESHOLD_SEC) {
+    const segments: string[] = [];
+    let windowStartFrame = startFrame;
+    for (let w = 0; w < totalWindows; w++) {
+      let windowEndFrame = Math.min(endFrame, windowStartFrame + Math.round(WINDOW_SEC * fps));
+      if (windowEndFrame <= windowStartFrame) break;
+      // Keep boundaries out of any transition's range (an xfade split across
+      // windows would render two half-transitions).
+      for (const t of seq.transitions) {
+        if (t.startFrame < windowEndFrame && t.endFrame > windowStartFrame && t.endFrame > windowEndFrame) {
+          windowEndFrame = Math.min(endFrame, t.endFrame + Math.round(fps));
+        }
+      }
+      const winSec = (windowEndFrame - windowStartFrame) / fps;
+      if (winSec <= 0) break;
+      const wReport = w === 0 ? transitionReport : { applied: [], skipped: [] };
+      const wGraph = buildTimelineGraph(seq, windowStartFrame, windowEndFrame, used, wReport);
+      const segPath = pathInsideMediaRoot("timeline-renders", `u_${job.userId}`, `seg_${projectId}_${w}_${Date.now().toString(36)}.mp4`);
+      const winArgs = [
+        "-y", "-loglevel", "error",
+        ...inputArgs,
+        "-filter_complex", wGraph.filterComplex,
+        "-map", wGraph.videoLabel, "-map", "[mixout]",
+        "-c:v", "libx264", "-preset", "veryfast", "-crf", "20", "-pix_fmt", "yuv420p",
+        "-c:a", "aac", "-b:a", "192k",
+        "-t", q(winSec),
+        segPath,
+      ];
+      await jobManager.setProgress(job.id, Math.min(90, 5 + Math.round(((w + 1) / totalWindows) * 80)), `Rendering window ${w + 1}/${totalWindows} (long-form)`);
+      await jobManager.runFfmpeg(job.id, winArgs, {
+        totalDurationSec: winSec,
+        stageLabel: `Rendering timeline window ${w + 1}/${totalWindows} (FFmpeg)`,
+        onDone: async () => undefined,
+      });
+      segments.push(segPath);
+      windowStartFrame = windowEndFrame;
+    }
+    // Stream-copy concat — no re-encode, no A/V realignment.
+    const listPath = pathInsideMediaRoot("timeline-renders", `u_${job.userId}`, `list_${projectId}_${Date.now().toString(36)}.txt`);
+    await writeFile(listPath, segments.map((p) => `file '${p.replace(/'/g, "'\\''")}'`).join("\n") + "\n");
+    await jobManager.setProgress(job.id, 92, "Concatenating rendered windows");
+    await jobManager.runFfmpeg(job.id, [
+      "-y", "-loglevel", "error", "-f", "concat", "-safe", "0", "-i", listPath,
+      "-c", "copy", "-movflags", "+faststart", outPath,
+    ], {
+      totalDurationSec: totalSec,
+      stageLabel: "Concatenating long-form windows (FFmpeg)",
+      onDone: async () => undefined,
+    });
+    // Register the assembled output (validation happens below via the shared path).
+    const probe = await probeMediaDeep(outPath);
+    if (!probe.hasVideo) throw new Error("Rendered file has no video stream — rejected.");
+    const st = await stat(outPath);
+    await db.exportFile.create({
+      data: {
+        userId: job.userId,
+        kind: "TIMELINE_RENDER",
+        format: "mp4",
+        filename: path.basename(outPath),
+        storagePath: outPath,
+        sizeBytes: st.size,
+        durationSec: probe.durationSec ?? totalSec,
+        mediaId: null,
+        paramsJson: JSON.stringify({
+          projectId,
+          startFrame,
+          endFrame,
+          width: seq.width,
+          height: seq.height,
+          fps: `${seq.fps.num}/${seq.fps.den}`,
+          windowed: true,
+          windows: segments.length,
+          transitions: { applied: transitionReport.applied, skipped: transitionReport.skipped },
+        }),
+      },
+    });
+    await jobManager.setProgress(job.id, 100, "Render complete (long-form windowed)");
+    return;
+  }
+
+  const graph = buildTimelineGraph(seq, startFrame, endFrame, used, transitionReport);
   const args = [
     "-y", "-loglevel", "error",
     ...inputArgs,

@@ -81,7 +81,8 @@ export const FILTER_EFFECTS: FilterEffectSpec[] = [
     // stops: gain = 2^stops. CSS has no gamma filter function we can trust
     // for parity, so exposure maps to the SAME multiplier as brightness in
     // CSS (multiplicative) and to eq gamma in FFmpeg — documented parity pair.
-    ffmpeg: (p) => `eq=gamma=${Math.pow(2, -num(p, "stops", 0)).toFixed(4)}`,
+    // M18 parity fix: +1 stop must brighten — gamma 2^stops matches the preview's brightness(2^stops).
+    ffmpeg: (p) => `eq=gamma=${Math.pow(2, num(p, "stops", 0)).toFixed(4)}`,
     css: (p) => `brightness(${Math.pow(2, num(p, "stops", 0)).toFixed(4)})`,
     param: { key: "stops", min: -3, max: 3, step: 0.05, default: 0, unit: "stops" },
   },
@@ -116,7 +117,9 @@ export const FILTER_EFFECTS: FilterEffectSpec[] = [
     ffmpeg: (p) => {
       const t = num(p, "value", 0);
       if (Math.abs(t) < 0.001) return null;
-      return `colorbalance=gs=${(t * 0.5).toFixed(4)}:ms=${(-t * 0.5).toFixed(4)}`;
+      // M18 parity fix: colorbalance has NO "ms" option (invalid filter arg
+      // failed the whole graph) — magenta compensation = red+blue pulls.
+      return `colorbalance=gs=${(t * 0.5).toFixed(4)}:rs=${(-t * 0.25).toFixed(4)}:bs=${(-t * 0.25).toFixed(4)}`;
     },
     css: (p) => {
       const t = num(p, "value", 0);
@@ -196,7 +199,9 @@ export const FILTER_EFFECTS: FilterEffectSpec[] = [
       const w = 100 - l - r;
       const h = 100 - t - b;
       if (w <= 5 || h <= 5) return null;
-      return `crop=iw*${(w / 100).toFixed(4)}:ih*${(h / 100).toFixed(4)}:iw*${(l / 100).toFixed(4)}:ih*${(t / 100).toFixed(4)},scale=OW:OH`;
+      // M18 fix: OW/OH are NOT in scope inside a filter_complex graph —
+      // back-scale with ratios of iw/ih (verified by the parity pixel test).
+      return `crop=iw*${(w / 100).toFixed(4)}:ih*${(h / 100).toFixed(4)}:iw*${(l / 100).toFixed(4)}:ih*${(t / 100).toFixed(4)},scale=iw*${(100 / w).toFixed(5)}:ih*${(100 / h).toFixed(5)}`;
     },
     css: (p) => {
       const l = num(p, "left", 0), r = num(p, "right", 0), t = num(p, "top", 0), b = num(p, "bottom", 0);

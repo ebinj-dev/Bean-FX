@@ -84,6 +84,12 @@ export function ClipInspector({
         aria-label="Clip volume"
       />
 
+      {/* M17/M18 Phase D: volume AUTOMATION strip — click to add a keyframe
+          at that point (value = the current volume slider), drag a diamond to
+          move/change it, select + remove to delete. Same keyframes the mixer
+          schedules and the export renders (lib/editor/audio.ts). */}
+      <VolumeAutomationStrip clip={clip} session={session} />
+
       {/* Speed */}
       <div className="flex items-center justify-between">
         <span className="flex items-center gap-1.5 text-xs text-[#d8d8d2]">
@@ -449,6 +455,7 @@ function VolumeAutomationStrip({ clip, session }: { clip: import("@/lib/editor/m
         onPointerDown={(e) => {
           const target = e.target as HTMLElement;
           if (target.dataset.kf) {
+            e.stopPropagation(); // M18 fix: dragging a point must not ALSO create one (bubble hit the strip handler)
             setSelectedId(target.dataset.kf);
             dragRef.current = { id: target.dataset.kf };
             (e.target as HTMLElement).setPointerCapture?.(e.pointerId);
@@ -457,7 +464,8 @@ function VolumeAutomationStrip({ clip, session }: { clip: import("@/lib/editor/m
           const frame = localFrameFromEvent(e.clientX);
           const value = valueFromEvent(e.clientY);
           if (frame === null || value === null) return;
-          const id = session.newId("kf");
+          // M18 fix: E2E observed duplicate keyframe ids from the shared counter — generate a locally unique id.
+          const id = `kf-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
           session.apply([{ type: "SetKeyframe", clipId: clip.id, keyframe: { id, property: "volume", frame, value, interpolation: "LINEAR", bezier: null } }]);
           setSelectedId(id);
         }}

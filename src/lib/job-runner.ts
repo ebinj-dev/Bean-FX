@@ -112,7 +112,11 @@ export class JobManager {
     child.on("close", async (code, signal) => {
       const entry = this.active.get(jobId);
       const timedOut = entry?.timedOut === true;
-      const wasCancelled = !timedOut && (entry?.cancelled || signal === "SIGTERM" || signal === "SIGKILL");
+      // M18 §6 fix: a SIGKILL the user did not request is almost always the
+      // OOM killer (observed on the 600s render: ffmpeg at 2.5GB RSS on a
+      // 4GB sandbox). Reporting it as a user cancellation hid the real cause.
+      const wasCancelled = !timedOut && (entry?.cancelled || signal === "SIGTERM");
+      const wasKilled = !timedOut && !entry?.cancelled && signal === "SIGKILL";
       this.active.delete(jobId);
       if (timedOut) {
         await this.fail(jobId, "Processing exceeded its time limit and was stopped.");
@@ -123,6 +127,11 @@ export class JobManager {
         await db.job
           .update({ where: { id: jobId }, data: { status: "CANCELLED", stage: "Cancelled", message: "Processing was cancelled. Original media is intact." } })
           .catch(() => undefined);
+        await opts.onSettled?.().catch(() => undefined);
+        return;
+      }
+      if (wasKilled) {
+        await this.fail(jobId, `The encoder process was killed by the system (signal SIGKILL) — most likely out of memory while rendering this timeline. Try a proxy workflow or shorter segments. ${stderrBuf.trim().slice(-200)}`);
         await opts.onSettled?.().catch(() => undefined);
         return;
       }
