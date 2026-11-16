@@ -147,6 +147,9 @@ export function EditorTimeline({
 }) {
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const [scrollFrames, setScrollFrames] = useState(0);
+  // M17 Phase C: virtualization — only clip blocks intersecting the visible
+  // frame window are rendered (10k-clip projects must stay responsive).
+  const [viewportWidth, setViewportWidth] = useState(1400);
   const [drag, setDrag] = useState<DragState | null>(null);
   const [menu, setMenu] = useState<{ x: number; y: number; clipId: string | null } | null>(null);
   const [multiSelect, setMultiSelect] = useState<Set<string>>(new Set());
@@ -157,7 +160,23 @@ export function EditorTimeline({
   const end = Math.max(sequenceEndFrame(sequence) + Math.round(30 * fps.num / fps.den), 60 * Math.round(fps.num / fps.den));
   const contentWidth = HEADER_WIDTH + Math.ceil(end * ppf) + 240;
   const { majorFrames } = rulerScale(Math.max(600, end));
-  void scrollFrames;
+
+  // Visible frame window (±300 px margin) for clip-block virtualization.
+  const visibleWindow = useMemo(() => {
+    const margin = Math.ceil(300 / Math.max(0.5, ppf));
+    return [Math.max(0, scrollFrames - margin), scrollFrames + Math.ceil((viewportWidth + 300) / Math.max(0.5, ppf))] as const;
+  }, [scrollFrames, viewportWidth, ppf]);
+  const inVisibleWindow = useCallback(
+    (clip: Clip) => {
+      const endF = clipEndFrame(sequence, clip);
+      if (endF <= visibleWindow[0] || clip.timelineStartFrame >= visibleWindow[1]) {
+        // A dragged clip must stay rendered even when the pointer moves it out.
+        return drag?.clipId === clip.id;
+      }
+      return true;
+    },
+    [sequence, visibleWindow, drag?.clipId],
+  );
 
   // Snapping targets: every clip edge on every track + the playhead.
   const snapTargets = useMemo(() => {
@@ -196,6 +215,7 @@ export function EditorTimeline({
     const el = scrollRef.current;
     if (!el) return;
     setScrollFrames(clampScroll(Math.round(el.scrollLeft / ppf)));
+    if (el.clientWidth && Math.abs(el.clientWidth - viewportWidth) > 16) setViewportWidth(el.clientWidth);
   }, [ppf, clampScroll]);
 
   /** Ruler pointer → playhead (scrub while dragging). */
@@ -586,6 +606,7 @@ export function EditorTimeline({
           <div
             className="sticky top-0 z-20 cursor-col-resize select-none border-b border-[#2a2a2a] bg-[#111110]"
             style={{ height: RULER_HEIGHT }}
+            data-ruler="scrub"
             onPointerDown={(e) => {
               if (activeTool === "zoom") {
                 zoomAt(e.clientX);
@@ -659,7 +680,7 @@ export function EditorTimeline({
                     }}
                   >
                     {sequence.clips
-                      .filter((c) => c.trackId === track.id)
+                      .filter((c) => c.trackId === track.id && inVisibleWindow(c))
                       .map((clip) => {
                         const dragging = drag?.clipId === clip.id;
                         const groupSelected = multiSelect.has(clip.id);

@@ -20,6 +20,7 @@
 import type { Sequence, Clip } from "@/lib/editor/model";
 import { clipEndFrame } from "@/lib/editor/model";
 import { sourceSecondsAt, fadeMultiplierAt } from "@/lib/editor/preview";
+import { volumeKeyframes } from "@/lib/editor/audio";
 
 interface ClipWindow {
   clip: Clip;
@@ -188,6 +189,20 @@ export class AudioPreviewMixer {
       src.connect(gain);
       gain.connect(pan);
       pan.connect(trackGain);
+      // M17 Phase D: volume AUTOMATION — keyframe points scheduled on the
+      // audio clock (clip-relative frames → ctx time), preview of the
+      // export's volume expression (same evaluation module).
+      const points = volumeKeyframes(w.clip);
+      if (points.length > 0) {
+        const speed = Math.min(4, Math.max(0.25, w.clip.playbackSpeed));
+        const clipStartCtx = this.anchorCtxTime + Math.max(0, this.timelineSec(w.clip.timelineStartFrame, seq) - this.anchorTimelineSec);
+        for (const k of points) {
+          // k.frame is clip-RELATIVE — time = clip start + frames / fps / speed.
+          const when = clipStartCtx + k.frame / fps / speed;
+          if (when < this.anchorCtxTime - 0.001) continue; // before the playhead — not schedulable
+          gain.gain.setValueAtTime(Math.min(4, Math.max(0, k.value * w.clip.volume)), Math.max(this.anchorCtxTime, when));
+        }
+      }
       // Fades: linear ramps over the fade ranges (preview of the export's afade).
       const durSec = w.clip.timelineDurationFrames / fps;
       const localStartSec = (w.startFrame - w.clip.timelineStartFrame) / fps;

@@ -2,7 +2,7 @@
 
 import { ArrowRight, AudioLines, ScanLine, ShieldCheck, Scissors, Captions, Droplets, AudioWaveform, Film } from "lucide-react";
 import { BeanLogo } from "@/components/bean/logo";
-import { SITE_NAV_ITEMS } from "@/components/bean/nav-items";
+import { SITE_LEGAL_ITEMS, SITE_NAV_ITEMS } from "@/components/bean/nav-items";
 
 const CAPABILITIES = [
   { icon: AudioLines, label: "MP3 · WAV · M4A · AAC · FLAC" },
@@ -197,6 +197,16 @@ export function LandingPage({ onOpenStudio, onLogin }: { onOpenStudio: () => voi
                 className="text-[10.5px] font-bold uppercase tracking-[0.14em] text-[#8f8f8a] transition-colors hover:text-white"
               >
                 {item.label}
+              </a>
+            ))}
+            {/* M19: legal & marketing pages — real routes, not SPA hashes */}
+            {SITE_LEGAL_ITEMS.filter((_, i) => i % 3 === 0 || i > 5).map((item) => (
+              <a
+                key={item.href}
+                href={item.href}
+                className="text-[10.5px] font-bold uppercase tracking-[0.14em] text-[#6f6f68] transition-colors hover:text-white"
+              >
+                {item.label.toUpperCase()}
               </a>
             ))}
           </nav>

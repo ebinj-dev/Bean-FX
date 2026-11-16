@@ -30,6 +30,8 @@ import type { Rational } from "@/lib/editor/time";
 import { PlaybackController, publishFrame, subscribeFrame } from "@/lib/editor/playback";
 import { AudioPreviewMixer } from "@/lib/editor/audio-mixer";
 import { cssEffectFilter } from "@/lib/editor/filters";
+import { volumeAutomationAt } from "@/lib/editor/audio";
+import { unsupportedCodecMessage } from "@/lib/editor/codec-support";
 import { CompositionCanvas } from "@/components/bean/editor/composition-canvas";
 import type { EditToolId } from "@/lib/editor/tools";
 import type { EditorSession } from "@/hooks/use-editor-session";
@@ -137,6 +139,7 @@ export function ProgramMonitor({
       const seq = seqRef.current;
       const ctx = nikkiCtxRef.current;
       if (!seq || !ctx) return;
+      paintTransitionLayer(ctx, seq, frame, [videoARef.current, videoBRef.current]);
       const graphics = activeGraphicsAt(seq, frame);
       if (graphics.length === 0) {
         if (isPlaying || frame !== playheadRef.current) ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
@@ -151,10 +154,46 @@ export function ProgramMonitor({
     const seq = sequence;
     const ctx = nikkiCtxRef.current;
     if (!seq || !ctx) return;
+    paintTransitionLayer(ctx, seq, playhead, [videoARef.current, videoBRef.current]);
     const graphics = activeGraphicsAt(seq, playhead);
-    if (graphics.length === 0) ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
-    else drawGraphicsLayer(ctx, seq, playhead, graphics);
+    if (graphics.length === 0) {
+      if (!paintTransitionLayer(ctx, seq, playhead, [videoARef.current, videoBRef.current])) ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
+    } else drawGraphicsLayer(ctx, seq, playhead, graphics);
   }, [playhead, sequence, playing]);
+
+  /**
+   * M17 §6 — transition PREVIEW: inside a transition window between adjacent
+   * same-track clips, draw the INCOMING clip's frame (available in the idle
+   * preloaded video element) with an alpha ramp — real frames, same window
+   * semantics as the export xfade. Returns true when a layer was painted.
+   */
+  function paintTransitionLayer(ctx: CanvasRenderingContext2D, seq: Sequence, frame: number, slots: (HTMLVideoElement | null)[]): boolean {
+    let painted = false;
+    for (const t of seq.transitions) {
+      if (frame < t.startFrame || frame >= t.endFrame) continue;
+      const a = seq.clips.find((c) => c.id === t.clipAId);
+      const b = seq.clips.find((c) => c.id === t.clipBId);
+      if (!a || !b || a.trackId !== b.trackId || b.timelineStartFrame !== a.timelineStartFrame + a.timelineDurationFrames) continue;
+      const track = seq.tracks.find((tr) => tr.id === b.trackId);
+      if (!track || (track.kind !== "VIDEO" && track.kind !== "OVERLAY") || !track.visible) continue;
+      // The incoming clip must be the PRELOADED idle element (adjacent-next).
+      const incomingAssetId = b.sourceAssetId;
+      const incoming = slots.find((el) => el && el.dataset.asset === incomingAssetId && !el.className.includes("hidden"));
+      const active = slots.find((el) => el && el.className.includes("max-h-full"));
+      if (!incoming || incoming === active || incoming.readyState < 2) continue;
+      const alpha = (frame - t.startFrame + 1) / Math.max(1, t.endFrame - t.startFrame);
+      try {
+        ctx.save();
+        ctx.globalAlpha = Math.min(1, Math.max(0, alpha));
+        ctx.drawImage(incoming, 0, 0, ctx.canvas.width, ctx.canvas.height);
+        ctx.restore();
+        painted = true;
+      } catch {
+        // decode not ready — the straight cut remains visible (honest degradation)
+      }
+    }
+    return painted;
+  }
 
   // Keep refs mirrored for controller callbacks.
   useEffect(() => {
@@ -162,10 +201,28 @@ export function ProgramMonitor({
     seqRef.current = sequence;
   }, [playhead, sequence]);
 
+
   // ---- audio mixer (master when available) ---------------------------------
   const mixer = useMemo(() => new AudioPreviewMixer(), []);
   useEffect(() => () => mixer.dispose(), [mixer]);
   const mixerReady = mixer.available;
+  // M17 benchmark telemetry: window-scoped counters (never project state).
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const w = window as unknown as { __beanfxPlayback?: Record<string, unknown> };
+    w.__beanfxPlayback = {
+      controller,
+      clock: () => {
+        const c = controller.clock;
+        return { frame: c.frame, playing: c.playing, droppedFrames: c.droppedFrames, elapsedSeconds: c.elapsedSeconds };
+      },
+      mixerStats: () => ({ scheduled: mixer.lastStats.scheduled, decodeFailures: mixer.lastStats.decodeFailures, webAudio: mixerReady }),
+      memoryMB: () => {
+        const m = (performance as unknown as { memory?: { usedJSHeapSize: number } }).memory;
+        return m ? Math.round(m.usedJSHeapSize / 1048576) : null;
+      },
+    };
+  }, [controller, mixer, mixerReady]);
 
   // Transport events → mixer schedule/refill.
   const frameRef = useRef(playhead);
@@ -215,8 +272,24 @@ export function ProgramMonitor({
   }, [videoAssetId]);
   const isImageAsset = videoAssetId !== null && imageAssetIds.has(videoAssetId);
 
+  // M17: specific codec-compatibility messaging for decode failures.
+  const [activeMime, setActiveMime] = useState<string | null>(null);
+  useEffect(() => {
+    if (!videoAssetId) {
+      setActiveMime(null);
+      return;
+    }
+    void api
+      .mediaDetail(videoAssetId)
+      .then((r) => setActiveMime((r.media as { mimeType?: string }).mimeType ?? null))
+      .catch(() => undefined);
+  }, [videoAssetId]);
+  const decodeErrorMessage = useMemo(() => unsupportedCodecMessage(activeMime), [activeMime]);
   // Preview filter chain from the SAME module the export path uses.
   const previewFilter = useMemo(() => (activeVideo ? cssEffectFilter(activeVideo.clip.effects) : null), [activeVideo]);
+  // M17 §7: before/after comparison — hold the COMPARE button to bypass the
+  // preview filter (the export chain is unchanged; this is preview-only).
+  const [comparing, setComparing] = useState(false);
   // Visibility + filter for the ACTIVE pool element (imperative, but driven
   // by real state changes — asset swaps and effect edits — not per-frame).
   useEffect(() => {
@@ -225,9 +298,9 @@ export function ProgramMonitor({
       if (!el) continue;
       const isActive = el.dataset.asset === activeAssetId && activeAssetId !== null && !isImageAsset;
       el.className = isActive ? "max-h-full max-w-full" : "hidden";
-      el.style.filter = isActive ? previewFilter ?? "" : "";
+      el.style.filter = isActive && !comparing ? previewFilter ?? "" : "";
     }
-  }, [activeAssetId, isImageAsset, previewFilter]);
+  }, [activeAssetId, isImageAsset, previewFilter, comparing]);
 
   // ---- double-buffered video element driver --------------------------------
   // Which pool slot is active. Effect deps intentionally coarse: the driver
@@ -407,6 +480,15 @@ export function ProgramMonitor({
           <filter id="beanfx-tint-magenta">
             <feColorMatrix type="linear" values="1.25,0,0,0,0  0,0.75,0,0,0  0,0,1.25,0,0  0,0,0,1,0" />
           </filter>
+          {[1, 3, 5, 7, 9].map((n) => (
+            <filter key={n} id={`beanfx-vignette-${n}`}>
+              <feComponentTransfer>
+                <feFuncR type="gamma" amplitude={`${1 - n * 0.06}`} exponent="1.6" offset="0" />
+                <feFuncG type="gamma" amplitude={`${1 - n * 0.06}`} exponent="1.6" offset="0" />
+                <feFuncB type="gamma" amplitude={`${1 - n * 0.06}`} exponent="1.6" offset="0" />
+              </feComponentTransfer>
+            </filter>
+          ))}
         </defs>
       </svg>
       <div className="flex items-center justify-between border-b border-[#2a2a2a] px-3 py-1.5">
@@ -414,8 +496,8 @@ export function ProgramMonitor({
         <MonitorTimecode fpsRational={fpsRational} fallback={playhead} />
       </div>
       <div className="relative flex min-h-[220px] flex-1 items-center justify-center overflow-hidden bg-black">
-        <video ref={videoARef} playsInline preload="auto" className="hidden" onEnded={() => onPlayingChange(false)} onError={() => onDecodeError?.("Video decode error — the source may be unsupported or corrupted.")} />
-        <video ref={videoBRef} playsInline preload="auto" className="hidden" onEnded={() => onPlayingChange(false)} onError={() => onDecodeError?.("Video decode error — the source may be unsupported or corrupted.")} />
+        <video ref={videoARef} playsInline preload="auto" className="hidden" onEnded={() => onPlayingChange(false)} onError={() => onDecodeError?.(decodeErrorMessage ?? "Video decode error — the source may be unsupported or corrupted.")} />
+        <video ref={videoBRef} playsInline preload="auto" className="hidden" onEnded={() => onPlayingChange(false)} onError={() => onDecodeError?.(decodeErrorMessage ?? "Video decode error — the source may be unsupported or corrupted.")} />
         {/* IMAGE assets are stills on VIDEO tracks — rendered as an <img>,
             never fed to the <video> decoder. Same preview filter chain. */}
         {isImageAsset && videoAssetId && (
@@ -461,6 +543,18 @@ export function ProgramMonitor({
             {activeVideo.clip.label || activeVideo.clip.id} · {activeVideo.track.name}
             {mixerReady && playing ? " · web-audio mix" : !mixerReady ? " · element mix (Web Audio unavailable)" : ""}
           </div>
+        )}
+        {previewFilter && (
+          <button
+            type="button"
+            title="Hold to compare before/after (bypasses the preview filter while held)"
+            className="absolute right-3 bottom-2 rounded border border-[#d4a017]/60 bg-black/70 px-2 py-0.5 text-[10px] text-[#d4a017] hover:bg-[#d4a017] hover:text-black"
+            onPointerDown={() => setComparing(true)}
+            onPointerUp={() => setComparing(false)}
+            onPointerLeave={() => setComparing(false)}
+          >
+            {comparing ? "BEFORE" : "COMPARE"}
+          </button>
         )}
         {playing && <div className="pointer-events-none absolute right-3 top-2 rounded bg-[#d4a017]/20 px-2 py-0.5 text-[10px] text-[#d4a017]">PLAYING</div>}
       </div>

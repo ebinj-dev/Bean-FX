@@ -1,14 +1,18 @@
-User-agent: Googlebot
-Allow: /
-
-User-agent: Bingbot
-Allow: /
-
-User-agent: Twitterbot
-Allow: /
-
-User-agent: facebookexternalhit
-Allow: /
-
+# BEAN FX robots — index the public marketing/legal pages only.
 User-agent: *
 Allow: /
+Allow: /features
+Allow: /pricing
+Allow: /about
+Allow: /contact
+Allow: /faq
+Allow: /help
+Allow: /privacy
+Allow: /terms
+Allow: /cookies
+Disallow: /api/
+Disallow: /settings
+Disallow: /verify-email
+Disallow: /reset-password
+Disallow: /forgot-password
+# Sitemap is served dynamically at /sitemap.xml

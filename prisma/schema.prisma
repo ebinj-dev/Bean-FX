@@ -8,13 +8,21 @@ datasource db {
 }
 
 model User {
-  id           String       @id @default(cuid())
-  email        String       @unique
-  name         String?
-  passwordHash String
-  createdAt    DateTime     @default(now())
-  updatedAt    DateTime     @updatedAt
+  id            String    @id @default(cuid())
+  email         String    @unique
+  name          String?
+  passwordHash  String
+  /// M19: "user" | "admin" — server-side role checks only, never a client claim.
+  role          String    @default("user")
+  /// M19: set true only after the user verifies through the email-verification flow.
+  emailVerified Boolean   @default(false)
+  /// M19 soft-delete marker: deleted accounts are locked out; cleanup is deferred.
+  deletedAt     DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
   sessions     Session[]
+  emailVerificationTokens EmailVerificationToken[]
+  passwordResetTokens     PasswordResetToken[]
   projects     Project[]
   mediaAssets  MediaAsset[]
   exportFiles  ExportFile[]
@@ -975,4 +983,39 @@ model CompositionVersion {
 
   @@unique([compositionId, version])
   @@index([compositionId, version])
+}
+
+/// M19: single-use email-verification tokens (SHA-256 hashed at rest).
+model EmailVerificationToken {
+  id        String   @id @default(cuid())
+  userId    String
+  tokenHash String   @unique
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  @@index([userId])
+}
+
+/// M19: single-use password-reset tokens (SHA-256 hashed at rest, consumed on use).
+model PasswordResetToken {
+  id        String    @id @default(cuid())
+  userId    String
+  tokenHash String    @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  @@index([userId])
+}
+
+/// M19: privileged-action audit trail (deletions, admin actions, security events).
+model AuditEvent {
+  id        String   @id @default(cuid())
+  userId    String?
+  action    String
+  detail    String?
+  ip        String?
+  createdAt DateTime @default(now())
+  @@index([userId])
+  @@index([action])
 }
