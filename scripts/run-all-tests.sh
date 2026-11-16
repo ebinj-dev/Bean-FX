@@ -49,6 +49,9 @@ SUITES=(
   scripts/p3_union.test.ts
   scripts/test-words-srt.test.ts
   scripts/v5-inference-reliability.test.ts
+  # M19 — live-server security suite; runs against the shared dev server (BASE).
+  # Must stay LAST: its brute-force test exhausts the per-account login bucket.
+  scripts/test-m19-security.test.ts
 )
 
 ONLY="${2:-}"

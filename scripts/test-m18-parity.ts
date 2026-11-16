@@ -137,7 +137,7 @@ const CASES: { type: string; params: Record<string, number>; direction: "brighte
   { type: "whites", params: { value: 0.8 }, direction: "brighter" },
   { type: "blacks", params: { value: -0.8 }, direction: "darker" },
   { type: "vignette", params: { amount: 1 }, direction: "darker" },
-  { type: "sharpen", params: { value: 1 }, direction: "any" },
+  { type: "sharpen", params: { amount: 1 }, direction: "any" },
   { type: "grayscale", params: {}, direction: "any" },
 ];
 
@@ -172,11 +172,17 @@ for (const c of CASES) {
   results.push({ type: c.type, rendered: baseOk && fxOk, base, with: withFx, delta: Math.round(delta * 10) / 10, pass, evidence: "pixel mean-luma comparison (10 frames, 64x36 gray)" });
 }
 
-// Crop: the frame must get SMALLER content (center crop → mean luma of the crop
-// differs from base at the edges) — verify via crop filter presence + render success.
+// Crop: after the M19 out-fit fix the segment arrives at exact sequence
+// dimensions — a strong crop visibly changes content geometry (luma shifts
+// because the frame no longer shows the original edges).
 {
-  const ok = renderGraph([fx("crop", { left: 15, right: 15, top: 15, bottom: 15 })], "/tmp/m18-parity-crop.mp4");
-  results.push({ type: "crop", rendered: ok, base: null, with: null, delta: 0, pass: ok, evidence: "proportional crop filter renders (frame comparison via luma would need geometry handling — filter verified live)" });
+  const baseOk = renderGraph([], `/tmp/m18-parity-base-crop.mp4`);
+  const fxOk = renderGraph([fx("crop", { left: 15, right: 15, top: 15, bottom: 15 })], `/tmp/m18-parity-fx-crop.mp4`);
+  const base = baseOk ? meanLumaStdout(`/tmp/m18-parity-base-crop.mp4`) : null;
+  const withFx = fxOk ? meanLumaStdout(`/tmp/m18-parity-fx-crop.mp4`) : null;
+  const delta = base !== null && withFx !== null ? withFx - base : 0;
+  const pass = base !== null && withFx !== null && Math.abs(delta) > 0.5;
+  results.push({ type: "crop", rendered: base !== null && withFx !== null, base, with: withFx, delta: Math.round(delta * 10) / 10, pass, evidence: "pixel mean-luma comparison — 30%% crop shifts visible content geometry" });
 }
 
 console.log("\n=== EXPORT PARITY MATRIX (pixel-verified where possible) ===");

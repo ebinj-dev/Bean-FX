@@ -135,6 +135,9 @@ export interface SafeUser {
   email: string;
   name: string | null;
   createdAt: string;
+  /** M19: server-side role claim ("user" | "admin") — never from the client. */
+  role: string;
+  emailVerified: boolean;
 }
 
 export async function getCurrentUser(): Promise<SafeUser | null> {
@@ -164,6 +167,14 @@ export async function getCurrentUser(): Promise<SafeUser | null> {
         continue;
       }
 
+      // M19 §10: deleted accounts are locked out immediately — their session
+      // rows are torn down and the request fails closed.
+      if (session.user.deletedAt) {
+        await db.session.deleteMany({ where: { userId: session.user.id } }).catch(() => undefined);
+        unmatched.push(tokenFingerprint(token));
+        continue;
+      }
+
       // Sliding renewal: once more than half the TTL is consumed, extend the
       // session and re-issue the cookie so active users are never logged out
       // mid-work. Token is unchanged; only the expiry moves.
@@ -187,6 +198,8 @@ export async function getCurrentUser(): Promise<SafeUser | null> {
         email: session.user.email,
         name: session.user.name,
         createdAt: session.user.createdAt.toISOString(),
+        role: session.user.role,
+        emailVerified: session.user.emailVerified,
       };
     }
     // Only log when the whole lookup failed — a stale sibling cookie that is
@@ -209,4 +222,39 @@ export async function requireUser(): Promise<SafeUser> {
   return user;
 }
 
-export class AuthError extends Error {}
+export class AuthError extends Error {
+  status: number;
+  constructor(message: string, status = 401) {
+    super(message);
+    this.status = status;
+  }
+}
+
+/**
+ * M19 — the CURRENT session row (used to keep this session alive while other
+ * sessions are revoked on password change). Null when unauthenticated.
+ */
+export async function getSessionRecord(): Promise<{ id: string; token: string } | null> {
+  const reqHeaders = await headers();
+  const tokens = tokensFromCookieHeader(reqHeaders.get("cookie"));
+  if (tokens.length === 0) return null;
+  for (const token of tokens) {
+    const rec = await db.session.findUnique({ where: { token }, select: { id: true, token: true } }).catch(() => null);
+    if (rec) return rec;
+  }
+  return null;
+}
+
+/**
+ * M19 §14 — server-side admin gate. The role lives on the User row; nothing
+ * about it is ever accepted from a request payload.
+ */
+export async function requireAdmin(): Promise<SafeUser> {
+  const user = await requireUser();
+  if (user.role !== "admin") {
+    throw new AuthError("Admin access is required for this operation.", 403);
+  }
+  return user;
+}
+
+
