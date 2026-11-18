@@ -52,7 +52,12 @@ export default function SettingsPage() {
     setLoading(false);
   }, []);
 
-  useEffect(() => { void refresh(); }, [refresh]);
+  useEffect(() => {
+    // Defer past the sync phase: refresh() sets state after its awaits; the
+    // react-hooks compiler flags direct invocation in the effect body.
+    const t = setTimeout(() => void refresh(), 0);
+    return () => clearTimeout(t);
+  }, [refresh]);
 
   const saveName = async () => {
     setNameMsg(null);

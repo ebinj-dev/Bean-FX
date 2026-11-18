@@ -11,6 +11,12 @@ export default function CookiesPage() {
     <div className="mx-auto max-w-4xl px-4 py-14 sm:px-6">
       <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-[#d4a017]">Cookies</p>
       <h1 className="mt-2 text-3xl font-bold text-white sm:text-4xl">Cookie Policy</h1>
+      <p className="mt-4 rounded-lg border border-red-500/40 bg-red-500/5 p-4 text-[13.5px] leading-relaxed text-[#c9c9c2]">
+        <strong className="text-red-400">REQUIRES LEGAL REVIEW:</strong> this document describes
+        verified application behavior and is not legal advice. It must be reviewed and approved by a
+        qualified legal professional before public commercial launch, together with the owner fields
+        marked <em>[OWNER TO CONFIRM]</em> in the launch checklist.
+      </p>
       <p className="mt-4 text-[14.5px] leading-relaxed text-[#b8b8b0]">
         BEAN FX sets exactly one cookie:
       </p>

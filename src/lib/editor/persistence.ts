@@ -185,6 +185,10 @@ export async function applyTimelineEdits(
   // unique constraint — the loser surfaces as a REAL 409 (with the fresh head)
   // instead of a raw P2002 400 the client would treat as generic failure.
   try {
+    // M20: the default interactive-transaction timeout is 5s. A cold standalone
+    // server's first timeline write (route JIT + SQLite WAL contention during
+    // suite fan-in) can exceed it and 400 the whole edit batch. 15s keeps the
+    // atomicity guarantee while tolerating cold-start latency.
     await db.$transaction(async (tx) => {
       const created = await tx.timelineVersion.create({
         data: {
@@ -207,7 +211,7 @@ export async function applyTimelineEdits(
           },
         });
       }
-    });
+    }, { timeout: 15_000, maxWait: 10_000 });
   } catch (err) {
     if ((err as { code?: string })?.code === "P2002") {
       const winner = await db.timelineVersion.findFirst({

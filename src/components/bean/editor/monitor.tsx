@@ -52,6 +52,34 @@ function nextClipOnTrack(sequence: Sequence, clipId: string) {
   );
 }
 
+function paintTransitionLayer(ctx: CanvasRenderingContext2D, seq: Sequence, frame: number, slots: (HTMLVideoElement | null)[]): boolean {
+  let painted = false;
+  for (const t of seq.transitions) {
+    if (frame < t.startFrame || frame >= t.endFrame) continue;
+    const a = seq.clips.find((c) => c.id === t.clipAId);
+    const b = seq.clips.find((c) => c.id === t.clipBId);
+    if (!a || !b || a.trackId !== b.trackId || b.timelineStartFrame !== a.timelineStartFrame + a.timelineDurationFrames) continue;
+    const track = seq.tracks.find((tr) => tr.id === b.trackId);
+    if (!track || (track.kind !== "VIDEO" && track.kind !== "OVERLAY") || !track.visible) continue;
+    // The incoming clip must be the PRELOADED idle element (adjacent-next).
+    const incomingAssetId = b.sourceAssetId;
+    const incoming = slots.find((el) => el && el.dataset.asset === incomingAssetId && !el.className.includes("hidden"));
+    const active = slots.find((el) => el && el.className.includes("max-h-full"));
+    if (!incoming || incoming === active || incoming.readyState < 2) continue;
+    const alpha = (frame - t.startFrame + 1) / Math.max(1, t.endFrame - t.startFrame);
+    try {
+      ctx.save();
+      ctx.globalAlpha = Math.min(1, Math.max(0, alpha));
+      ctx.drawImage(incoming, 0, 0, ctx.canvas.width, ctx.canvas.height);
+      ctx.restore();
+      painted = true;
+    } catch {
+      // decode not ready — the straight cut remains visible (honest degradation)
+    }
+  }
+  return painted;
+}
+
 export function ProgramMonitor({
   sequence,
   playhead,
@@ -90,7 +118,9 @@ export function ProgramMonitor({
   const controller = useMemo(
     () => new PlaybackController(sequence?.fps ?? { num: 30, den: 1 }, playhead, end),
     // Recreate only when the sequence's timebase changes — frame continuity
-    // survives ordinary edits.
+    // survives ordinary edits. Primitive deps are deliberate (object identity
+    // of `sequence` changes on every edit and would reset playback).
+    // eslint-disable-next-line react-hooks/preserve-manual-memoization -- intentional narrow deps
     [sequence?.fps.num, sequence?.fps.den],
   );
   useEffect(() => {
@@ -167,33 +197,6 @@ export function ProgramMonitor({
    * preloaded video element) with an alpha ramp — real frames, same window
    * semantics as the export xfade. Returns true when a layer was painted.
    */
-  function paintTransitionLayer(ctx: CanvasRenderingContext2D, seq: Sequence, frame: number, slots: (HTMLVideoElement | null)[]): boolean {
-    let painted = false;
-    for (const t of seq.transitions) {
-      if (frame < t.startFrame || frame >= t.endFrame) continue;
-      const a = seq.clips.find((c) => c.id === t.clipAId);
-      const b = seq.clips.find((c) => c.id === t.clipBId);
-      if (!a || !b || a.trackId !== b.trackId || b.timelineStartFrame !== a.timelineStartFrame + a.timelineDurationFrames) continue;
-      const track = seq.tracks.find((tr) => tr.id === b.trackId);
-      if (!track || (track.kind !== "VIDEO" && track.kind !== "OVERLAY") || !track.visible) continue;
-      // The incoming clip must be the PRELOADED idle element (adjacent-next).
-      const incomingAssetId = b.sourceAssetId;
-      const incoming = slots.find((el) => el && el.dataset.asset === incomingAssetId && !el.className.includes("hidden"));
-      const active = slots.find((el) => el && el.className.includes("max-h-full"));
-      if (!incoming || incoming === active || incoming.readyState < 2) continue;
-      const alpha = (frame - t.startFrame + 1) / Math.max(1, t.endFrame - t.startFrame);
-      try {
-        ctx.save();
-        ctx.globalAlpha = Math.min(1, Math.max(0, alpha));
-        ctx.drawImage(incoming, 0, 0, ctx.canvas.width, ctx.canvas.height);
-        ctx.restore();
-        painted = true;
-      } catch {
-        // decode not ready — the straight cut remains visible (honest degradation)
-      }
-    }
-    return painted;
-  }
 
   // Keep refs mirrored for controller callbacks.
   useEffect(() => {
@@ -226,6 +229,9 @@ export function ProgramMonitor({
 
   // Transport events → mixer schedule/refill.
   const frameRef = useRef(playhead);
+  // Render-time ref mirror is intentional: the mixer must see the live
+  // playhead without a re-render per frame (react-hooks/refs is muted here).
+  // eslint-disable-next-line react-hooks/refs -- intentional live mirror
   frameRef.current = playhead;
   useEffect(() => {
     if (!sequence) return;

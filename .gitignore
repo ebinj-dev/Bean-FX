@@ -96,3 +96,15 @@ worklog.md
 /prompt
 /test
 Caddyfile
+
+# M20: root-locked artifacts from sandbox recycle (unscannable, preserved)
+.deps-mirror*
+download.root-owned
+BEAN-FX-Source-Export
+BEAN-FX-Source-Code.zip
+backups
+authdata
+models
+sidecar
+bench
+.next/lock

@@ -7,6 +7,7 @@ import { db } from "@/lib/db";
 import { audit } from "@/lib/audit";
 import { requireUser, verifyPassword, hashPassword, validatePassword, sessionCookieHeaders, getSessionRecord } from "@/lib/auth";
 import { clientIp, enforceRateLimit, RATE_LIMITS } from "@/lib/rate-limit";
+import { sendPasswordChangedNotice } from "@/lib/mailer";
 
 export const runtime = "nodejs";
 
@@ -30,5 +31,6 @@ export async function POST(req: Request) {
     ...(current ? [db.session.deleteMany({ where: { userId: user.id, id: { not: current.id } } })] : []),
   ]);
   await audit("auth.password_changed", { userId: user.id, ip: clientIp(req) });
+  await sendPasswordChangedNotice(user.email);
   return NextResponse.json({ ok: true, message: "Password changed. Other sessions were signed out." });
 }

@@ -197,8 +197,10 @@ export async function POST(req: NextRequest) {
   return NextResponse.json({ ok: true, jobId });
 }
 
-/** Module-level human-readable stage labels (1-15) used for live job progress. */
-export const RIISHE_STAGE_LABELS: Record<RiisheStageKey, string> = {
+/** Module-level human-readable stage labels (1-15) used for live job progress.
+ *  Not exported: route modules may only export handlers (webpack typegen
+ *  enforces a strict index signature on route exports). */
+const RIISHE_STAGE_LABELS: Record<RiisheStageKey, string> = {
   mediaInspection: "Media inspection (FFprobe)",
   audioExtraction: "Audio extraction",
   audioDecoding: "Audio decoding + normalization",

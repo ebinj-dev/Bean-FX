@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { randomBytes } from "crypto";
 import { audit } from "@/lib/audit";
-import { sendMail, hashToken, mailConfigured } from "@/lib/mailer";
+import { sendVerificationEmail, hashToken, mailConfigured } from "@/lib/mailer";
 import { clientIp, enforceRateLimit, RATE_LIMITS } from "@/lib/rate-limit";
 
 import { db } from "@/lib/db";
@@ -59,12 +59,7 @@ export async function POST(req: NextRequest) {
     });
     let verification: { delivered: boolean; notice?: string; devToken?: string } = { delivered: false };
     if (mailConfigured()) {
-      const origin = process.env.PUBLIC_APP_URL ?? new URL(req.url).origin;
-      const mail = await sendMail({
-        to: user.email,
-        subject: "Verify your BEAN FX email address",
-        body: `Welcome to BEAN FX. Confirm this email address within 24 hours:\n${origin}/verify-email?token=${verifyRaw}`,
-      });
+      const mail = await sendVerificationEmail(user.email, verifyRaw, process.env.PUBLIC_APP_URL ?? new URL(req.url).origin);
       verification = { delivered: mail.delivered, ...(mail.delivered ? {} : { notice: "Email delivery failed — the verification link could not be sent." }) };
     } else {
       verification = { delivered: false, notice: "Email delivery is not configured on this deployment — email addresses cannot be verified until an SMTP provider is set up.", devToken: verifyRaw };
