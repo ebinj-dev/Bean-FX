@@ -28,6 +28,8 @@ import {
   type Track,
 } from "./model";
 import { assertValidRange, makeRational, type Rational } from "./time";
+import { filterSpec } from "@/lib/editor/filters";
+import type { Effect } from "./model";
 import { NikkiGraphicStyleSchema } from "@/lib/nikki/types";
 
 export class EditorError extends Error {
@@ -179,6 +181,54 @@ export const CommandSchema = z.discriminatedUnion("type", [
   z.object({ type: z.literal("AlignClipsToPlayhead"), clipIds: z.array(idSchema).min(1).max(200), frame: z.number().int().min(0) }),
   /** M26 P1 — low-level group tag (GroupClips/UngroupClips compile to this). */
   z.object({ type: z.literal("SetClipGroup"), clipId: idSchema, groupId: z.string().max(64).nullable() }),
+  /** M27 P1 — ROLL EDIT: move the shared boundary between two ADJACENT clips.
+   *  The left clip's source out-point and the right clip's source in-point
+   *  shift by the same frame count (the timeline boundary moves; neither clip
+   *  changes start-of-sequence position on the outside). Sequence duration is
+   *  preserved: the right clip's END stays fixed and the left clip's START
+   *  stays fixed. Absolute integer-frame boundary target (snapping done in UI). */
+  z.object({
+    type: z.literal("RollEdit"),
+    leftClipId: idSchema,
+    rightClipId: idSchema,
+    newBoundaryFrame: z.number().int().min(0),
+  }),
+  // M27 P2 — per-effect parameter keyframes (visual effects only; the volume
+  // effect keeps its dedicated M17/M18 automation system).
+  z.object({
+    type: z.literal("SetEffectKeyframe"),
+    clipId: idSchema,
+    effectId: idSchema,
+    keyframe: z.object({
+      id: idSchema,
+      param: z.string().min(1).max(32),
+      frame: z.number().int().min(0),
+      value: z.number(),
+      interpolation: z.enum(["HOLD", "LINEAR", "EASE_IN", "EASE_OUT", "EASE_IN_OUT"]).default("LINEAR"),
+    }),
+  }),
+  z.object({ type: z.literal("RemoveEffectKeyframe"), clipId: idSchema, effectId: idSchema, keyframeId: idSchema }),
+  /** Bulk replace of one effect's animation state — the exact inverse unit. */
+  z.object({
+    type: z.literal("SetEffectKeyframes"),
+    clipId: idSchema,
+    effectId: idSchema,
+    keyframes: z.array(z.object({
+      id: idSchema,
+      param: z.string().min(1).max(32),
+      frame: z.number().int().min(0),
+      value: z.number(),
+      interpolation: z.enum(["HOLD", "LINEAR", "EASE_IN", "EASE_OUT", "EASE_IN_OUT"]).default("LINEAR"),
+    })).max(256),
+    animatedParams: z.array(z.string().max(32)).max(16),
+  }),
+  z.object({
+    type: z.literal("ToggleEffectParamAnimation"),
+    clipId: idSchema,
+    effectId: idSchema,
+    param: z.string().min(1).max(32),
+    enabled: z.boolean(),
+  }),
 ]);
 export type Command = z.infer<typeof CommandSchema>;
 
@@ -739,6 +789,136 @@ function applyUngroupClips(seq: Sequence, cmd: Extract<Command, { type: "Ungroup
   }
 }
 
+/** M27 P1 — ROLL EDIT. Frame-accurate shared-boundary adjustment.
+ *  Both clips must sit adjacent on the SAME unlocked track, share a playback
+ *  speed, and have no transition attached (moving the boundary would
+ *  invalidate the transition window — refused, never rewritten).
+ *  The boundary must stay inside both clips and inside both source ranges.
+ *  Inverse: RollEdit back to the previous boundary (exact before-state). */
+function applyRollEdit(seq: Sequence, cmd: Extract<Command, { type: "RollEdit" }>, inverse: Command[]): void {
+  const left = findClip(seq, cmd.leftClipId);
+  const right = findClip(seq, cmd.rightClipId);
+  const leftTrack = findTrack(seq, left.trackId);
+  if (left.trackId !== right.trackId) throw new EditorError("INVALID_COMMAND", "roll edit requires both clips on the same track");
+  if (leftTrack.locked) throw new EditorError("INVALID_TIMELINE", `track ${leftTrack.id} is locked — edit refused`);
+  const leftEnd = left.timelineStartFrame + left.timelineDurationFrames;
+  const rightEnd = right.timelineStartFrame + right.timelineDurationFrames;
+  if (leftEnd !== right.timelineStartFrame) {
+    throw new EditorError("INVALID_COMMAND", `clips are not adjacent (left ends ${leftEnd}, right starts ${right.timelineStartFrame})`);
+  }
+  if (left.playbackSpeed !== right.playbackSpeed) {
+    throw new EditorError("INVALID_COMMAND", "roll edit requires equal playback speeds on both clips (mixed-speed roll refused)");
+  }
+  if (seq.transitions.some((t) => t.clipAId === left.id || t.clipBId === left.id || t.clipAId === right.id || t.clipBId === right.id)) {
+    throw new EditorError("TRANSITION_CONFLICT", "roll edit refused — remove the transition on these clips first (its window would become invalid)");
+  }
+  const oldBoundary = leftEnd;
+  const newBoundary = cmd.newBoundaryFrame;
+  if (newBoundary <= left.timelineStartFrame || newBoundary >= rightEnd) {
+    throw new EditorError("INVALID_RANGES", `boundary ${newBoundary} must stay inside both clips (${left.timelineStartFrame + 1}…${rightEnd - 1})`);
+  }
+  const delta = newBoundary - oldBoundary; // timeline frames (integer)
+  // Source shift mirrors the timeline shift at the clips' common speed.
+  const speed = left.playbackSpeed;
+  const newLeftSourceOut = left.sourceOutFrame + delta * speed;
+  const newRightSourceIn = right.sourceInFrame + delta * speed;
+  if (newLeftSourceOut <= left.sourceInFrame || newRightSourceIn >= right.sourceOutFrame) {
+    throw new EditorError("INVALID_RANGES", "roll exceeds the available source media on one side — clamp or trim first");
+  }
+  if (newRightSourceIn < 0) throw new EditorError("INVALID_RANGES", "roll would need frames before the right clip's source start");
+  inverse.unshift({ type: "RollEdit", leftClipId: left.id, rightClipId: right.id, newBoundaryFrame: oldBoundary });
+  // Recompute durations through the canonical integer-frame calculator so the
+  // timebase stays exact (no floating-point timeline arithmetic here).
+  const newLeftDur = clipTimelineDuration(newLeftSourceOut, left.sourceInFrame, rational(left.sourceFps), rational(seq.fps), speed);
+  const newRightDur = clipTimelineDuration(right.sourceOutFrame, newRightSourceIn, rational(right.sourceFps), rational(seq.fps), speed);
+  if (newLeftDur <= 0 || newRightDur <= 0) throw new EditorError("INVALID_RANGES", "roll produced a non-positive clip duration");
+  // Boundary consistency: left keeps its start; right keeps its END.
+  const effectiveBoundary = left.timelineStartFrame + newLeftDur;
+  if (effectiveBoundary + newRightDur !== rightEnd) {
+    // Integer rounding at exotic timebases — refuse rather than drift.
+    throw new EditorError("INVALID_RANGES", "integer-frame rounding would desync the boundary at this timebase/speed — roll refused");
+  }
+  left.sourceOutFrame = newLeftSourceOut;
+  left.timelineDurationFrames = newLeftDur;
+  right.sourceInFrame = newRightSourceIn;
+  right.timelineStartFrame = effectiveBoundary;
+  right.timelineDurationFrames = newRightDur;
+}
+
+// ── M27 P2 — per-effect parameter keyframes ─────────────────────────────────
+
+/** Param must belong to the effect's registry spec (never invent params) and
+ *  the frame must stay inside the clip. First keyframe auto-enables the param. */
+function findEffect(clip: Clip, effectId: string): Effect {
+  const effect = clip.effects.find((e) => e.id === effectId);
+  if (!effect) throw new EditorError("INVALID_COMMAND", `effect ${effectId} not found on clip ${clip.id}`);
+  return effect;
+}
+
+function applySetEffectKeyframe(seq: Sequence, cmd: Extract<Command, { type: "SetEffectKeyframe" }>, inverse: Command[]): void {
+  const clip = findClip(seq, cmd.clipId);
+  const effect = findEffect(clip, cmd.effectId);
+  if (effect.type === "volume") {
+    throw new EditorError("INVALID_COMMAND", "the volume effect animates through the dedicated automation strip (M17/M18), not effect keyframes");
+  }
+  const spec = filterSpec(effect.type);
+  const knownParams = new Set<string>([spec?.param.key, ...(spec?.paramExtras ?? []).map((p) => p.key)].filter((k): k is string => Boolean(k)));
+  if (!knownParams.has(cmd.keyframe.param)) {
+    throw new EditorError("INVALID_COMMAND", `param "${cmd.keyframe.param}" is not part of the ${effect.type} effect definition`);
+  }
+  if (cmd.keyframe.frame >= clip.timelineDurationFrames) {
+    throw new EditorError("INVALID_RANGES", `keyframe frame ${cmd.keyframe.frame} is beyond the clip (${clip.timelineDurationFrames} frames)`);
+  }
+  // Exact inverse: snapshot the effect's whole animation state and restore it
+  // via the bulk command (no id/slot ambiguity — moves undo perfectly).
+  const prior = { keyframes: clone(effect.keyframes), animatedParams: [...effect.animatedParams] };
+  const byId = effect.keyframes.find((k) => k.id === cmd.keyframe.id);
+  if (byId) effect.keyframes = effect.keyframes.filter((k) => k.id !== cmd.keyframe.id);
+  const slot = effect.keyframes.find((k) => k.param === cmd.keyframe.param && k.frame === cmd.keyframe.frame);
+  if (slot) Object.assign(slot, clone(cmd.keyframe));
+  else {
+    effect.keyframes.push(clone(cmd.keyframe));
+    effect.keyframes.sort((a, b) => a.frame - b.frame);
+  }
+  if (!effect.animatedParams.includes(cmd.keyframe.param)) {
+    effect.animatedParams.push(cmd.keyframe.param);
+  }
+  const changed = JSON.stringify({ keyframes: effect.keyframes, animatedParams: effect.animatedParams }) !== JSON.stringify(prior);
+  if (changed) inverse.unshift({ type: "SetEffectKeyframes", clipId: clip.id, effectId: effect.id, keyframes: prior.keyframes, animatedParams: prior.animatedParams });
+}
+
+function applySetEffectKeyframes(seq: Sequence, cmd: Extract<Command, { type: "SetEffectKeyframes" }>, inverse: Command[]): void {
+  const clip = findClip(seq, cmd.clipId);
+  const effect = findEffect(clip, cmd.effectId);
+  const prior = { keyframes: clone(effect.keyframes), animatedParams: [...effect.animatedParams] };
+  effect.keyframes = clone(cmd.keyframes).sort((a, b) => a.frame - b.frame);
+  effect.animatedParams = [...cmd.animatedParams];
+  const changed = JSON.stringify({ keyframes: effect.keyframes, animatedParams: effect.animatedParams }) !== JSON.stringify(prior);
+  if (changed) inverse.unshift({ type: "SetEffectKeyframes", clipId: clip.id, effectId: effect.id, keyframes: prior.keyframes, animatedParams: prior.animatedParams });
+}
+
+function applyRemoveEffectKeyframe(seq: Sequence, cmd: Extract<Command, { type: "RemoveEffectKeyframe" }>, inverse: Command[]): void {
+  const clip = findClip(seq, cmd.clipId);
+  const effect = findEffect(clip, cmd.effectId);
+  const kf = effect.keyframes.find((k) => k.id === cmd.keyframeId);
+  if (!kf) throw new EditorError("INVALID_COMMAND", `keyframe ${cmd.keyframeId} not found on effect ${effect.id}`);
+  effect.keyframes = effect.keyframes.filter((k) => k.id !== cmd.keyframeId);
+  inverse.unshift({ type: "SetEffectKeyframe", clipId: clip.id, effectId: effect.id, keyframe: clone(kf) });
+}
+
+function applyToggleEffectParamAnimation(seq: Sequence, cmd: Extract<Command, { type: "ToggleEffectParamAnimation" }>, inverse: Command[]): void {
+  const clip = findClip(seq, cmd.clipId);
+  const effect = findEffect(clip, cmd.effectId);
+  const had = effect.animatedParams.includes(cmd.param);
+  if (cmd.enabled && !had) {
+    effect.animatedParams.push(cmd.param);
+    inverse.unshift({ type: "ToggleEffectParamAnimation", clipId: clip.id, effectId: effect.id, param: cmd.param, enabled: false });
+  } else if (!cmd.enabled && had) {
+    effect.animatedParams = effect.animatedParams.filter((p) => p !== cmd.param);
+    inverse.unshift({ type: "ToggleEffectParamAnimation", clipId: clip.id, effectId: effect.id, param: cmd.param, enabled: true });
+  }
+}
+
 function applySetClipGroup(seq: Sequence, cmd: Extract<Command, { type: "SetClipGroup" }>, inverse: Command[]): void {
   const clip = findClip(seq, cmd.clipId);
   inverse.unshift({ type: "SetClipGroup", clipId: clip.id, groupId: clip.groupId ?? null });
@@ -876,6 +1056,21 @@ export function applyCommand(inputSeq: Sequence, input: unknown): ApplyResult {
       break;
     case "SetClipGroup":
       applySetClipGroup(seq, cmd, inverse);
+      break;
+    case "RollEdit":
+      applyRollEdit(seq, cmd, inverse);
+      break;
+    case "SetEffectKeyframe":
+      applySetEffectKeyframe(seq, cmd, inverse);
+      break;
+    case "RemoveEffectKeyframe":
+      applyRemoveEffectKeyframe(seq, cmd, inverse);
+      break;
+    case "SetEffectKeyframes":
+      applySetEffectKeyframes(seq, cmd, inverse);
+      break;
+    case "ToggleEffectParamAnimation":
+      applyToggleEffectParamAnimation(seq, cmd, inverse);
       break;
   }
 

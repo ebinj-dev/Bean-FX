@@ -47,11 +47,29 @@ export const EffectType = z.enum([
 ]);
 export type EffectType = z.infer<typeof EffectType>;
 
+/** M27 P2 — per-EFFECT-parameter keyframes. `frame` is CLIP-RELATIVE on the
+ *  TIMELINE clock (0 = clip start; survives timeline moves like property
+ *  keyframes). Interpolation modes match the property-keyframe family minus
+ *  BEZIER (not exposed for effect params — never displayed as functional). */
+export const EffectKeyframeSchema = z.object({
+  id: z.string().min(1).max(64),
+  param: z.string().min(1).max(32),
+  frame: z.number().int().min(0),
+  value: z.number(),
+  interpolation: z.enum(["HOLD", "LINEAR", "EASE_IN", "EASE_OUT", "EASE_IN_OUT"]).default("LINEAR"),
+});
+export type EffectKeyframe = z.infer<typeof EffectKeyframeSchema>;
+
 export const EffectSchema = z.object({
   id: z.string().min(1).max(64),
   type: EffectType,
   enabled: z.boolean().default(true),
   params: z.record(z.string(), z.union([z.number(), z.string(), z.boolean()])).default({}),
+  /** M27 P2 — parameter keyframes (only for params listed in animatedParams). */
+  keyframes: z.array(EffectKeyframeSchema).max(256).default([]),
+  /** Params with animation ENABLED — disabling ignores stored keyframes
+   *  (non-destructive toggle; legacy effects parse with an empty list). */
+  animatedParams: z.array(z.string().max(32)).max(16).default([]),
 });
 export type Effect = z.infer<typeof EffectSchema>;
 

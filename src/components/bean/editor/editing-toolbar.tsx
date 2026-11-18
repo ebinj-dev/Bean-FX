@@ -6,13 +6,14 @@
  * displayed unless its action is implemented and committed through the M1
  * command engine.
  */
-import { MousePointer2, MoveVertical, Scissors, ArrowLeftRight, MoveHorizontal, Hand, ZoomIn, Type, Frame } from "lucide-react";
+import { MousePointer2, MoveVertical, Scissors, ChevronsLeftRight, ArrowLeftRight, MoveHorizontal, Hand, ZoomIn, Type, Frame } from "lucide-react";
 import { EDIT_TOOLS, type EditToolId } from "@/lib/editor/tools";
 
 const TOOL_ICONS: Record<EditToolId, React.ComponentType<{ className?: string }>> = {
   select: MousePointer2,
   "track-select": MoveVertical,
   razor: Scissors,
+  roll: ChevronsLeftRight,
   slip: ArrowLeftRight,
   slide: MoveHorizontal,
   hand: Hand,

@@ -36,7 +36,7 @@ import {
 } from "@/lib/editor/interaction";
 import { sequenceEndFrame } from "@/lib/editor/preview";
 import { slipCommand, slideCommands, type EditToolId } from "@/lib/editor/tools";
-import { compileRoll, compileLift, compileExtract, compileGroupMove } from "@/lib/editor/edits";
+import { compileRoll, compileLift, compileExtract, compileGroupMove, compileAudioCrossfade } from "@/lib/editor/edits";
 import { subscribeFrame } from "@/lib/editor/playback";
 import { thumbnailFor } from "@/lib/editor/thumbnails";
 import type { EditorSession } from "@/hooks/use-editor-session";
@@ -111,7 +111,7 @@ function ClipThumbnail({ assetId, width }: { assetId: string; width: number }) {
 }
 
 interface DragState {
-  kind: "move" | "trim" | "slip" | "slide";
+  kind: "move" | "trim" | "slip" | "slide" | "roll";
   clipId: string;
   zone: "body" | "trim-in" | "trim-out";
   grabOffsetFrames: number;
@@ -120,6 +120,9 @@ interface DragState {
   trim?: TrimPreview;
   slipDelta?: number;
   slideDelta?: number;
+  /** M27 P1 — roll: shared boundary between leftClipId/rightClipId. */
+  rollBase?: { leftId: string; rightId: string; boundaryFrame: number; clientX: number };
+  rollPreview?: { boundaryFrame: number; valid: boolean; reason?: string };
 }
 
 export function EditorTimeline({
@@ -313,6 +316,26 @@ export function EditorTimeline({
         session.select(hit.clip.id);
         return;
       }
+      // M27 P1 — roll: target the NEAREST shared boundary of this clip.
+      if (activeTool === "roll") {
+        const clipStart = hit.clip.timelineStartFrame;
+        const clipEnd = clipStart + hit.clip.timelineDurationFrames;
+        const leftN = sequence.clips.find((c) => c.trackId === hit.clip.trackId && c.id !== hit.clip.id && c.timelineStartFrame + c.timelineDurationFrames === clipStart);
+        const rightN = sequence.clips.find((c) => c.trackId === hit.clip.trackId && c.id !== hit.clip.id && c.timelineStartFrame === clipEnd);
+        const dStart = Math.abs(frame - clipStart);
+        const dEnd = Math.abs(frame - clipEnd);
+        const useEnd = leftN && rightN ? dEnd < dStart : rightN ? true : false;
+        const boundary = useEnd ? clipEnd : clipStart;
+        const l = useEnd ? hit.clip : leftN;
+        const r = useEnd ? rightN : hit.clip;
+        if (l && r) {
+          setDrag({ kind: "roll", clipId: hit.clip.id, zone: "body", grabOffsetFrames: 0, rollBase: { leftId: l.id, rightId: r.id, boundaryFrame: boundary, clientX: event.clientX }, rollPreview: { boundaryFrame: boundary, valid: true } });
+          session.select(hit.clip.id);
+          return;
+        }
+        notice?.("Roll needs an adjacent clip on this side.");
+        return;
+      }
       session.select(hit.clip.id);
       setMultiSelect((prev) => {
         if (event.shiftKey) return new Set([...prev, hit.clip.id]);
@@ -349,6 +372,27 @@ export function EditorTimeline({
         setDrag({ ...drag, slipDelta: deltaFrames });
       } else if (drag.kind === "slide") {
         setDrag({ ...drag, slideDelta: snapTo(frame - drag.grabOffsetFrames) - clip.timelineStartFrame });
+      } else if (drag.kind === "roll" && drag.rollBase) {
+        const rb = drag.rollBase;
+        const left = sequence.clips.find((c) => c.id === rb.leftId);
+        const right = sequence.clips.find((c) => c.id === rb.rightId);
+        if (!left || !right) return;
+        const target = snapTo(frame);
+        const rightEnd = right.timelineStartFrame + right.timelineDurationFrames;
+        const lo = left.timelineStartFrame + 1;
+        const hi = rightEnd - 1;
+        const boundary = Math.min(hi, Math.max(lo, target));
+        const delta = boundary - (left.timelineStartFrame + left.timelineDurationFrames);
+        const speed = left.playbackSpeed;
+        const newLeftSourceOut = left.sourceOutFrame + delta * speed;
+        const newRightSourceIn = right.sourceInFrame + delta * speed;
+        let valid = true;
+        let reason: string | undefined;
+        const leftAssetMax = assetDurations?.get(left.sourceAssetId);
+        if (left.playbackSpeed !== right.playbackSpeed) { valid = false; reason = "mixed speeds"; }
+        else if (newLeftSourceOut <= left.sourceInFrame || newRightSourceIn >= right.sourceOutFrame || newRightSourceIn < 0) { valid = false; reason = "source bounds"; }
+        else if (leftAssetMax !== undefined && newLeftSourceOut > leftAssetMax) { valid = false; reason = "beyond asset length"; }
+        setDrag({ ...drag, rollPreview: { boundaryFrame: boundary, valid, reason } });
       }
     },
     [drag, sequence, frameAtEvent, snapTo, ppf, fps],
@@ -385,6 +429,17 @@ export function EditorTimeline({
         return;
       }
       if (!session.apply([cmd])) notice?.("Slip refused by the engine.");
+      else notice?.(null);
+      return;
+    }
+    if (drag.kind === "roll" && drag.rollBase && drag.rollPreview) {
+      const rb = drag.rollBase;
+      const left = sequence.clips.find((c) => c.id === rb.leftId);
+      const right = sequence.clips.find((c) => c.id === rb.rightId);
+      if (!left || !right) return;
+      if (drag.rollPreview.boundaryFrame === left.timelineStartFrame + left.timelineDurationFrames) return; // no-op
+      const ok = session.apply([{ type: "RollEdit", leftClipId: rb.leftId, rightClipId: rb.rightId, newBoundaryFrame: drag.rollPreview.boundaryFrame }]);
+      if (!ok) notice?.(drag.rollPreview.reason ? `Roll refused (${drag.rollPreview.reason}).` : "Roll refused by the engine.");
       else notice?.(null);
       return;
     }
@@ -788,13 +843,19 @@ export function EditorTimeline({
                         const selected = session.selectedClipId === clip.id;
                         const isAudio = track.kind === "AUDIO" && !clip.missingMedia;
                         const kfTimeline = clip.keyframes.map((k) => Math.round((k.frame * fps.num * clip.sourceFps.den) / (clip.sourceFps.num * fps.den) / clip.playbackSpeed) + start);
+                        // M27 P2 — effect-parameter keyframe diamonds (blue).
+                        const effectKfTimeline = clip.effects.flatMap((e) =>
+                          e.animatedParams.flatMap((prm) =>
+                            e.keyframes.filter((k) => k.param === prm).map((k) => k.frame + start),
+                          ),
+                        );
                         return (
                           <div
                             key={clip.id}
                             data-clip-id={clip.id}
                             className={`absolute inset-y-1.5 overflow-hidden rounded border ${colors.block} ${colors.edge} ${
                               selected || groupSelected ? "outline outline-2 outline-[#d4a017]" : ""
-                            } ${dragging ? "z-10 opacity-90" : activeTool === "razor" ? "cursor-crosshair" : "cursor-grab"}`}
+                            } ${dragging ? "z-10 opacity-90" : activeTool === "razor" ? "cursor-crosshair" : activeTool === "roll" ? "cursor-col-resize" : "cursor-grab"}`}
                             style={{ left: rect.left + slideShiftPx, width: rect.width }}
                             onPointerDown={(e) => {
                               const hit = clipAtPoint(sequence, clip.trackId, frameAtEvent(e.clientX), zoom, fps);
@@ -819,6 +880,9 @@ export function EditorTimeline({
                                 {kfTimeline.map((f, i) => (
                                   <span key={i} className="absolute bottom-0 h-1.5 w-1.5 -translate-x-1/2 rotate-45 bg-[#d4a017]" style={{ left: frameToX(f, zoom, fps, 0) - rect.left }} />
                                 ))}
+                                {effectKfTimeline.map((f, i) => (
+                                  <span key={`ek${i}`} className="absolute bottom-0 h-1.5 w-1.5 -translate-x-1/2 rotate-45 bg-[#3fa7c4]" style={{ left: frameToX(f, zoom, fps, 0) - rect.left }} title="Effect parameter keyframe" />
+                                ))}
                               </div>
                             )}
                           </div>
@@ -830,6 +894,15 @@ export function EditorTimeline({
             })}
             {/* Playhead — follows the frame bus imperatively while playing
                 (no re-render per tick); the `playhead` prop anchors paused. */}
+            {/* M27 P1 — roll drag preview: shared-boundary line + badge. */}
+            {drag?.kind === "roll" && drag.rollPreview && (
+              <div className="pointer-events-none absolute z-30" style={{ left: frameToX(drag.rollPreview.boundaryFrame, zoom, fps, 0), top: RULER_HEIGHT, height: totalTrackHeight }}>
+                <div className={`absolute top-0 h-full w-0.5 ${drag.rollPreview.valid ? "bg-[#4cc47f]" : "bg-[#c45c4c]"}`} />
+                <div className={`absolute top-1 left-1 whitespace-nowrap rounded border px-1 font-mono text-[9px] ${drag.rollPreview.valid ? "border-[#4cc47f] bg-[#111110] text-[#4cc47f]" : "border-[#c45c4c] bg-[#111110] text-[#c45c4c]"}`}>
+                  ROLL {drag.rollPreview.boundaryFrame}f{drag.rollPreview.reason ? ` · ${drag.rollPreview.reason}` : ""}
+                </div>
+              </div>
+            )}
             <div ref={playheadLineRef} className="pointer-events-none absolute top-0 bottom-0 z-30 w-px bg-[#d4a017]" style={{ left: frameToX(playhead, zoom, fps, 0), height: totalTrackHeight + RULER_HEIGHT }}>
               <div className="absolute -left-1.5 top-0 h-2.5 w-3 bg-[#d4a017]" style={{ clipPath: "polygon(0 0, 100% 0, 50% 100%)" }} />
             </div>
@@ -896,6 +969,37 @@ export function EditorTimeline({
               }}>
                 Extract (remove + close gap)
               </button>
+              {/* M27 P3 — automatic audio crossfade (adjacent audio clips). */}
+              {(() => {
+                const clip = sequence.clips.find((c) => c.id === menu.clipId);
+                if (!clip) return null;
+                const track = sequence.tracks.find((t) => t.id === clip.trackId);
+                if (!track || (track.kind !== "AUDIO" && track.kind !== "VIDEO")) return null;
+                const leftN = sequence.clips.find((c) => c.trackId === clip.trackId && c.id !== clip.id && c.timelineStartFrame + c.timelineDurationFrames === clip.timelineStartFrame);
+                const rightN = sequence.clips.find((c) => c.trackId === clip.trackId && c.id !== clip.id && c.timelineStartFrame === clip.timelineStartFrame + clip.timelineDurationFrames);
+                if (!leftN && !rightN) return null;
+                const d = Math.max(1, Math.round((sequence.fps.num / sequence.fps.den) / 2));
+                const run = (leftId: string, rightId: string, curve: "LINEAR" | "EQUAL_POWER") => {
+                  const op = compileAudioCrossfade(sequence, leftId, rightId, d, curve);
+                  if ("refusal" in op) { notice?.(`Crossfade refused: ${op.refusal}`); return; }
+                  if (session.apply(op.commands)) notice?.(op.summary);
+                  else notice?.("Crossfade refused by the engine.");
+                };
+                return (
+                  <>
+                    {rightN && (
+                      <button type="button" className="block w-full px-3 py-1 text-left text-[11px] text-[#d8d8d2] hover:bg-[#22221f]" title={`Overlaps ${rightN.id} by ${d}f with an equal-power gain hand-off (volume automation — real preview and export)`} onClick={() => { setMenu(null); run(clip.id, rightN.id, "EQUAL_POWER"); }}>
+                        Auto crossfade → {rightN.id.slice(0, 10)} (equal-power, 0.5s)
+                      </button>
+                    )}
+                    {leftN && (
+                      <button type="button" className="block w-full px-3 py-1 text-left text-[11px] text-[#d8d8d2] hover:bg-[#22221f]" title={`Overlaps this clip over ${leftN.id} with a linear gain ramp (real volume automation)`} onClick={() => { setMenu(null); run(leftN.id, clip.id, "LINEAR"); }}>
+                        Auto crossfade ← {leftN.id.slice(0, 10)} (linear, 0.5s)
+                      </button>
+                    )}
+                  </>
+                );
+              })()}
               <button type="button" className="block w-full px-3 py-1 text-left text-[11px] text-[#d8d8d2] hover:bg-[#22221f]" onClick={() => {
                 setMenu(null);
                 // Roll: nudge the boundary between this clip and its right

@@ -9,6 +9,7 @@
  * command is issued.
  */
 import { clipEndFrame, type Clip, type Sequence } from "./model";
+import type { Command } from "./commands";
 import { slipCommand, slideCommands } from "./tools";
 
 /** Compile helper result: commands + human explanation of affected objects. */
@@ -224,6 +225,68 @@ export function compileDuplicate(seq: Sequence, clipId: string): EditCompilation
   }
   const copy = { ...clip, id: `${clip.id}__dup${seq.clips.length}`, timelineStartFrame: start };
   return { commands: [{ type: "AddClip", clip: copy }], summary: `Duplicate: copy of ${clip.id} placed at frame ${start}` };
+}
+
+/**
+ * M27 P3 — AUTOMATIC AUDIO CROSSFADE. Overlaps the right clip by `duration`
+ * frames and applies a REAL gain hand-off on both clips through the existing
+ * volume-automation system (M17/M18 keyframes → preview mixer AND export
+ * volume expressions — identical math both paths):
+ *   LINEAR      — 9-sample straight ramp on each clip
+ *   EQUAL_POWER — 9-sample √-cos/sin ramp (constant perceived loudness)
+ * Source media untouched; fades ride automation, never the assets. Refuses:
+ * non-adjacency, locked tracks, transitions on either clip, durations that
+ * would cover a whole clip. Returns null with the reason in `summary`-style
+ * via `refusal` when invalid.
+ */
+export function compileAudioCrossfade(
+  seq: Sequence,
+  leftId: string,
+  rightId: string,
+  duration: number,
+  curve: "LINEAR" | "EQUAL_POWER",
+): { commands: Command[]; summary: string } | { refusal: string } {
+  const left = seq.clips.find((c) => c.id === leftId);
+  const right = seq.clips.find((c) => c.id === rightId);
+  if (!left || !right) return { refusal: "Clip not found." };
+  const track = findTrack(seq, left);
+  if (!track || track.locked) return { refusal: "Track is locked." };
+  if (left.trackId !== right.trackId) return { refusal: "Clips are on different tracks." };
+  const leftEnd = left.timelineStartFrame + left.timelineDurationFrames;
+  if (leftEnd !== right.timelineStartFrame) return { refusal: `Clips are not adjacent (left ends ${leftEnd}, right starts ${right.timelineStartFrame}) — close the gap first.` };
+  if (seq.transitions.some((t) => t.clipAId === left.id || t.clipBId === left.id || t.clipAId === right.id || t.clipBId === right.id)) {
+    return { refusal: "A transition exists on these clips — remove it first." };
+  }
+  const maxDur = Math.min(left.timelineDurationFrames - 1, right.timelineDurationFrames - 1);
+  if (duration < 1) return { refusal: "Crossfade duration must be at least one frame." };
+  if (duration > maxDur) return { refusal: `Crossfade duration ${duration}f exceeds the shorter clip (max ${maxDur}f).` };
+  const d = duration;
+  const SAMPLES = 9;
+  const commands: Command[] = [{ type: "MoveClip", clipId: right.id, newTimelineStartFrame: leftEnd - d }];
+  const lerp = (a: number, b: number, t: number) => a + (b - a) * t;
+  // Ramp samples live INSIDE the overlap window (L: leftDur-d … leftDur-1,
+  // R: 0 … d-1) — the last sample is the final audible frame of the overlap.
+  // Deterministic ids (clip + frame) so re-runs upsert cleanly.
+  for (let i = 1; i <= SAMPLES; i++) {
+    const t = i / SAMPLES;
+    const frameA = left.timelineDurationFrames - d + Math.round(t * (d - 1));
+    const frameB = Math.round(t * (d - 1));
+    if (curve === "LINEAR") {
+      commands.push({ type: "SetKeyframe", clipId: left.id, keyframe: { id: `xcf-${left.id}-f${frameA}`, property: "volume", frame: frameA, value: Number(lerp(1, 0, t).toFixed(4)), interpolation: "LINEAR", bezier: null } });
+      commands.push({ type: "SetKeyframe", clipId: right.id, keyframe: { id: `xcf-${right.id}-f${frameB}`, property: "volume", frame: frameB, value: Number(lerp(0, 1, t).toFixed(4)), interpolation: "LINEAR", bezier: null } });
+    } else {
+      const theta = (t * Math.PI) / 2;
+      commands.push({ type: "SetKeyframe", clipId: left.id, keyframe: { id: `xcf-${left.id}-f${frameA}`, property: "volume", frame: frameA, value: Number(Math.cos(theta).toFixed(4)), interpolation: "LINEAR", bezier: null } });
+      commands.push({ type: "SetKeyframe", clipId: right.id, keyframe: { id: `xcf-${right.id}-f${frameB}`, property: "volume", frame: frameB, value: Number(Math.sin(theta).toFixed(4)), interpolation: "LINEAR", bezier: null } });
+    }
+  }
+  // Anchor the flat parts so the automation is well-defined outside the overlap.
+  commands.push({ type: "SetKeyframe", clipId: left.id, keyframe: { id: `xcf-${left.id}-f0`, property: "volume", frame: 0, value: 1, interpolation: "LINEAR", bezier: null } });
+  commands.push({ type: "SetKeyframe", clipId: right.id, keyframe: { id: `xcf-${right.id}-f${d}`, property: "volume", frame: d, value: 1, interpolation: "LINEAR", bezier: null } });
+  return {
+    commands,
+    summary: `Auto crossfade (${curve.toLowerCase()}, ${d}f): ${left.id} fades out over ${left.id}/${right.id} overlap — ${SAMPLES + 1} automation points per clip`,
+  };
 }
 
 export { slipCommand, slideCommands };

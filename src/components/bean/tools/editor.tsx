@@ -335,7 +335,7 @@ export function EditorTool({ user }: { user: { id: string }; onLogout: () => voi
         } else if (e.key === "Escape" && range) {
           setRange(null);
         }
-        const toolKeys: Record<string, EditToolId> = { v: "select", a: "track-select", c: "razor", y: "slip", u: "slide", h: "hand", z: "zoom", t: "text", r: "transform" };
+        const toolKeys: Record<string, EditToolId> = { v: "select", a: "track-select", c: "razor", e: "roll", y: "slip", u: "slide", h: "hand", z: "zoom", t: "text", r: "transform" };
         const tool = toolKeys[e.key.toLowerCase()];
         if (tool) setActiveTool(tool);
       }

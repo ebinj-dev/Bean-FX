@@ -22,7 +22,7 @@ import { db } from "@/lib/db";
 import { pathInsideMediaRoot } from "@/lib/media-storage";
 import { clipEndFrame, type Clip, type Sequence } from "@/lib/editor/model";
 import { sequenceEndFrame } from "@/lib/editor/preview";
-import { ffmpegEffectChain } from "@/lib/editor/filters";
+import { ffmpegEffectChain, ffmpegEffectChainAnimated, segmentSplitFrames } from "@/lib/editor/filters";
 import { ffmpegVolumeArgs } from "@/lib/editor/audio";
 import { buildGraphicFilters } from "@/lib/nikki/render";
 import { jobManager } from "@/lib/job-runner";
@@ -77,10 +77,103 @@ function collectAudioPlans(seq: Sequence, startFrame: number, endFrame: number):
 
 /** Source-media seconds for a given window-start frame inside the clip. */
 function srcStartSec(plan: RenderClipPlan, seq: Sequence): number {
+  return clipRelSrcSec(plan, seq, Math.max(0, plan.winStartFrame - plan.clip.timelineStartFrame));
+}
+
+/** Source seconds for a clip-relative TIMELINE frame (M27 keyframe splits). */
+function clipRelSrcSec(plan: RenderClipPlan, seq: Sequence, clipRelFrame: number): number {
   const { clip } = plan;
-  const offsetFrames = Math.max(0, plan.winStartFrame - clip.timelineStartFrame);
-  const srcOffset = Math.round((offsetFrames * clip.playbackSpeed * clip.sourceFps.num * seq.fps.den) / (clip.sourceFps.den * seq.fps.num));
+  const srcOffset = Math.round((clipRelFrame * clip.playbackSpeed * clip.sourceFps.num * seq.fps.den) / (clip.sourceFps.den * seq.fps.num));
   return (clip.sourceInFrame + srcOffset) / (clip.sourceFps.num / clip.sourceFps.den);
+}
+
+/**
+ * M27 P2 — emit ONE clip's video segment. Animated clips with non-expr
+ * keyframed params (colorbalance/gblur/unsharp families) are SPLIT at their
+ * keyframe frames into per-segment constant chains (real processing, real
+ * concat — no fabricated animation); expr-capable params (eq family,
+ * vignette) animate exactly via eval=frame t-expressions with no split.
+ */
+function emitVisualSegment(
+  parts: string[],
+  plan: RenderClipPlan,
+  seq: Sequence,
+  inputIndex: number,
+  isImage: boolean,
+  outLabel: string,
+  uid: string,
+  renderStartFrame: number,
+): void {
+  const fps = seq.fps.num / seq.fps.den;
+  const fpsR = { num: seq.fps.num, den: seq.fps.den };
+  const fit = { width: seq.width, height: seq.height };
+  const clipRelWinStart = Math.max(0, plan.winStartFrame - plan.clip.timelineStartFrame);
+  const winDurFrames = plan.winEndFrame - plan.winStartFrame;
+  const animated = plan.clip.effects.some((e) => e.enabled && e.animatedParams.length > 0);
+  const splits = animated ? segmentSplitFrames(plan.clip.effects, plan.clip.timelineDurationFrames).filter((f) => f > clipRelWinStart && f < clipRelWinStart + winDurFrames) : [];
+  if (splits.length === 0) {
+    // Static OR expr-only animation: one segment, exact t-expressions.
+    const seg = buildSegmentBase(plan, seq, isImage);
+    const chain = animated
+      ? ffmpegEffectChainAnimated(plan.clip.effects, clipRelWinStart, fpsR, fit)
+      : ffmpegEffectChain(plan.clip.effects, fit);
+    if (chain) seg.push(chain);
+    // M27 fix: shift PTS so the segment's t equals its TRUE position in the
+    // render window (enable windows and tpad-free overlays line up).
+    const offsetSec = (plan.winStartFrame - renderStartFrame) / fps;
+    if (offsetSec > 0) seg.push(`setpts=PTS+${q(offsetSec)}/TB`);
+    parts.push(`[${inputIndex}:v]${seg.join(",")}${outLabel}`);
+    return;
+  }
+  // Piecewise-constant path: split the input once, trim+chain each sub-range,
+  // concat. Clip fades apply AFTER the concat (they span the whole clip).
+  const bounds = [clipRelWinStart, ...splits, clipRelWinStart + winDurFrames];
+  const branches = bounds.slice(0, -1).map((_, i) => `[bs${uid}${i}]`).join("");
+  parts.push(`[${inputIndex}:v]split=${bounds.length - 1}${branches}`);
+  const subLabels: string[] = [];
+  for (let i = 0; i < bounds.length - 1; i++) {
+    const b0 = bounds[i];
+    const b1 = bounds[i + 1];
+    const sub: string[] = [];
+    const durSec = (b1 - b0) / fps;
+    if (!isImage) {
+      const srcStart = clipRelSrcSec(plan, seq, b0);
+      sub.push(`trim=start=${q(srcStart)}:duration=${q(durSec * plan.clip.playbackSpeed)},setpts=PTS-STARTPTS`);
+      if (plan.clip.playbackSpeed !== 1) sub.push(`setpts=PTS*${q(1 / plan.clip.playbackSpeed)}`);
+      sub.push(`scale=${seq.width}:${seq.height}:force_original_aspect_ratio=decrease,pad=${seq.width}:${seq.height}:(ow-iw)/2:(oh-ih)/2,setsar=1,fps=${fps}`);
+    } else {
+      sub.push(`scale=${seq.width}:${seq.height}:force_original_aspect_ratio=decrease,pad=${seq.width}:${seq.height}:(ow-iw)/2:(oh-ih)/2,setsar=1`);
+    }
+    const chain = ffmpegEffectChainAnimated(plan.clip.effects, b0, fpsR, fit);
+    if (chain) sub.push(chain);
+    const lab = `[sub${uid}${i}]`;
+    subLabels.push(lab);
+    parts.push(`${`[bs${uid}${i}]`}${sub.join(",")}${lab}`);
+  }
+  parts.push(`${subLabels.join("")}concat=n=${subLabels.length}:v=1:a=0[cat${uid}]`);
+  // Clip-level fades on the reassembled stream (fade st relative to the clip
+  // window inside THIS segment — the segment starts at the clip's window).
+  const fade: string[] = [];
+  if (plan.clip.fadeInFrames > 0) fade.push(`fade=in:st=0:d=${q(plan.clip.fadeInFrames / fps)}`);
+  if (plan.clip.fadeOutFrames > 0) fade.push(`fade=out:st=${q((winDurFrames - plan.clip.fadeOutFrames) / fps)}:d=${q(plan.clip.fadeOutFrames / fps)}`);
+  const offsetSec = (plan.winStartFrame - renderStartFrame) / fps;
+  const shift = offsetSec > 0 ? `setpts=PTS+${q(offsetSec)}/TB` : "null";
+  parts.push(`[cat${uid}]${[...fade, shift].join(",")}${outLabel}`);
+}
+
+/** Base filters of a segment WITHOUT the effect chain (M27 split path). */
+function buildSegmentBase(plan: RenderClipPlan, seq: Sequence, isImage: boolean): string[] {
+  const fps = seq.fps.num / seq.fps.den;
+  const durSec = (plan.winEndFrame - plan.winStartFrame) / fps;
+  const filters: string[] = [];
+  if (isImage) {
+    filters.push(`scale=${seq.width}:${seq.height}:force_original_aspect_ratio=decrease,pad=${seq.width}:${seq.height}:(ow-iw)/2:(oh-ih)/2,setsar=1`);
+  } else {
+    filters.push(`trim=start=${q(srcStartSec(plan, seq))}:duration=${q(durSec * plan.clip.playbackSpeed)},setpts=PTS-STARTPTS`);
+    if (plan.clip.playbackSpeed !== 1) filters.push(`setpts=PTS*${q(1 / plan.clip.playbackSpeed)}`);
+    filters.push(`scale=${seq.width}:${seq.height}:force_original_aspect_ratio=decrease,pad=${seq.width}:${seq.height}:(ow-iw)/2:(oh-ih)/2,setsar=1,fps=${fps}`);
+  }
+  return filters;
 }
 
 /** Filter fragment for one visual clip segment (trim→speed→fit→effects→fade). */
@@ -96,8 +189,8 @@ function visualSegmentFilters(plan: RenderClipPlan, seq: Sequence, isImage: bool
     if (plan.clip.playbackSpeed !== 1) filters.push(`setpts=PTS*${q(1 / plan.clip.playbackSpeed)}`);
     filters.push(`scale=${seq.width}:${seq.height}:force_original_aspect_ratio=decrease,pad=${seq.width}:${seq.height}:(ow-iw)/2:(oh-ih)/2,setsar=1,fps=${fps}`);
   }
-  const chain = ffmpegEffectChain(plan.clip.effects, { width: seq.width, height: seq.height });
-  if (chain) filters.push(chain);
+  // M27 P2: the effect chain is emitted by emitVisualSegment (static chain or
+  // animated sub-segments) — this builder keeps only base geometry.
   if (plan.clip.fadeInFrames > 0) filters.push(`fade=in:st=0:d=${q(plan.clip.fadeInFrames / fps)}`);
   if (plan.clip.fadeOutFrames > 0) filters.push(`fade=out:st=${q(durSec - plan.clip.fadeOutFrames / fps)}:d=${q(plan.clip.fadeOutFrames / fps)}`);
   return filters;
@@ -174,60 +267,62 @@ export function buildTimelineGraph(seq: Sequence, startFrame: number, endFrame: 
   // Silence bed — stable base audio so amix always has ≥1 input.
   parts.push(`anullsrc=r=48000:cl=stereo,atrim=duration=${q(totalSec)},asetpts=PTS-STARTPTS[silence]`);
 
-  // Video composite: per-track chains (xfade for validated transitions,
-  // enable-window overlays otherwise), overlaid in track order — matching
-  // the preview resolver's top-down track rule.
+  // Video composite (M27 rework): a FULL-WINDOW black base is the primary of
+  // every overlay, so the composite always spans the render window no matter
+  // how clips are laid out. Segments now carry window-relative PTS, so
+  // enable=between(t,…) windows match real stream time. Clips joined by a
+  // validated transition are xfade-merged into a "run" first (real frames
+  // from both inputs); every run/solo clip then overlays the base with its
+  // exact enable window — top-down track order preserved.
+  parts.push(`color=c=black:s=${seq.width}x${seq.height}:r=${fps}:d=${q(totalSec)},setsar=1[base]`);
   let videoLabel = "[base]";
-  if (visualPlans.length === 0) {
-    parts.push(`color=c=black:s=${seq.width}x${seq.height}:r=${fps}:d=${q(totalSec)},setsar=1[base]`);
-    videoLabel = "[base]";
-  } else {
-    const trackIds = [...new Set(visualPlans.map((p) => p.trackIndex))];
+  {
     let segCounter = 0;
-    let chainCounter = 0;
-    let baseChain: string | null = null;
+    let compCounter = 0;
+    const trackIds = [...new Set(visualPlans.map((p) => p.trackIndex))];
     for (const trackIndex of trackIds) {
       const trackPlans = visualPlans.filter((p) => p.trackIndex === trackIndex);
       const trackId = seq.tracks[trackIndex]?.id ?? "";
       const pairs = planTrackTransitions(seq, trackId, trackPlans, report ?? { applied: [], skipped: [] });
-      // Chain the first segment.
-      const first = trackPlans[0];
-      const inFirst = assetInputs.get(first.clip.sourceAssetId)!;
-      const firstLabel = `[tseg${segCounter}]`;
-      parts.push(`[${inFirst.index}:v]${visualSegmentFilters(first, seq, inFirst.isImage).join(",")}${firstLabel}`);
-      segCounter += 1;
-      let chain = firstLabel;
-      for (let i = 1; i < trackPlans.length; i++) {
-        const plan = trackPlans[i];
-        const input = assetInputs.get(plan.clip.sourceAssetId)!;
-        const segLabel = `[tseg${segCounter}]`;
-        parts.push(`[${input.index}:v]${visualSegmentFilters(plan, seq, input.isImage).join(",")}${segLabel}`);
-        segCounter += 1;
-        const out = `[tchain${chainCounter}]`;
-        const transition = pairs[i - 1]?.transition ?? null;
-        if (transition) {
-          // xfade consumes REAL frames from both segments (no synthesized media).
-          const offsetSec = (transition.startFrame - first.clip.timelineStartFrame) / fps;
-          const durSec = (transition.endFrame - transition.startFrame) / fps;
-          parts.push(`${chain}${segLabel}xfade=transition=${XFADE_KINDS[transition.kind]}:duration=${q(durSec)}:offset=${q(Math.max(0, offsetSec))}${out}`);
+      // Group into runs: consecutive clips joined by a validated transition.
+      const runs: Array<{ plans: typeof trackPlans; transitions: Array<(typeof seq.transitions)[number] | null> }> = [];
+      for (let i = 0; i < trackPlans.length; i++) {
+        const prevTransition = i > 0 ? pairs[i - 1]?.transition ?? null : null;
+        if (prevTransition && runs.length > 0) {
+          runs[runs.length - 1].plans.push(trackPlans[i]);
+          runs[runs.length - 1].transitions.push(prevTransition);
         } else {
-          // M18: window-relative times — windowed long-form renders start at t=0.
-          const offsetSec = (plan.winStartFrame - startFrame) / fps;
-          const endSec = (plan.winEndFrame - startFrame) / fps;
-          parts.push(`${chain}${segLabel}overlay=eof_action=pass:enable='between(t\\,${q(offsetSec)}\\,${q(endSec)})'${out}`);
+          runs.push({ plans: [trackPlans[i]], transitions: [] });
         }
-        chainCounter += 1;
-        chain = out;
       }
-      // Overlay this track's chain onto the running composite (track order).
-      if (baseChain === null) {
-        baseChain = chain;
-        videoLabel = chain;
-      } else {
-        const out = `[tcomp${chainCounter}]`;
-        parts.push(`${baseChain}${chain}overlay=eof_action=pass${out}`);
-        baseChain = out;
+      for (const run of runs) {
+        const labels: string[] = [];
+        for (let i = 0; i < run.plans.length; i++) {
+          const plan = run.plans[i];
+          const input = assetInputs.get(plan.clip.sourceAssetId)!;
+          const label = `[tseg${segCounter}]`;
+          emitVisualSegment(parts, plan, seq, input.index, input.isImage, label, `s${segCounter}`, startFrame);
+          segCounter += 1;
+          labels.push(label);
+        }
+        let runLabel = labels[0];
+        for (let i = 1; i < labels.length; i++) {
+          const transition = run.transitions[i - 1]!;
+          const out = `[trun${compCounter}_${i}]`;
+          // xfade offsets are relative to the FIRST input's t=0 — the run's
+          // window-relative start of the first clip.
+          const offsetSec = (transition.startFrame - run.plans[0].winStartFrame) / fps;
+          const durSec = (transition.endFrame - transition.startFrame) / fps;
+          parts.push(`${runLabel}${labels[i]}xfade=transition=${XFADE_KINDS[transition.kind]}:duration=${q(durSec)}:offset=${q(Math.max(0, offsetSec))}${out}`);
+          runLabel = out;
+        }
+        // Overlay the run onto the composite with its exact enable window.
+        const winStartSec = (run.plans[0].winStartFrame - startFrame) / fps;
+        const winEndSec = (run.plans[run.plans.length - 1].winEndFrame - startFrame) / fps;
+        const out = `[tcomp${compCounter}]`;
+        parts.push(`${videoLabel}${runLabel}overlay=eof_action=pass:enable='between(t\\,${q(Math.max(0, winStartSec))}\\,${q(winEndSec)})'${out}`);
         videoLabel = out;
+        compCounter += 1;
       }
     }
   }

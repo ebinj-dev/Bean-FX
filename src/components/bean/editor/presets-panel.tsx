@@ -53,7 +53,7 @@ export function PresetsPanel({ sequence, session, notice }: { sequence: Sequence
     setBusy(true);
     try {
       let payload: Record<string, unknown> | null = null;
-      if (kind === "VIDEO_EFFECT") payload = { effects: selectedClip.effects.map((e) => ({ type: e.type, enabled: e.enabled, params: e.params })) };
+      if (kind === "VIDEO_EFFECT") payload = { effects: selectedClip.effects.map((e) => ({ type: e.type, enabled: e.enabled, params: e.params, keyframes: e.keyframes, animatedParams: e.animatedParams })) };
       else if (kind === "CAPTION") payload = selectedClip.captionStyle ? { captionStyle: selectedClip.captionStyle } : null;
       else if (kind === "EXPORT") payload = { profileIds: [] };
       else payload = { gangziiPresetId: "" };
@@ -74,9 +74,9 @@ export function PresetsPanel({ sequence, session, notice }: { sequence: Sequence
   const applyPreset = async (p: PresetRow) => {
     if (!selectedClip) return notice("Select a clip first — presets apply to the selection.");
     if (p.kind === "VIDEO_EFFECT") {
-      const effects = (p.payload.effects as Array<{ type: string; enabled: boolean; params: Record<string, number | string | boolean> }>) ?? [];
+      const effects = (p.payload.effects as Array<{ type: string; enabled: boolean; params: Record<string, number | string | boolean>; keyframes?: Array<{ id: string; param: string; frame: number; value: number; interpolation: "HOLD" | "LINEAR" | "EASE_IN" | "EASE_OUT" | "EASE_IN_OUT" }>; animatedParams?: string[] }>) ?? [];
       if (effects.length === 0) return notice("Preset has an empty effect stack.");
-      const ok = session.apply(effects.map((e) => ({ type: "AddEffect" as const, clipId: selectedClip.id, effect: { id: session.newId("fx"), type: e.type, enabled: e.enabled, params: e.params } })));
+      const ok = session.apply(effects.map((e) => ({ type: "AddEffect" as const, clipId: selectedClip.id, effect: { id: session.newId("fx"), type: e.type, enabled: e.enabled, params: e.params, keyframes: (e.keyframes ?? []).map((k) => ({ ...k, id: session.newId("ek") })), animatedParams: e.animatedParams ?? [] } })));
       notice(ok ? `Applied ${p.name} (${effects.length} effects, undoable).` : "Apply refused by the engine.");
     } else if (p.kind === "CAPTION") {
       const style = (p.payload.captionStyle as Record<string, unknown>) ?? null;
