@@ -9,7 +9,7 @@
  * timeline uses M1 commands exclusively. Provider options shown here mirror
  * the provider's REAL capability map — no decorative controls.
  */
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Film, Loader2, Scissors, Sparkles, Plus, RefreshCw } from "lucide-react";
 import type { Sequence } from "@/lib/editor/model";
 import type { EditorSession } from "@/hooks/use-editor-session";
@@ -70,6 +70,8 @@ export function JazmiiPanel({ sequence, session }: { sequence: Sequence; session
   const [withAudio, setWithAudio] = useState(false);
   const [suggestions, setSuggestions] = useState<Suggestion[]>([]);
   const [job, setJob] = useState<JobLite | null>(null);
+  // M25 P5 — last generation params for honest retry + cancel support.
+  const lastGen = useRef<{ prompt: string; duration: "5" | "10" } | null>(null);
   const [outputs, setOutputs] = useState<OutputAsset[]>([]);
   const [busy, setBusy] = useState<null | "suggest" | "generate" | "insert" | "analyze">(null);
   const [notice, setNotice] = useState<string | null>(null);
@@ -167,6 +169,7 @@ export function JazmiiPanel({ sequence, session }: { sequence: Sequence; session
   const generate = useCallback(
     async (genPrompt: string, genDuration: "5" | "10") => {
       if (!genPrompt.trim() || busy) return;
+      lastGen.current = { prompt: genPrompt, duration: genDuration };
       setBusy("generate");
       setNotice(null);
       try {
@@ -199,6 +202,19 @@ export function JazmiiPanel({ sequence, session }: { sequence: Sequence; session
     },
     [busy, quality, size, fps, durationSec, withAudio, refreshOutputs],
   );
+
+  /** M25 P5 — cancel the active generation job (real DELETE /api/jobs/[id]);
+   *  the poll loop observes CANCELLED and reports it honestly. */
+  const cancelGeneration = useCallback(async () => {
+    if (!job || busy !== "generate") return;
+    await fetch(`/api/jobs/${job.id}`, { method: "DELETE" }).catch(() => undefined);
+  }, [job, busy]);
+
+  /** M25 P5 — retry the last failed generation with the exact same params. */
+  const retryGeneration = useCallback(() => {
+    if (!lastGen.current || busy) return;
+    void generate(lastGen.current.prompt, lastGen.current.duration);
+  }, [busy, generate]);
 
   /** Insert a generated/imported video as a clip on the first VIDEO track. */
   const insertAsset = useCallback(
@@ -337,6 +353,16 @@ export function JazmiiPanel({ sequence, session }: { sequence: Sequence; session
           <label className="flex items-center gap-1 text-[9px]">
             <input type="checkbox" checked={withAudio} onChange={(e) => setWithAudio(e.target.checked)} /> AI audio
           </label>
+          {busy === "generate" && job && (
+            <button type="button" onClick={() => void cancelGeneration()} className="rounded border border-[#c45c4c]/40 bg-[#c45c4c]/10 px-2 py-1 text-[#c45c4c] hover:bg-[#c45c4c]/20" title="Cancel the active generation job">
+              CANCEL JOB
+            </button>
+          )}
+          {busy !== "generate" && job?.status === "FAILED" && lastGen.current && (
+            <button type="button" onClick={retryGeneration} className="rounded border border-[#d4a017] px-2 py-1 text-[#d4a017] hover:bg-[#d4a017]/10" title="Retry the last generation with the same params">
+              RETRY
+            </button>
+          )}
           <button type="button" onClick={() => void generate(prompt, durationSec)} disabled={busy !== null || !prompt.trim()} className="flex items-center gap-1 rounded border border-[#d4a017] bg-[#d4a017]/10 px-2 py-1 text-[#d4a017] hover:bg-[#d4a017]/20 disabled:opacity-40">
             {busy === "generate" ? <Loader2 className="h-3 w-3 animate-spin" /> : <Film className="h-3 w-3" />} GENERATE
           </button>

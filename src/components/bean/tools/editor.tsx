@@ -540,7 +540,7 @@ export function EditorTool({ user }: { user: { id: string }; onLogout: () => voi
               <span className="bean-label text-[10px] text-[#d4a017]">PROJECT SETTINGS &amp; HISTORY</span>
               <button type="button" onClick={() => setDrawer(null)} className="text-[#8f8f8a] hover:text-[#d8d8d2]">✕</button>
             </div>
-            <ProjectSettings projectId={projectId} onNotice={setNotice} onDuplicate={() => void duplicateProject()} onRestored={() => session.reload()} />
+            <ProjectSettings projectId={projectId} onNotice={setNotice} onDuplicate={() => void duplicateProject()} onRestored={() => session.reload()} onDeleted={() => { setPlaying(false); setProjectId(null); }} />
           </div>
         </div>
       )}
@@ -554,8 +554,12 @@ export function EditorTool({ user }: { user: { id: string }; onLogout: () => voi
  * state. No fake progress — the durable worker drives the stages.
  */
 function TimelineRenderPanel({ projectId, onNotice }: { projectId: string; onNotice: (m: string | null) => void }) {
-  const [state, setState] = useState<{ jobs: { id: string; status: string; stage: string | null; progress: number; message: string | null; createdAt: string }[]; exports: { id: string; filename: string; sizeBytes: number; durationSec: number; createdAt: string }[] } | null>(null);
+  const [state, setState] = useState<{ jobs: { id: string; status: string; stage: string | null; progress: number; message: string | null; createdAt: string; range?: { startFrame?: number; endFrame?: number } | null }[]; exports: { id: string; filename: string; sizeBytes: number; durationSec: number; createdAt: string }[] } | null>(null);
   const [busy, setBusy] = useState(false);
+  // M25 P3 — real export range selection (backend-supported frames only).
+  const [rangeMode, setRangeMode] = useState<"full" | "preview" | "custom">("full");
+  const [startSec, setStartSec] = useState("0");
+  const [endSec, setEndSec] = useState("");
   const load = useCallback(() => {
     fetch(`/api/editor/projects/${projectId}/render`).then((r) => r.json()).then((d) => setState(d)).catch(() => undefined);
   }, [projectId]);
@@ -564,11 +568,11 @@ function TimelineRenderPanel({ projectId, onNotice }: { projectId: string; onNot
     const id = window.setInterval(load, 3000);
     return () => window.clearInterval(id);
   }, [load]);
-  const render = async () => {
+  const render = async (range?: { startFrame?: number; endFrame?: number }) => {
     setBusy(true);
     try {
-      const res = await fetch(`/api/editor/projects/${projectId}/render`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({}) });
-      const body = (await res.json()) as { jobId?: string; error?: string };
+      const res = await fetch(`/api/editor/projects/${projectId}/render`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(range ?? {}) });
+      const body = (await res.json()) as { jobId?: string; error?: string; code?: string };
       if (body.jobId) onNotice(`Render job queued — ${body.jobId}`);
       else onNotice(body.error ?? "Render enqueue failed.");
       load();
@@ -576,13 +580,41 @@ function TimelineRenderPanel({ projectId, onNotice }: { projectId: string; onNot
       setBusy(false);
     }
   };
+  /** M25 P3 — cancel an active render (real DELETE /api/jobs/[id]). */
+  const cancelJob = async (id: string) => {
+    const res = await fetch(`/api/jobs/${id}`, { method: "DELETE" });
+    onNotice(res.ok ? "Render cancelled." : "This job can no longer be cancelled.");
+    load();
+  };
+  const rangeFrames = (fps: number): { startFrame?: number; endFrame?: number } => {
+    if (rangeMode === "full") return {};
+    if (rangeMode === "preview") return { startFrame: 0, endFrame: Math.max(1, Math.round(10 * fps)) };
+    const st = Math.max(0, Math.round((Number(startSec) || 0) * fps));
+    const en = endSec ? Math.max(st + 1, Math.round(Number(endSec) * fps)) : undefined;
+    return en ? { startFrame: st, endFrame: en } : { startFrame: st };
+  };
   return (
     <div className="mt-4 border-t border-[#2a2a2a] pt-3">
       <div className="mb-1.5 flex items-center justify-between">
         <span className="bean-label text-[10px] text-[#d4a017]">RENDER TIMELINE (FFmpeg)</span>
-        <button type="button" onClick={() => void render()} disabled={busy} className="rounded border border-[#d4a017] px-2 py-1 text-[10px] font-bold text-[#d4a017] hover:bg-[#d4a017] hover:text-[#0c0c0c] disabled:opacity-40">
+        <button type="button" onClick={() => void render(rangeFrames(30))} disabled={busy} className="rounded border border-[#d4a017] px-2 py-1 text-[10px] font-bold text-[#d4a017] hover:bg-[#d4a017] hover:text-[#0c0c0c] disabled:opacity-40">
           {busy ? "…" : "RENDER SEQUENCE"}
         </button>
+      </div>
+      {/* M25 P3 — export range presets (real backend range support). */}
+      <div className="mb-2 flex flex-wrap items-center gap-1.5 text-[9px] text-[#8f8f8a]">
+        {(["full", "preview", "custom"] as const).map((m) => (
+          <button key={m} type="button" onClick={() => setRangeMode(m)} className={`rounded border px-1.5 py-0.5 ${rangeMode === m ? "border-[#d4a017] text-[#d4a017]" : "border-[#2a2a2a] text-[#d8d8d2] hover:border-[#d4a017]"}`}>
+            {m === "full" ? "FULL SEQUENCE" : m === "preview" ? "PREVIEW (FIRST 10s)" : "CUSTOM RANGE"}
+          </button>
+        ))}
+        {rangeMode === "custom" && (
+          <span className="flex items-center gap-1">
+            <input aria-label="Range start seconds" value={startSec} onChange={(e) => setStartSec(e.target.value.replace(/[^0-9.]/g, "").slice(0, 8))} className="w-14 rounded border border-[#2a2a2a] bg-[#111110] px-1 py-0.5 text-[9px] text-[#d4d4d0]" placeholder="start s" />
+            <span>→</span>
+            <input aria-label="Range end seconds" value={endSec} onChange={(e) => setEndSec(e.target.value.replace(/[^0-9.]/g, "").slice(0, 8))} className="w-14 rounded border border-[#2a2a2a] bg-[#111110] px-1 py-0.5 text-[9px] text-[#d4d4d0]" placeholder="end s" />
+          </span>
+        )}
       </div>
       <p className="mb-2 text-[9px] leading-relaxed text-[#6a6a64]">
         Renders the CURRENT sequence: every visual clip (effects, fades), captions, graphics and the full audio mix through the durable worker; output validated with FFprobe before it appears below.
@@ -594,6 +626,14 @@ function TimelineRenderPanel({ projectId, onNotice }: { projectId: string; onNot
             <span className="font-mono text-[9px] text-[#6a6a64]">{Math.round(j.progress)}%</span>
           </div>
           <div className="text-[9px] text-[#8f8f8a]">{j.stage ?? ""}{j.message ? ` — ${j.message.slice(0, 160)}` : ""}</div>
+          {(j.status === "QUEUED" || j.status === "PROCESSING" || j.status === "RUNNING") && (
+            <button type="button" onClick={() => void cancelJob(j.id)} className="mt-0.5 rounded border border-[#c45c4c]/40 px-1.5 py-0.5 text-[9px] text-[#c45c4c] hover:bg-[#c45c4c]/10">Cancel</button>
+          )}
+          {j.status === "FAILED" && (
+            <button type="button" onClick={() => void render(j.range ?? {})} disabled={busy} className="mt-0.5 rounded border border-[#d4a017] px-1.5 py-0.5 text-[9px] text-[#d4a017] hover:bg-[#d4a017]/10 disabled:opacity-40" title="Re-run this exact render">
+              Retry
+            </button>
+          )}
         </div>
       ))}
       {state?.exports?.map((e) => (
@@ -622,11 +662,14 @@ function BusTimecode({ fpsRational, fallback }: { fpsRational: Rational; fallbac
 }
 
 /** Settings drawer body: real project detail + version history (with restore) + duplicate. */
-function ProjectSettings({ projectId, onNotice, onDuplicate, onRestored }: { projectId: string; onNotice: (m: string | null) => void; onDuplicate: () => void; onRestored: () => Promise<void> }) {
+function ProjectSettings({ projectId, onNotice, onDuplicate, onRestored, onDeleted }: { projectId: string; onNotice: (m: string | null) => void; onDuplicate: () => void; onRestored: () => Promise<void>; onDeleted: () => void }) {
   const [detail, setDetail] = useState<{ project: { id: string; name: string; description: string | null; createdAt: string }; versions: { versionNo: number; autosave: boolean; createdAt: string }[] } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [restoring, setRestoring] = useState<number | null>(null);
   const [restoreMsg, setRestoreMsg] = useState<string | null>(null);
+  // M25 P4 — deletion with typed-name safeguard.
+  const [delConfirm, setDelConfirm] = useState("");
+  const [deleting, setDeleting] = useState(false);
   const loadDetail = useCallback(async () => {
     try {
       const r = await fetch(`/api/projects/${projectId}`);
@@ -665,6 +708,26 @@ function ProjectSettings({ projectId, onNotice, onDuplicate, onRestored }: { pro
       setRestoring(null);
     }
   };
+  /** M25 P4 — real DELETE /api/projects/[id]?confirm=<name> (typed-name
+   *  safeguard; the media library is never touched). */
+  const deleteProject = async () => {
+    if (deleting) return;
+    setDeleting(true);
+    try {
+      const res = await fetch(`/api/projects/${projectId}?confirm=${encodeURIComponent(delConfirm.trim())}`, { method: "DELETE" });
+      const body = (await res.json().catch(() => ({}))) as { deleted?: boolean; error?: string; versionsRemoved?: number };
+      if (res.ok && body.deleted) {
+        onNotice(`Project deleted (${body.versionsRemoved ?? 0} versions removed; media library untouched).`);
+        onDeleted();
+      } else {
+        setRestoreMsg(body.error ?? `Delete failed (${res.status}).`);
+      }
+    } catch {
+      setRestoreMsg("Delete failed (network).");
+    } finally {
+      setDeleting(false);
+    }
+  };
   if (error) return <p className="text-[11px] text-[#c45c4c]">{error}</p>;
   if (!detail) return <Loader2 className="h-4 w-4 animate-spin text-[#d4a017]" />;
   const headVersion = detail.versions.reduce((m, v) => Math.max(m, v.versionNo), 0);
@@ -699,6 +762,18 @@ function ProjectSettings({ projectId, onNotice, onDuplicate, onRestored }: { pro
           ))}
           {detail.versions.length === 0 && <li className="text-[10px] text-[#6a6a64]">No versions yet.</li>}
         </ul>
+        {restoreMsg && <p className="mt-1 text-[10px] text-[#a0a09a]" role="status">{restoreMsg}</p>}
+      </div>
+      {/* M25 P4 — danger zone: typed-name deletion. */}
+      <div className="rounded border border-[#c45c4c]/40 p-2">
+        <div className="bean-label mb-1 text-[9px] text-[#c45c4c]">DANGER ZONE</div>
+        <p className="mb-1.5 text-[9px] leading-relaxed text-[#8f8f8a]">Deletes this project and its version history. Your media library is never touched. Type the project name to confirm.</p>
+        <div className="flex gap-1">
+          <input aria-label="Type project name to confirm deletion" value={delConfirm} onChange={(e) => setDelConfirm(e.target.value.slice(0, 120))} placeholder={detail.project.name} className="min-w-0 flex-1 rounded border border-[#2a2a2a] bg-[#111110] px-1.5 py-1 text-[10px] text-[#d4d4d0] placeholder:text-[#5a5a55]" />
+          <button type="button" onClick={() => void deleteProject()} disabled={deleting || delConfirm.trim() !== detail.project.name} className="rounded border border-[#c45c4c] bg-[#c45c4c]/10 px-2 py-1 text-[10px] text-[#c45c4c] hover:bg-[#c45c4c]/20 disabled:opacity-40">
+            {deleting ? "…" : "Delete project"}
+          </button>
+        </div>
         {restoreMsg && <p className="mt-1 text-[10px] text-[#a0a09a]" role="status">{restoreMsg}</p>}
       </div>
       <p className="text-[9px] text-[#6a6a64]">Recovery: the newest version reloads automatically when the project is reopened; undo/redo steps remain available in-session. Conflict handling reloads the authoritative version and tells you honestly.</p>

@@ -13,6 +13,21 @@ type Storage = { bytesUsed: number; quotaBytes: number | null; uploads: number; 
 /** M24 §3.I — integration tokens (API v1 / MCP / Desktop Bridge). Same contract as /api/account/tokens. */
 type IntegrationTokenRow = { id: string; prefix: string; name: string; scopes: string[]; createdAt: string; expiresAt: string | null; revokedAt: string | null };
 type HealthInfo = { status?: string; checks?: Record<string, { ok: boolean; detail?: string }> };
+/** M25 P2 — subscription/plan/usage shapes (same contract as /api/billing/*). */
+type PlanEntitlements = {
+  maxProjects: number | null; monthlyExportMinutes: number | null; monthlyAiCalls: number | null;
+  storageQuotaBytes: number | null; maxConcurrentRenders: number | null;
+  features: { watermarkRemoval: boolean; aiGeneration: boolean; publishPackages: boolean };
+  requiresPayment: boolean; selfServe: boolean;
+};
+type PlanEntry = { id: string; name: string; sort: number; entitlements: PlanEntitlements };
+type SubState = {
+  subscription: { planId: string; planName: string; status: string; cancelAtPeriodEnd: boolean; provider: string; currentPeriodStart: string; currentPeriodEnd: string };
+  entitlements: PlanEntitlements;
+  usage: { projects: number; exportMinutes: number | null; aiCalls: number; storageBytes: number | null; activeRenders: number };
+  paymentsEnabled: boolean;
+};
+type BillingEventRow = { id: string; type: string; detailJson: string | null; createdAt: string };
 
 const fmtBytes = (n: number | null) => {
   if (n === null || n === undefined) return "—";
@@ -55,6 +70,17 @@ export default function SettingsPage() {
   // M24 §6 — honest system status (public health + admin ops).
   const [health, setHealth] = useState<HealthInfo | null>(null);
   const [adminHealth, setAdminHealth] = useState<HealthInfo | null>(null);
+  // M25 P2 — plan & usage (real subscription + entitlements + usage).
+  const [sub, setSub] = useState<SubState | null>(null);
+  const [plans, setPlans] = useState<PlanEntry[] | null>(null);
+  const [planMsg, setPlanMsg] = useState<string | null>(null);
+  const [planBusy, setPlanBusy] = useState(false);
+  const [billingEvents, setBillingEvents] = useState<BillingEventRow[] | null>(null);
+  // M25 P7 — admin billing assignment.
+  const [adminAssignEmail, setAdminAssignEmail] = useState("");
+  const [adminAssignPlan, setAdminAssignPlan] = useState("creator");
+  const [adminMsg, setAdminMsg] = useState<string | null>(null);
+  const [auditFeed, setAuditFeed] = useState<Array<{ id: string; action: string; detail: string | null; createdAt: string }> | null>(null);
 
   const refresh = useCallback(async () => {
     const [a, s, sess] = await Promise.all([
@@ -76,13 +102,27 @@ export default function SettingsPage() {
     try { setHealth((await (await fetch("/api/health")).json()) as HealthInfo); } catch { setHealth(null); }
   }, []);
 
+  /** M25 P2 — load the real subscription, catalog and billing history. */
+  const refreshBilling = useCallback(async () => {
+    try {
+      const [subRes, plansRes] = await Promise.all([fetch("/api/billing/subscription"), fetch("/api/billing/plans")]);
+      if (subRes.ok) setSub((await subRes.json()) as SubState);
+      if (plansRes.ok) setPlans(((await plansRes.json()) as { plans: PlanEntry[] }).plans);
+      const h = await fetch("/api/billing/history");
+      if (h.ok) setBillingEvents(((await h.json()) as { events: BillingEventRow[] }).events);
+    } catch {
+      setSub(null);
+    }
+  }, []);
+
   useEffect(() => {
     // Defer past the sync phase: refresh() sets state after its awaits; the
     // react-hooks compiler flags direct invocation in the effect body.
     const t = setTimeout(() => void refresh(), 0);
     const t2 = setTimeout(() => void refreshIntegrations(), 0);
-    return () => { clearTimeout(t); clearTimeout(t2); };
-  }, [refresh, refreshIntegrations]);
+    const t3 = setTimeout(() => void refreshBilling(), 0);
+    return () => { clearTimeout(t); clearTimeout(t2); clearTimeout(t3); };
+  }, [refresh, refreshIntegrations, refreshBilling]);
 
   const saveName = async () => {
     setNameMsg(null);
@@ -125,6 +165,49 @@ export default function SettingsPage() {
       return;
     }
     setDelMsg(body.error ?? `Deletion failed (${res.status}).`);
+  };
+
+  // ── M25 P2 — plan actions (real /api/billing/*; payments disabled by design).
+  const switchPlan = async (planId: string) => {
+    setPlanMsg(null);
+    setPlanBusy(true);
+    try {
+      const res = await fetch("/api/billing/subscription", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ planId }) });
+      const body = (await res.json().catch(() => ({}))) as { error?: string; unchanged?: boolean };
+      if (res.ok) setPlanMsg(body.unchanged ? "Already on this plan." : "Plan changed.");
+      else setPlanMsg(body.error ?? `Change failed (${res.status}).`);
+      void refreshBilling();
+    } finally {
+      setPlanBusy(false);
+    }
+  };
+
+  const billingAction = async (kind: "cancel" | "resume") => {
+    setPlanMsg(null);
+    setPlanBusy(true);
+    try {
+      const res = await fetch(`/api/billing/${kind}`, { method: "POST" });
+      const body = (await res.json().catch(() => ({}))) as { error?: string; unchanged?: boolean; cancelAtPeriodEnd?: boolean };
+      if (res.ok) setPlanMsg(body.unchanged ? (kind === "cancel" ? "Cancellation was already scheduled." : "No scheduled cancellation.") : kind === "cancel" ? "Cancellation scheduled — access continues until the period ends." : "Cancellation reverted.");
+      else setPlanMsg(body.error ?? `Action failed (${res.status}).`);
+      void refreshBilling();
+    } finally {
+      setPlanBusy(false);
+    }
+  };
+
+  /** M25 P7 — admin manual plan assignment (the only path to paid tiers). */
+  const adminAssign = async () => {
+    setAdminMsg(null);
+    setPlanBusy(true);
+    try {
+      const res = await fetch("/api/admin/billing", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ email: adminAssignEmail.trim(), planId: adminAssignPlan }) });
+      const body = (await res.json().catch(() => ({}))) as { error?: string; assigned?: { email: string; planId: string } };
+      setAdminMsg(res.ok && body.assigned ? `Assigned ${body.assigned.planId} to ${body.assigned.email}.` : (body.error ?? `Assignment failed (${res.status}).`));
+      void refreshBilling();
+    } finally {
+      setPlanBusy(false);
+    }
   };
 
   // ── M24 §3.I — integration token management (real /api/account/tokens CRUD).
@@ -175,6 +258,8 @@ export default function SettingsPage() {
       next = { ...(next ?? {}), checks: { ...(next?.checks ?? {}), queue: { ok: true, detail: lines || "no jobs" } } };
     }
     setAdminHealth(next ?? { status: "unavailable" });
+    const a = await fetch("/api/admin/audit?take=15");
+    if (a.ok) setAuditFeed(((await a.json()) as { events: Array<{ id: string; action: string; detail: string | null; createdAt: string }> }).events);
   };
 
   if (loading) return <main className="mx-auto max-w-3xl px-6 py-16 text-sm text-[#8f8f8a]">Loading…</main>;
@@ -268,6 +353,77 @@ export default function SettingsPage() {
         ) : <p className="mt-2 text-xs text-[#8f8f8a]">Usage unavailable.</p>}
       </section>
 
+      {/* M25 P2 — Plan & usage: real subscription state, entitlements and
+          usage from the same tables the product already records. No prices,
+          no checkout — payments are disabled until the owner enables them. */}
+      <section className={card} aria-labelledby="plan-h">
+        <h2 id="plan-h" className="text-sm font-semibold text-[#d8d8d2]">Plan &amp; usage</h2>
+        {!sub ? (
+          <p className="mt-2 text-xs text-[#8f8f8a]">{loading ? "Loading…" : "Subscription unavailable."}</p>
+        ) : (
+          <div className="mt-2 space-y-3 text-xs text-[#b8b8b2]">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="rounded-lg border border-[#d4a017]/40 bg-[#d4a017]/10 px-2 py-1 text-xs font-semibold text-[#d4a017]">{sub.subscription.planName}</span>
+              <span>{sub.subscription.status}{sub.subscription.cancelAtPeriodEnd ? " · cancels at period end" : ""}</span>
+              <span className="text-[#8f8f8a]">renews {new Date(sub.subscription.currentPeriodEnd).toLocaleDateString()} · no charge (payments disabled)</span>
+            </div>
+            <ul className="grid gap-1.5 sm:grid-cols-2">
+              <li>Projects: <strong className="text-[#e8e8e2]">{sub.usage.projects}</strong>{sub.entitlements.maxProjects !== null ? ` / ${sub.entitlements.maxProjects}` : " · no limit"}</li>
+              <li>Export minutes (period): <strong className="text-[#e8e8e2]">{sub.usage.exportMinutes ?? 0}</strong>{sub.entitlements.monthlyExportMinutes !== null ? ` / ${sub.entitlements.monthlyExportMinutes}` : " · no limit"}</li>
+              <li>AI calls (period): <strong className="text-[#e8e8e2]">{sub.usage.aiCalls}</strong>{sub.entitlements.monthlyAiCalls !== null ? ` / ${sub.entitlements.monthlyAiCalls}` : " · no limit"}</li>
+              <li>Active renders: <strong className="text-[#e8e8e2]">{sub.usage.activeRenders}</strong>{sub.entitlements.maxConcurrentRenders !== null ? ` / ${sub.entitlements.maxConcurrentRenders}` : " · no limit"}</li>
+              <li>Storage: <strong className="text-[#e8e8e2]">{fmtBytes(sub.usage.storageBytes)}</strong>{sub.entitlements.storageQuotaBytes !== null ? ` / ${fmtBytes(sub.entitlements.storageQuotaBytes)}` : " · deployment quota"}</li>
+              <li>Features: {Object.entries(sub.entitlements.features).filter(([, v]) => v).map(([k]) => k).join(", ")}</li>
+            </ul>
+            {planMsg && <p className="text-xs text-[#8f8f8a]" role="status">{planMsg}</p>}
+            <div>
+              <span className={label}>Plans</span>
+              <div className="mt-1 flex flex-wrap gap-2">
+                {(plans ?? [{ id: sub.subscription.planId, name: sub.subscription.planName, sort: 0, entitlements: sub.entitlements }]).map((pl) => (
+                  <div key={pl.id} className="rounded-lg border border-[#2a2a26] px-3 py-2">
+                    <div className="flex items-center justify-between gap-3">
+                      <strong className="text-[#e8e8e2]">{pl.name}</strong>
+                      {pl.id === sub.subscription.planId && <span className="text-[10px] text-[#d4a017]">CURRENT</span>}
+                    </div>
+                    <p className="mt-0.5 text-[11px] text-[#8f8f8a]">
+                      {pl.entitlements.maxProjects === null ? "Unlimited projects" : `${pl.entitlements.maxProjects} projects`} · {pl.entitlements.monthlyExportMinutes === null ? "unlimited exports" : `${pl.entitlements.monthlyExportMinutes} min/mo exports`} · {pl.entitlements.monthlyAiCalls === null ? "unlimited AI" : `${pl.entitlements.monthlyAiCalls} AI calls/mo`}
+                    </p>
+                    {pl.id !== sub.subscription.planId && (
+                      pl.entitlements.requiresPayment ? (
+                        <span className="mt-1 inline-block rounded border border-[#2a2a26] px-2 py-1 text-[11px] text-[#8f8f8a]" title="Payments are disabled on this deployment — the owner assigns plans manually">
+                          Payments not enabled
+                        </span>
+                      ) : (
+                        <button type="button" className={`${btn} mt-1`} onClick={() => switchPlan(pl.id)} disabled={planBusy}>Switch to {pl.name}</button>
+                      )
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+            {sub.subscription.planId !== "free" && (
+              <div className="flex flex-wrap gap-2">
+                {!sub.subscription.cancelAtPeriodEnd
+                  ? <button type="button" className={btnDanger} onClick={() => billingAction("cancel")} disabled={planBusy}>Cancel at period end</button>
+                  : <button type="button" className={btn} onClick={() => billingAction("resume")} disabled={planBusy}>Resume subscription</button>}
+              </div>
+            )}
+            <div>
+              <span className={label}>Billing history</span>
+              <ul className="mt-1 space-y-1">
+                {(billingEvents ?? []).slice(0, 10).map((e) => (
+                  <li key={e.id} className="rounded border border-[#2a2a26] px-2 py-1 text-[11px] text-[#8f8f8a]">
+                    <strong className="text-[#b8b8b2]">{e.type.replace(/_/g, " ").toLowerCase()}</strong> · {new Date(e.createdAt).toLocaleString()}
+                    {e.detailJson ? ` · ${(() => { try { const d = JSON.parse(e.detailJson) as Record<string, unknown>; return String(d.note ?? d.to ?? d.attempted ?? d.planId ?? ""); } catch { return ""; } })()}` : ""}
+                  </li>
+                ))}
+                {(billingEvents ?? []).length === 0 && <li className="text-[11px] text-[#8f8f8a]">No billing events yet.</li>}
+              </ul>
+            </div>
+          </div>
+        )}
+      </section>
+
       {/* M24 §3.I — Integrations: API v1 / MCP / Desktop Bridge token management
           + status. Same design language; every control calls the real APIs. */}
       <section className={card} aria-labelledby="integrations-h">
@@ -352,6 +508,32 @@ export default function SettingsPage() {
           <div className="mt-2 flex flex-wrap items-center gap-2">
             <button type="button" className={btn} onClick={loadAdminStatus}>Load operational status</button>
           </div>
+          {/* M25 P7 — admin plan assignment (payments disabled; manual only). */}
+          <div className="mt-3 border-t border-[#2a2a26] pt-3">
+            <span className={label}>Assign plan (manual — payments disabled)</span>
+            <div className="mt-1 flex flex-wrap items-center gap-2">
+              <input aria-label="User email for plan assignment" className={`${input} max-w-[240px]`} placeholder="user@example.com" value={adminAssignEmail} onChange={(e) => setAdminAssignEmail(e.target.value)} />
+              <select aria-label="Plan to assign" className={`${input} max-w-[140px]`} value={adminAssignPlan} onChange={(e) => setAdminAssignPlan(e.target.value)}>
+                {(plans ?? []).map((pl) => <option key={pl.id} value={pl.id}>{pl.name}{pl.entitlements.requiresPayment ? " (manual)" : ""}</option>)}
+              </select>
+              <button type="button" className={btn} onClick={adminAssign} disabled={planBusy || !adminAssignEmail.trim()}>Assign</button>
+            </div>
+            {adminMsg && <p className="mt-1 text-xs text-[#8f8f8a]" role="status">{adminMsg}</p>}
+          </div>
+          {auditFeed && (
+            <div className="mt-2">
+              <span className={label}>Recent audit events (15 newest)</span>
+              <ul className="mt-1 space-y-0.5">
+                {auditFeed.map((e) => (
+                  <li key={e.id} className="rounded border border-[#2a2a26] px-2 py-1 text-[11px] text-[#8f8f8a]">
+                    <strong className="text-[#b8b8b2]">{e.action}</strong> · {new Date(e.createdAt).toLocaleString()}
+                    {e.detail ? ` · ${e.detail.slice(0, 80)}` : ""}
+                  </li>
+                ))}
+                {auditFeed.length === 0 && <li className="text-[11px] text-[#8f8f8a]">No audit events recorded yet.</li>}
+              </ul>
+            </div>
+          )}
           {adminHealth && (
             <div className="mt-2 text-xs text-[#b8b8b2]">
               {Object.entries(adminHealth.checks ?? {}).map(([k, v]) => (

@@ -18,7 +18,7 @@ All 9 were fixed in M24. Eight got new UI access points built strictly in the ex
 6. **Intent router** (MY AI panel) — text → `POST /api/ai/route` with live sequence context → routed engine shown ("→ engine JAZMII"); unmatched requests answered honestly with supported options.
 7. **JAZMII analyze footage** — video selector + background-job flow (`/api/jazmii/analyze` → `/api/jobs/[id]` polling) with completion/failure messages.
 8. **SETTINGS navigation** — user menu entry (existing menu, existing classes) — `/settings` was previously reachable only by typing the URL.
-9. **Missing backend routes implemented** — `GET/DELETE /api/media/upload/[uploadId]` (resumable-upload state + cancel) against the real `UploadSession` model and scratch-parts layout; ownership enforced (foreign user → 404); missing/mismatched chunk computation matches the client contract.
+9. ~~Missing backend routes implemented~~ **CORRECTED IN M25**: these endpoints existed since M3 (commit 4084fa9, with leak-safe 404s and per-part mismatch detection). The M24 audit wrongly reported them missing; the local rewrite was never pushed and M25 restored the superior M3 original. Audit error, not a product change.
 
 Also removed a misleading dead code path during audit (restored after discovering it was actually consumed by the upload-resume flow — the correct fix was the backend route, not deletion).
 

@@ -91,7 +91,7 @@ Verification = this milestone's live browser walkthrough (`m24-evidence/screensh
 | MCP/JSON-RPC transports | M21 | `/api/v1/mcp`, `/api/automation/*` | External clients by design (SDK + raw clients verified in M23) | By design |
 | Premiere extension | M21/M23 | UXP panel | external (UDT) | Blocked → OWNER ACTION (checklist delivered M23) |
 | Desktop Bridge pairing/status | M22/M23 | bridge process | external + guide | Blocked → OWNER ACTION (Windows) |
-| **Resumable-upload session endpoints** | **M24** | `GET/DELETE /api/media/upload/[uploadId]` — **implemented (route was missing while the client called it)** | transparent (upload resume) | **Connected** — verified 200 w/ missing-chunk list + 404 ownership |
+| Resumable-upload session endpoints | M3 (correction in M25) | `GET/DELETE /api/media/upload/[uploadId]` | transparent (upload resume) | VERIFIED — M24 audit wrongly called this missing; route existed since commit 4084fa9 |
 | Admin ops status | M19 | `/api/admin/*` | **NEW: Settings → System status (admin-only)** | Connected (server-gated) |
 
 ## J. Project / Account / Production management
