@@ -1,0 +1,177 @@
+$ next build --webpack
+▲ Next.js 16.4.6 (webpack)
+- Environments: .env
+✓ Running next.config.ts took 33ms
+
+⚠ The "middleware" file convention is deprecated. Please use "proxy" instead.
+
+  To migrate automatically, run:
+  npx @next/codemod@canary middleware-to-proxy .
+
+  Learn more: https://nextjs.org/docs/messages/middleware-to-proxy
+  Creating an optimized production build ...
+✓ Compiled successfully in 23.9s
+  Running TypeScript ...
+  Finished TypeScript in 11.8s ...
+  Collecting page data using 1 worker ...
+  Generating static pages using 1 worker (0/108) ...
+  Generating static pages using 1 worker (27/108) 
+  Generating static pages using 1 worker (54/108) 
+  Generating static pages using 1 worker (81/108) 
+✓ Generating static pages using 1 worker (108/108) in 950ms
+  Finalizing page optimization ...
+  Collecting build traces ...
+
+Route (app)
+┌ ○ /
+├ ○ /_not-found
+├ ○ /about
+├ ƒ /api
+├ ƒ /api/account
+├ ƒ /api/account/delete
+├ ƒ /api/account/export-data
+├ ƒ /api/account/storage
+├ ƒ /api/account/tokens
+├ ƒ /api/admin/audit
+├ ƒ /api/admin/billing
+├ ƒ /api/admin/health
+├ ƒ /api/admin/jobs
+├ ƒ /api/admin/users
+├ ƒ /api/ai/outputs
+├ ƒ /api/ai/route
+├ ƒ /api/auth/change-password
+├ ƒ /api/auth/forgot-password
+├ ƒ /api/auth/login
+├ ƒ /api/auth/logout
+├ ƒ /api/auth/me
+├ ƒ /api/auth/register
+├ ƒ /api/auth/reset-password
+├ ƒ /api/auth/sessions
+├ ƒ /api/auth/verify-email
+├ ƒ /api/autocut/analyses
+├ ƒ /api/autocut/analyze
+├ ƒ /api/autocut/analyze/result/[jobId]
+├ ƒ /api/autocut/decisions
+├ ƒ /api/autocut/words
+├ ƒ /api/automation/mcp
+├ ƒ /api/automation/rpc
+├ ƒ /api/automation/tokens
+├ ƒ /api/billing/cancel
+├ ƒ /api/billing/history
+├ ƒ /api/billing/plans
+├ ƒ /api/billing/resume
+├ ƒ /api/billing/subscription
+├ ƒ /api/creative/analyze/transcripts
+├ ƒ /api/creative/analyze/transcripts/[id]
+├ ƒ /api/creative/analyze/unified
+├ ƒ /api/creative/assistant
+├ ƒ /api/creative/m14/assets
+├ ƒ /api/creative/m14/compose
+├ ƒ /api/creative/m14/direction
+├ ƒ /api/creative/m14/render
+├ ƒ /api/creative/m14/scenes
+├ ƒ /api/creative/plans/preview
+├ ƒ /api/creative/recommendations/[id]
+├ ƒ /api/creative/reviews
+├ ƒ /api/creative/reviews/[id]
+├ ƒ /api/creative/temporal/index
+├ ƒ /api/creative/temporal/mograph
+├ ƒ /api/creative/temporal/search
+├ ƒ /api/creative/variants
+├ ƒ /api/creative/variants/[id]
+├ ƒ /api/creative/visual/index
+├ ƒ /api/creative/visual/search
+├ ƒ /api/editor/projects/[projectId]/batch-export
+├ ƒ /api/editor/projects/[projectId]/render
+├ ƒ /api/editor/projects/[projectId]/timeline
+├ ƒ /api/editor/projects/[projectId]/timeline/restore
+├ ƒ /api/editor/projects/[projectId]/timeline/versions
+├ ƒ /api/exports
+├ ƒ /api/exports/[id]/file
+├ ƒ /api/gangzii/analyze
+├ ƒ /api/gangzii/process
+├ ƒ /api/gangzii/process/[id]
+├ ƒ /api/gangzii/processes
+├ ƒ /api/gangzii/proposal
+├ ƒ /api/health
+├ ƒ /api/jazmii/analyze
+├ ƒ /api/jazmii/generate
+├ ƒ /api/jazmii/proposal
+├ ƒ /api/jobs/[id]
+├ ƒ /api/laxii/generate
+├ ƒ /api/mcp/approvals
+├ ƒ /api/media
+├ ƒ /api/media/[id]
+├ ƒ /api/media/[id]/file
+├ ƒ /api/media/[id]/waveform
+├ ƒ /api/media/list
+├ ƒ /api/media/upload/[uploadId]
+├ ƒ /api/my-ai/chat
+├ ƒ /api/my-ai/conversations
+├ ƒ /api/my-ai/health
+├ ƒ /api/my-ai/plans
+├ ƒ /api/my-ai/plans/[planId]
+├ ƒ /api/nikki/proposal
+├ ƒ /api/nikki/render
+├ ƒ /api/presets
+├ ƒ /api/presets/[id]
+├ ƒ /api/process/audio
+├ ƒ /api/process/autocut
+├ ƒ /api/process/burn-captions
+├ ƒ /api/process/watermark
+├ ƒ /api/projects
+├ ƒ /api/projects/[id]
+├ ƒ /api/publish/metadata
+├ ƒ /api/publish/metadata/[id]
+├ ƒ /api/publish/metadata/[id]/field
+├ ƒ /api/publish/packages
+├ ƒ /api/publish/packages/[id]
+├ ƒ /api/publish/packages/[id]/download
+├ ƒ /api/publish/presets
+├ ƒ /api/publish/presets/[id]
+├ ƒ /api/publish/presets/[id]/apply
+├ ƒ /api/publish/profiles
+├ ƒ /api/publish/status
+├ ƒ /api/publish/thumbnails
+├ ƒ /api/publish/thumbnails/[id]
+├ ƒ /api/publish/thumbnails/[id]/composite
+├ ƒ /api/publish/thumbnails/[id]/generate
+├ ƒ /api/publish/variants
+├ ƒ /api/publish/variants/[id]
+├ ƒ /api/publish/variants/[id]/retry
+├ ƒ /api/riishe
+├ ƒ /api/studio/batch
+├ ƒ /api/studio/plans
+├ ƒ /api/studio/plans/[planId]
+├ ƒ /api/studio/plans/[planId]/assemble
+├ ƒ /api/studio/plans/[planId]/scenes/[sceneId]
+├ ƒ /api/transcribe
+├ ƒ /api/v1/capabilities
+├ ƒ /api/v1/jobs
+├ ƒ /api/v1/jobs/[id]
+├ ƒ /api/v1/mcp
+├ ƒ /api/v1/projects
+├ ƒ /api/v1/projects/[id]/canonical
+├ ƒ /api/workflows
+├ ƒ /api/workflows/[id]
+├ ○ /contact
+├ ○ /cookies
+├ ○ /faq
+├ ○ /features
+├ ○ /forgot-password
+├ ○ /help
+├ ○ /pricing
+├ ○ /privacy
+├ ○ /reset-password
+├ ○ /robots.txt
+├ ○ /settings
+├ ○ /sitemap.xml
+├ ○ /terms
+└ ○ /verify-email
+
+
+ƒ Proxy (Middleware)
+
+○  (Static)   prerendered as static content
+ƒ  (Dynamic)  server-rendered on demand
+

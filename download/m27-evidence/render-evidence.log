@@ -1,0 +1,13 @@
+# M27 render evidence — 2026-11-18T17:32:46.535Z
+register: 200
+project: cmwmeg3s3000ewnwyyjv0zvpr
+assets: cmwmeg49a000gwnwyyqgbw2i6 (440Hz) + cmwmeg49r000kwnwym6ox23yp (880Hz)
+timeline apply (RollEdit + animated effect + crossfade batch): 200
+render job: 202 {"jobId":"cmwmeg4c9002gwnwym7z6ryrv"}
+render: COMPLETED Timeline render complete.
+export: cmwmeg8us002iwnwy3h59ypja → 2092906 bytes (ffprobe-validated by the worker)
+ffprobe streams: h264,video,10.000000 | aac,audio,10.000000
+luma YAVG @0.5s=130 @3.0s=191 @5.4s=245 (static gray source: animated brightness 0→0.5 → expect rising luma; ramp PASS)
+mean_volume A-only=-18.4 dB, overlap=-20.1 dB, B-only=-18.1 dB (continuity: |overlap − neighbors| < 4 dB)
+rms shape: 4.9s:-18.6dB 5.0s:-18.5dB 5.1s:-18.6dB 5.2s:-19.2dB 5.3s:-20.2dB 5.4s:-20.7dB 5.5s:-21dB 5.6s:-18dB 5.7s:-18.1dB
+crossfade continuity: PASS

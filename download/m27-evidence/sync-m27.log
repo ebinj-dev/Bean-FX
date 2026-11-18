@@ -1,0 +1,11 @@
+fixture ready: 6.000000s
+200
+job=cmwmdxud9004uwneubg0kf5pr
+final: COMPLETED
+export: 2347188 bytes
+beep_centers: [1.025, 2.025, 3.025, 4.025, 5.025]
+flash_centers: [0.973, 1.973, 2.973, 3.973, 4.973]
+A/V offsets (flash - beep) per marker: [-0.052, -0.052, -0.052, -0.052, -0.052]
+mean offset: -0.052 s; max |offset|: 0.052 s
+SYNC_MEASURED
+M18_SYNC_COMPLETE

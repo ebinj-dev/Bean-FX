@@ -56,6 +56,8 @@ if git diff --name-only "$BASE" | grep -vE "^scripts/(push-m[0-9]+|overlay-m[0-9
 fi
 echo "(clean)"
 git add -A
+# M27 evidence bundle lives in the ignored download/ space — force-add it.
+git add -A -f download/m27-evidence 2>/dev/null || true
 git -c user.name="Z User" -c user.email="z@container" commit -q -m "feat(m27): precision editing & professional finishing — additive UI only
 
 P1 roll editing: RollEdit reversible command (integer-frame shared boundary,
