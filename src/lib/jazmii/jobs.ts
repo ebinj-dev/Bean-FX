@@ -54,6 +54,7 @@ function validateGeneratedVideo(file: string, requestedDurationSec: number, requ
 }
 
 export async function runJazmiiGenerateJob(job: HandlerJob): Promise<void> {
+  const startedAt = Date.now();
   const parsed = JazmiiGenerateParamsSchema.safeParse(JSON.parse(job.paramsJson ?? "{}"));
   if (!parsed.success) throw new PermanentJobError(`JAZMII_GENERATE invalid params: ${parsed.error.issues.map((i) => i.message).join("; ")}`);
   const params = parsed.data;
@@ -110,9 +111,22 @@ export async function runJazmiiGenerateJob(job: HandlerJob): Promise<void> {
     validate: () => validateGeneratedVideo(file, Number(params.durationSec), params.size),
   });
   await jobManager.complete(job.id, registered.id, `JAZMII video ready: asset ${registered.id} (${(registered.sizeBytes / 1024 / 1024).toFixed(1)} MB, task ${handle.taskId}, model ${handle.model})`);
+  // M23 P4 usage accounting (true measured latency; provider does not
+  // expose token counts → 0).
+  await db.aIUsage.create({
+    data: {
+      userId: job.userId,
+      provider: provider.id,
+      model: handle.model,
+      purpose: "JAZMII_GENERATE",
+      latencyMs: Math.round(Date.now() - startedAt),
+      ok: true,
+    },
+  });
 }
 
 export async function runJazmiiAnalyzeJob(job: HandlerJob): Promise<void> {
+  const startedAt = Date.now();
   const parsed = JSON.parse(job.paramsJson ?? "{}") as { mediaId?: string };
   if (!parsed.mediaId) throw new PermanentJobError("JAZMII_ANALYZE requires mediaId.");
   const asset = await db.mediaAsset.findUnique({ where: { id: parsed.mediaId } });
@@ -145,6 +159,16 @@ export async function runJazmiiAnalyzeJob(job: HandlerJob): Promise<void> {
 
   const summary = `${report.scenes.length} scene(s), ${report.blackSegments.length} black, ${report.freezeSegments.length} freeze; ${report.durationSec.toFixed(1)}s @ ${report.fps.toFixed(2)}fps ${report.width}x${report.height}`;
   await jobManager.complete(job.id, reportFile, `JAZMII analysis: ${summary}. Keyframes registered: ${keyframeIds.join(", ") || "none"}. Method: ffmpeg-heuristic.`);
+  await db.aIUsage.create({
+    data: {
+      userId: job.userId,
+      provider: "ffmpeg-local",
+      model: "heuristic-shot-analysis",
+      purpose: "JAZMII_ANALYZE",
+      latencyMs: Math.round(Date.now() - startedAt),
+      ok: true,
+    },
+  });
 }
 
 /** Probe the real video provider once (used by routes/tests). */

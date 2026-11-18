@@ -25,6 +25,7 @@ interface HandlerJob {
 }
 
 export async function runLaxiiGenerateJob(job: HandlerJob): Promise<void> {
+  const startedAt = Date.now();
   const parsed = LaxiiGenerateParamsSchema.safeParse(JSON.parse(job.paramsJson ?? "{}"));
   if (!parsed.success) throw new PermanentJobError(`LAXII_GENERATE invalid params: ${parsed.error.issues.map((i) => i.message).join("; ")}`);
   const params = parsed.data;
@@ -115,4 +116,16 @@ export async function runLaxiiGenerateJob(job: HandlerJob): Promise<void> {
   }
 
   await jobManager.complete(job.id, assetIds[0] ?? null, `LAXII assets ready: ${assetIds.join(", ")}`);
+  // M23 P4 usage accounting: real provider call recorded (tokens not exposed
+  // by the image provider → 0; latency is the true measured wall time).
+  await db.aIUsage.create({
+    data: {
+      userId: job.userId,
+      provider: provider.id,
+      model: provider.label,
+      purpose: "LAXII_GENERATE",
+      latencyMs: Math.round(Date.now() - startedAt),
+      ok: true,
+    },
+  });
 }

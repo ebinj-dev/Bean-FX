@@ -33,8 +33,8 @@ export interface CredentialStore {
 /** Real PowerShell used by the Windows provider: CredWrite/CredRead P/Invoke. */
 export function windowsCredmanScript(name: string, secret: string | null): string {
   if (secret === null) {
-    // DELETE path
-    return `powershell.exe -NoProfile -NonInteractive -Command "$c=New-Object System.Net.NetworkCredential('',([System.Runtime.InteropServices.Marshal]::PtrToStringAuto([System.Runtime.InteropServices.Marshal]::SecureStringToBSS((Read-Host -AsSecureString 'x')))));  " 2>$null`;
+    // DELETE path — cmdkey removes the stored credential by target name.
+    return `cmdkey /delete:"BEAN FX Bridge"`;
   }
   const b64 = Buffer.from(secret, "utf8").toString("base64");
   return [
