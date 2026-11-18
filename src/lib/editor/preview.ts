@@ -11,6 +11,7 @@
  * additively across tracks; solo on any track mutes everything else.
  */
 import { clipEndFrame, type Clip, type Sequence, type Track } from "./model";
+import { volumeAutomationAt } from "./audio";
 import type { Rational } from "./time";
 
 export interface ActiveVideo {
@@ -68,10 +69,9 @@ export function activeAudioAt(seq: Sequence, frame: number): ActiveAudio[] {
     if (!isAudioTrack && !isVideoTrack) continue; // captions/graphics are silent
     if (track.muted || clip.muted) continue;
     if (solo && !track.solo) continue;
-    // Gain: clip volume × track contribution; the model allows volume up to 4
-    // so boosts must reach the WebAudio gain nodes (the cap here mirrors the
-    // ChangeVolume schema bound, not a mix-protection 1.0 ceiling).
-    const gain = Math.min(4, Math.max(0, clip.volume));
+    // Gain: clip volume × AUTOMATION (M17 volume keyframes) — the same
+    // evaluation module the mixer and the export renderer use.
+    const gain = volumeAutomationAt(clip, frame, seq.fps);
     out.push({ clip, track, gain });
   }
   return out;

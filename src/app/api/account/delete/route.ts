@@ -16,6 +16,7 @@ import { db } from "@/lib/db";
 import { audit } from "@/lib/audit";
 import { requireUser, verifyPassword, clearSessionCookieHeaders, AuthError } from "@/lib/auth";
 import { clientIp, enforceRateLimit, RATE_LIMITS } from "@/lib/rate-limit";
+import { sendAccountDeletedConfirmation } from "@/lib/mailer";
 
 export const runtime = "nodejs";
 
@@ -35,6 +36,9 @@ export async function POST(req: Request) {
     db.session.deleteMany({ where: { userId: user.id } }),
   ]);
   await audit("account.deleted", { userId: user.id, ip: clientIp(req), detail: "soft-deleted; sessions revoked; deferred cleanup queued" });
+  // M20 §5: deletion confirmation reaches the (still stored) address — the
+  // user is already locked out, this is their receipt.
+  await sendAccountDeletedConfirmation(user.email);
   const res = NextResponse.json({ ok: true, message: "Your account is deleted and all sessions are signed out. Stored files are cleaned up on a deferred schedule; shared assets stay available to their owners." });
   for (const h of clearSessionCookieHeaders()) res.headers.append("Set-Cookie", h);
   return res;

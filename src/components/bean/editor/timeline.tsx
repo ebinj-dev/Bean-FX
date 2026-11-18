@@ -206,17 +206,15 @@ export function EditorTimeline({
     [snapTargets, ppf],
   );
 
-  const clampScroll = useCallback(
-    (frames: number) => Math.max(0, Math.min(frames, Math.max(0, end - 120))),
-    [end],
-  );
-
+  // Clamp inlined (a memoized helper crossing useCallback boundaries made
+  // the react-hooks compiler skip memoization for this callback).
   const onScroll = useCallback(() => {
     const el = scrollRef.current;
     if (!el) return;
-    setScrollFrames(clampScroll(Math.round(el.scrollLeft / ppf)));
+    const raw = Math.round(el.scrollLeft / ppf);
+    setScrollFrames(Math.max(0, Math.min(raw, Math.max(0, end - 120))));
     if (el.clientWidth && Math.abs(el.clientWidth - viewportWidth) > 16) setViewportWidth(el.clientWidth);
-  }, [ppf, clampScroll]);
+  }, [ppf, end, viewportWidth]);
 
   /** Ruler pointer → playhead (scrub while dragging). */
   const seekFromEvent = useCallback(

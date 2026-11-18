@@ -16,7 +16,7 @@
  * media never modified. Missing media is skipped and disclosed via the job
  * stage/params — never faked.
  */
-import { mkdir, stat, writeFile } from "fs/promises";
+import { mkdir, stat, unlink, writeFile } from "fs/promises";
 import path from "path";
 import { db } from "@/lib/db";
 import { pathInsideMediaRoot } from "@/lib/media-storage";
@@ -96,7 +96,7 @@ function visualSegmentFilters(plan: RenderClipPlan, seq: Sequence, isImage: bool
     if (plan.clip.playbackSpeed !== 1) filters.push(`setpts=PTS*${q(1 / plan.clip.playbackSpeed)}`);
     filters.push(`scale=${seq.width}:${seq.height}:force_original_aspect_ratio=decrease,pad=${seq.width}:${seq.height}:(ow-iw)/2:(oh-ih)/2,setsar=1,fps=${fps}`);
   }
-  const chain = ffmpegEffectChain(plan.clip.effects);
+  const chain = ffmpegEffectChain(plan.clip.effects, { width: seq.width, height: seq.height });
   if (chain) filters.push(chain);
   if (plan.clip.fadeInFrames > 0) filters.push(`fade=in:st=0:d=${q(plan.clip.fadeInFrames / fps)}`);
   if (plan.clip.fadeOutFrames > 0) filters.push(`fade=out:st=${q(durSec - plan.clip.fadeOutFrames / fps)}:d=${q(plan.clip.fadeOutFrames / fps)}`);
@@ -360,16 +360,24 @@ export async function runTimelineRenderJob(job: { id: string; userId: string; pa
   const outPath = pathInsideMediaRoot("timeline-renders", `u_${job.userId}`, `seq_${projectId}_${Date.now().toString(36)}.mp4`);
   await mkdir(path.dirname(outPath), { recursive: true });
 
-  // M18 §3: LONG-FORM WINDOWED RENDERING. One giant filter_complex holds a
-  // frame buffer per segment — the 600s validation OOM-killed ffmpeg at
-  // ~2.5GB RSS on a 4GB host (dmesg evidence). Windows render sequentially
+  // M20 §3: LONG-FORM WINDOWED DURABLE RENDERING. One giant filter_complex
+  // holds a frame buffer per segment — the 600s validation OOM-killed ffmpeg
+  // at ~2.5GB RSS on a 4GB host (dmesg evidence). Windows render sequentially
   // (bounded graph each), then a stream-copy concat stitches them losslessly
-  // (identical encoder settings, frame-aligned boundaries).
+  // (identical encoder settings, frame-aligned boundaries). M20 hardening:
+  // each window passes ONLY the assets its own plans reference (bounded
+  // demuxers → bounded RSS), and window segments are removed after the
+  // concat settles (success or failure) — no temp-file leak.
   const LONG_FORM_THRESHOLD_SEC = 240;
   const WINDOW_SEC = 60;
   const totalWindows = Math.ceil(totalSec / WINDOW_SEC);
   if (totalSec > LONG_FORM_THRESHOLD_SEC) {
-    const segments: string[] = [];
+    const segPaths: string[] = [];
+    let listPath: string | null = null;
+    const cleanupTemp = async () => {
+      for (const p of segPaths) await unlink(p).catch(() => undefined);
+      if (listPath) await unlink(listPath).catch(() => undefined);
+    };
     let windowStartFrame = startFrame;
     for (let w = 0; w < totalWindows; w++) {
       let windowEndFrame = Math.min(endFrame, windowStartFrame + Math.round(WINDOW_SEC * fps));
@@ -383,15 +391,43 @@ export async function runTimelineRenderJob(job: { id: string; userId: string; pa
       }
       const winSec = (windowEndFrame - windowStartFrame) / fps;
       if (winSec <= 0) break;
+      // M20 §3: bound this window's ffmpeg inputs to the assets its plans
+      // actually reference. Deterministic two-pass: collect the same plans
+      // the graph builder will collect, gather distinct assets from them.
+      const wPlans = [...collectVisualPlans(seq, windowStartFrame, windowEndFrame), ...collectAudioPlans(seq, windowStartFrame, windowEndFrame)];
+      const wAssetIds = [...new Set(wPlans.map((p) => p.clip.sourceAssetId).filter(Boolean))] as string[];
+      const used = new Map<string, { index: number; isImage: boolean; hasAudio: boolean }>();
+      const winInputArgs: string[] = [];
+      let winIndex = 0;
+      for (const id of wAssetIds) {
+        const asset = assetById.get(id);
+        if (!asset) continue;
+        const plan = wPlans.find((p) => p.clip.sourceAssetId === id);
+        const isImage = asset.kind === "IMAGE";
+        used.set(id, { index: winIndex, isImage, hasAudio: hasAudioById.get(id) ?? false });
+        if (isImage) {
+          const win = (plan?.winEndFrame ?? windowEndFrame) - (plan?.winStartFrame ?? windowStartFrame);
+          winInputArgs.push("-loop", "1", "-framerate", String(fps), "-t", q(Math.max(1, win) / fps), "-i", asset.storagePath);
+        } else {
+          winInputArgs.push("-i", asset.storagePath);
+        }
+        winIndex += 1;
+      }
       const wReport = w === 0 ? transitionReport : { applied: [], skipped: [] };
       const wGraph = buildTimelineGraph(seq, windowStartFrame, windowEndFrame, used, wReport);
       const segPath = pathInsideMediaRoot("timeline-renders", `u_${job.userId}`, `seg_${projectId}_${w}_${Date.now().toString(36)}.mp4`);
+      segPaths.push(segPath);
       const winArgs = [
         "-y", "-loglevel", "error",
-        ...inputArgs,
+        ...winInputArgs,
         "-filter_complex", wGraph.filterComplex,
         "-map", wGraph.videoLabel, "-map", "[mixout]",
         "-c:v", "libx264", "-preset", "veryfast", "-crf", "20", "-pix_fmt", "yuv420p",
+        // M20 §3: bounded-memory encode on small hosts — cap x264 threads and
+        // lookahead so a window's RSS stays well under the OOM line even when
+        // the host also runs the app server (observed: default thread/lookahead
+        // auto-sizing pushed the 4GB container into global OOM).
+        "-threads", "2", "-x264-params", "rc-lookahead=10:ref=2",
         "-c:a", "aac", "-b:a", "192k",
         "-t", q(winSec),
         segPath,
@@ -402,12 +438,19 @@ export async function runTimelineRenderJob(job: { id: string; userId: string; pa
         stageLabel: `Rendering timeline window ${w + 1}/${totalWindows} (FFmpeg)`,
         onDone: async () => undefined,
       });
-      segments.push(segPath);
+      // runFfmpeg reports terminal failures via the job row; abort the loop.
+      const jobRow = await db.job.findUnique({ where: { id: job.id }, select: { status: true } });
+      if (jobRow?.status === "FAILED" || jobRow?.status === "CANCELLED") {
+        await cleanupTemp();
+        return;
+      }
       windowStartFrame = windowEndFrame;
     }
-    // Stream-copy concat — no re-encode, no A/V realignment.
-    const listPath = pathInsideMediaRoot("timeline-renders", `u_${job.userId}`, `list_${projectId}_${Date.now().toString(36)}.txt`);
-    await writeFile(listPath, segments.map((p) => `file '${p.replace(/'/g, "'\\''")}'`).join("\n") + "\n");
+    // Stream-copy concat — no re-encode, no A/V realignment. M20 §3: window
+    // segments and the concat list are temp files — removed when the concat
+    // settles (success or failure); only the registered output survives.
+    listPath = pathInsideMediaRoot("timeline-renders", `u_${job.userId}`, `list_${projectId}_${Date.now().toString(36)}.txt`);
+    await writeFile(listPath, segPaths.map((p) => `file '${p.replace(/'/g, "'\\''")}'`).join("\n") + "\n");
     await jobManager.setProgress(job.id, 92, "Concatenating rendered windows");
     await jobManager.runFfmpeg(job.id, [
       "-y", "-loglevel", "error", "-f", "concat", "-safe", "0", "-i", listPath,
@@ -416,12 +459,13 @@ export async function runTimelineRenderJob(job: { id: string; userId: string; pa
       totalDurationSec: totalSec,
       stageLabel: "Concatenating long-form windows (FFmpeg)",
       onDone: async () => undefined,
+      onSettled: cleanupTemp,
     });
     // Register the assembled output (validation happens below via the shared path).
     const probe = await probeMediaDeep(outPath);
     if (!probe.hasVideo) throw new Error("Rendered file has no video stream — rejected.");
     const st = await stat(outPath);
-    await db.exportFile.create({
+    const exportRow = await db.exportFile.create({
       data: {
         userId: job.userId,
         kind: "TIMELINE_RENDER",
@@ -439,12 +483,16 @@ export async function runTimelineRenderJob(job: { id: string; userId: string; pa
           height: seq.height,
           fps: `${seq.fps.num}/${seq.fps.den}`,
           windowed: true,
-          windows: segments.length,
+          windows: segPaths.length,
           transitions: { applied: transitionReport.applied, skipped: transitionReport.skipped },
         }),
       },
     });
-    await jobManager.setProgress(job.id, 100, "Render complete (long-form windowed)");
+    // M20 §3 idempotent completion: the handler must mark the durable job
+    // COMPLETED itself — nothing else does. Without this the job stayed
+    // PROCESSING (heartbeats stopped), the stale-claim sweep requeued it, and
+    // the render restarted until retries were exhausted ("interrupted").
+    await jobManager.complete(job.id, exportRow.id, "Timeline render complete (long-form windowed).");
     return;
   }
 
@@ -455,6 +503,8 @@ export async function runTimelineRenderJob(job: { id: string; userId: string; pa
     "-filter_complex", graph.filterComplex,
     "-map", graph.videoLabel, "-map", "[mixout]",
     "-c:v", "libx264", "-preset", "veryfast", "-crf", "20", "-pix_fmt", "yuv420p",
+    // M20 §3: same bounded-memory encode caps as the long-form windows.
+    "-threads", "2", "-x264-params", "rc-lookahead=10:ref=2",
     "-c:a", "aac", "-b:a", "192k",
     "-movflags", "+faststart",
     "-t", q(totalSec),
@@ -470,7 +520,7 @@ export async function runTimelineRenderJob(job: { id: string; userId: string; pa
       const probe = await probeMediaDeep(outPath);
       if (!probe.hasVideo) throw new Error("Rendered file has no video stream — rejected.");
       const st = await stat(outPath);
-      await db.exportFile.create({
+      const exportRow = await db.exportFile.create({
         data: {
           userId: job.userId,
           kind: "TIMELINE_RENDER",
@@ -492,6 +542,8 @@ export async function runTimelineRenderJob(job: { id: string; userId: string; pa
           }),
         },
       });
+      // M20 §3 idempotent completion (same rationale as the windowed path).
+      await jobManager.complete(job.id, exportRow.id, "Timeline render complete.");
     },
   });
 }

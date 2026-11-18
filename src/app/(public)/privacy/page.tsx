@@ -13,6 +13,12 @@ export default function PrivacyPage() {
     <div className="mx-auto max-w-4xl px-4 py-14 sm:px-6">
       <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-[#d4a017]">Privacy</p>
       <h1 className="mt-2 text-3xl font-bold text-white sm:text-4xl">Privacy Policy</h1>
+      <p className="mt-4 rounded-lg border border-red-500/40 bg-red-500/5 p-4 text-[13.5px] leading-relaxed text-[#c9c9c2]">
+        <strong className="text-red-400">REQUIRES LEGAL REVIEW:</strong> this document describes
+        verified application behavior and is not legal advice. It must be reviewed and approved by a
+        qualified legal professional before public commercial launch, together with the owner fields
+        marked <em>[OWNER TO CONFIRM]</em> in the launch checklist.
+      </p>
       <p className="mt-3 text-[12.5px] text-[#8f8f8a]">Effective date: {EFFECTIVE}. This policy describes the implementation as it exists; it is a living document and any change will be dated here.</p>
 
       <h2 className="mt-9 text-xl font-bold text-white">1. Account data</h2>

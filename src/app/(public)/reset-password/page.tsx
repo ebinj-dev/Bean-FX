@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import ResetPasswordClient from "./reset-password-client";
 
 export const metadata: Metadata = { title: "Choose a new password — BEAN FX", robots: { index: false } };
 
@@ -10,9 +11,7 @@ export default function ResetPasswordPage() {
         Paste the token from your reset email and choose a new password (at least 8 characters). Completing a reset
         signs out every existing session for safety.
       </p>
-      <p className="mt-4 rounded border border-[#2a2a2a] bg-[#101010] p-3 font-mono text-[12px] text-[#8f8f8a]">
-        POST /api/auth/reset-password {`{ "token": "…", "password": "…" }`}
-      </p>
+      <ResetPasswordClient />
     </div>
   );
 }

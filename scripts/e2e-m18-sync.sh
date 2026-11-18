@@ -11,10 +11,10 @@ BASE=http://localhost:3117
 rm -f "$JAR"
 
 FIX=/tmp/m18-sync-fixture.mp4
-[ -f "$FIX" ] || ffmpeg -y -loglevel error \
+rm -f "$FIX"; ffmpeg -y -loglevel error \
   -f lavfi -i "testsrc2=size=320x180:rate=30:duration=6" \
   -f lavfi -i "sine=frequency=1000:sample_rate=48000:duration=6" \
-  -filter_complex "[0:v]drawbox=x=0:y=0:w=iw:h=ih:color=white@1:t=fill:enable='between(t,0.98,1.06)+between(t,1.98,2.06)+between(t,2.98,3.06)+between(t,3.98,4.06)+between(t,4.98,5.06)'[v];[1:a]volume=0.9:enable='between(t,0.98,1.06)+between(t,1.98,2.06)+between(t,2.98,3.06)+between(t,3.98,4.06)+between(t,4.98,5.06)',volume=0[a]" \
+  -filter_complex "[0:v]drawbox=x=0:y=0:w=iw:h=ih:color=white@1:t=fill:enable='between(t,0.98,1.06)+between(t,1.98,2.06)+between(t,2.98,3.06)+between(t,3.98,4.06)+between(t,4.98,5.06)'[v];[1:a]volume=0:enable='lt(t,0.98)+between(t,1.06,1.98)+between(t,2.06,2.98)+between(t,3.06,3.98)+between(t,4.06,4.98)+gte(t,5.06)'[a]" \
   -map "[v]" -map "[a]" -c:v libx264 -pix_fmt yuv420p -c:a aac -shortest "$FIX"
 echo "fixture ready: $(ffprobe -v error -show_entries format=duration -of csv=p=0 "$FIX")s"
 
@@ -24,8 +24,10 @@ MID=$(curl -s -b "$JAR" -X POST "$BASE/api/media" -H "x-filename: sync-fixture.m
 PROJ=$(curl -s -b "$JAR" -X POST "$BASE/api/projects" -H "Content-Type: application/json" -d '{"name":"M18 Sync Validation"}' | python3 -c "import sys,json;print(json.load(sys.stdin)['project']['id'])")
 sleep 4
 COOKIE=$(grep beanfx_session "$JAR" | awk '{print "beanfx_session=" $NF}')
+# M20 §1a fix: the m17 builder advanced the timeline head, so the precise
+# baseVersion=1 POST below hit 409 and the 6s beep+flash sequence never got
+# applied (observed: 4s silent export). Build the precise sequence directly.
 # Single full-length clip (no offset) — export sync == source sync.
-python3 scripts/m17-build-sequence.py 6 "$MID" "$PROJ" "$COOKIE" "$BASE" >/dev/null 2>&1 || true
 # m17 builder makes 20s; write a precise 6s one instead.
 python3 - "$MID" "$PROJ" "$COOKIE" "$BASE" <<'PYEOF'
 import json, sys, urllib.request

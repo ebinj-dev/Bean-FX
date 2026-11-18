@@ -1,0 +1,30 @@
+<!doctype html>
+<!--
+  M21 P5 — Premiere Pro UXP panel skeleton (BEAN FX hand-off).
+  Runs INSIDE Premiere Pro's UXP runtime (manifest v7 below). Outside UXP
+  the panel shows an explicit "unavailable" state instead of pretending.
+-->
+<html>
+<head>
+  <meta charset="utf-8" />
+  <style>
+    body { font: 12px -apple-system, sans-serif; background: #1e1e1e; color: #ddd; margin: 12px; }
+    h1 { font-size: 14px; color: #fff; margin: 0 0 8px; }
+    button { background: #3a6ea5; color: #fff; border: 0; padding: 6px 12px; margin: 4px 4px 4px 0; border-radius: 4px; }
+    button:disabled { background: #444; }
+    #status { margin-top: 10px; white-space: pre-wrap; font-family: monospace; font-size: 11px; }
+    .warn { color: #e8b34c; }
+    .ok { color: #7fc47f; }
+    .err { color: #d76a6a; }
+  </style>
+</head>
+<body>
+  <h1>BEAN FX</h1>
+  <div>Send the active sequence to BEAN FX, submit durable render jobs, and pull them back — all through the Desktop Bridge with your scoped token.</div>
+  <button id="send">Send sequence → BEAN FX</button>
+  <button id="poll" disabled>Poll render status</button>
+  <div id="status"></div>
+  <!-- panel.js bundles @beanfx/core + the Premiere host adapter; loaded by UXP -->
+  <script src="panel.js"></script>
+</body>
+</html>

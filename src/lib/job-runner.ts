@@ -68,6 +68,16 @@ export class JobManager {
   }
 
   /** Spawn ffmpeg with -progress and stream real progress into the DB. */
+  /**
+   * M20 §3 root-cause fix: runFfmpeg previously returned `void` while every
+   * caller (8 sites: timeline windows, concat, single-pass, proxies, autocut)
+   * `await`-ed it expecting completion. The await resolved instantly, so the
+   * long-form window loop spawned ALL windows concurrently (OOM on 4GB hosts)
+   * and the concat step read window segments that were still being written
+   * ("Invalid data found when processing input"). Now returns a promise that
+   * settles exactly when ffmpeg settles (done / failed / cancelled / timeout),
+   * making every existing `await` correct without touching call sites.
+   */
   runFfmpeg(
     jobId: string,
     args: string[],
@@ -78,74 +88,84 @@ export class JobManager {
       /** Runs once after ffmpeg settles (done, failed, or cancelled) — used for temp-file cleanup. */
       onSettled?: () => Promise<void>;
     }
-  ): void {
-    const child = spawn("ffmpeg", ["-hide_banner", "-loglevel", "error", "-y", ...args, "-progress", "pipe:1", "-nostats"], {
-      stdio: ["ignore", "pipe", "pipe"],
-    });
-    this.active.set(jobId, { child, cancelled: false });
+  ): Promise<void> {
+    return new Promise<void>((resolveFfmpeg) => {
+      const child = spawn("ffmpeg", ["-hide_banner", "-loglevel", "error", "-y", ...args, "-progress", "pipe:1", "-nostats"], {
+        stdio: ["ignore", "pipe", "pipe"],
+      });
+      this.active.set(jobId, { child, cancelled: false });
 
-    let stderrBuf = "";
-    let lastUpdate = 0;
+      let stderrBuf = "";
+      let lastUpdate = 0;
 
-    child.stdout?.on("data", (chunk: Buffer) => {
-      const text = chunk.toString();
-      const match = [...text.matchAll(/out_time_ms=(\d+)/g)].pop();
-      if (match && opts.totalDurationSec && opts.totalDurationSec > 0) {
-        const outMs = Number(match[1]);
-        const pct = (outMs / 1_000_000 / opts.totalDurationSec) * 100;
-        const now = Date.now();
-        if (now - lastUpdate > 400) {
-          lastUpdate = now;
-          void this.setProgress(jobId, Math.min(99, pct), opts.stageLabel);
+      child.stdout?.on("data", (chunk: Buffer) => {
+        const text = chunk.toString();
+        const match = [...text.matchAll(/out_time_ms=(\d+)/g)].pop();
+        if (match && opts.totalDurationSec && opts.totalDurationSec > 0) {
+          const outMs = Number(match[1]);
+          const pct = (outMs / 1_000_000 / opts.totalDurationSec) * 100;
+          const now = Date.now();
+          if (now - lastUpdate > 400) {
+            lastUpdate = now;
+            void this.setProgress(jobId, Math.min(99, pct), opts.stageLabel);
+          }
         }
-      }
-    });
+      });
 
-    child.stderr?.on("data", (chunk: Buffer) => {
-      stderrBuf = (stderrBuf + chunk.toString()).slice(-8000);
-    });
+      child.stderr?.on("data", (chunk: Buffer) => {
+        stderrBuf = (stderrBuf + chunk.toString()).slice(-8000);
+      });
 
-    child.on("error", (err) => {
-      void this.fail(jobId, `Failed to start ffmpeg: ${err.message}`);
-    });
+      child.on("error", (err) => {
+        void this.fail(jobId, `Failed to start ffmpeg: ${err.message}`).catch(() => undefined);
+        resolveFfmpeg();
+      });
 
-    child.on("close", async (code, signal) => {
-      const entry = this.active.get(jobId);
-      const timedOut = entry?.timedOut === true;
-      // M18 §6 fix: a SIGKILL the user did not request is almost always the
-      // OOM killer (observed on the 600s render: ffmpeg at 2.5GB RSS on a
-      // 4GB sandbox). Reporting it as a user cancellation hid the real cause.
-      const wasCancelled = !timedOut && (entry?.cancelled || signal === "SIGTERM");
-      const wasKilled = !timedOut && !entry?.cancelled && signal === "SIGKILL";
-      this.active.delete(jobId);
-      if (timedOut) {
-        await this.fail(jobId, "Processing exceeded its time limit and was stopped.");
-        await opts.onSettled?.().catch(() => undefined);
-        return;
-      }
-      if (wasCancelled) {
-        await db.job
-          .update({ where: { id: jobId }, data: { status: "CANCELLED", stage: "Cancelled", message: "Processing was cancelled. Original media is intact." } })
-          .catch(() => undefined);
-        await opts.onSettled?.().catch(() => undefined);
-        return;
-      }
-      if (wasKilled) {
-        await this.fail(jobId, `The encoder process was killed by the system (signal SIGKILL) — most likely out of memory while rendering this timeline. Try a proxy workflow or shorter segments. ${stderrBuf.trim().slice(-200)}`);
-        await opts.onSettled?.().catch(() => undefined);
-        return;
-      }
-      if (code === 0) {
-        try {
-          await opts.onDone();
-        } catch (err) {
-          await this.fail(jobId, err instanceof Error ? err.message : "Post-processing failed.");
-        }
-      } else {
-        const tail = stderrBuf.trim().split("\n").slice(-3).join(" | ");
-        await this.fail(jobId, `ffmpeg exited with code ${code}. ${tail || "No error detail available."}`);
-      }
-      await opts.onSettled?.().catch(() => undefined);
+      child.on("close", (code, signal) => {
+        void (async () => {
+          const entry = this.active.get(jobId);
+          const timedOut = entry?.timedOut === true;
+          // M18 §6 fix: a SIGKILL the user did not request is almost always the
+          // OOM killer (observed on the 600s render: ffmpeg at 2.5GB RSS on a
+          // 4GB sandbox). Reporting it as a user cancellation hid the real cause.
+          const wasCancelled = !timedOut && (entry?.cancelled || signal === "SIGTERM");
+          const wasKilled = !timedOut && !entry?.cancelled && signal === "SIGKILL";
+          this.active.delete(jobId);
+          if (timedOut) {
+            await this.fail(jobId, "Processing exceeded its time limit and was stopped.");
+            await opts.onSettled?.().catch(() => undefined);
+            return;
+          }
+          if (wasCancelled) {
+            await db.job
+              .update({ where: { id: jobId }, data: { status: "CANCELLED", stage: "Cancelled", message: "Processing was cancelled. Original media is intact." } })
+              .catch(() => undefined);
+            await opts.onSettled?.().catch(() => undefined);
+            return;
+          }
+          if (wasKilled) {
+            await this.fail(jobId, `The encoder process was killed by the system (signal SIGKILL) — most likely out of memory while rendering this timeline. Try a proxy workflow or shorter segments. ${stderrBuf.trim().slice(-200)}`);
+            await opts.onSettled?.().catch(() => undefined);
+            return;
+          }
+          if (code === 0) {
+            try {
+              await opts.onDone();
+            } catch (err) {
+              await this.fail(jobId, err instanceof Error ? err.message : "Post-processing failed.");
+            }
+          } else {
+            const tail = stderrBuf.trim().split("\n").slice(-3).join(" | ");
+            await this.fail(jobId, `ffmpeg exited with code ${code}. ${tail || "No error detail available."}`);
+          }
+          await opts.onSettled?.().catch(() => undefined);
+        })()
+          .catch((e) => {
+            // The settle path itself must never reject the promise or crash the worker.
+            console.error(`[job-runner] ffmpeg settle bookkeeping failed for ${jobId}:`, e);
+          })
+          .finally(() => resolveFfmpeg());
+      });
     });
   }
 

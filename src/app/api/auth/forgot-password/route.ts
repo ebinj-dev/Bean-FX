@@ -8,7 +8,7 @@ import { randomBytes } from "crypto";
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { audit } from "@/lib/audit";
-import { sendMail, hashToken } from "@/lib/mailer";
+import { sendPasswordResetEmail, hashToken } from "@/lib/mailer";
 import { clientIp, enforceRateLimit, RATE_LIMITS } from "@/lib/rate-limit";
 
 export const runtime = "nodejs";
@@ -26,12 +26,7 @@ export async function POST(req: Request) {
     await db.passwordResetToken.create({
       data: { userId: user.id, tokenHash: hashToken(raw), expiresAt: new Date(Date.now() + 30 * 60 * 1000) },
     });
-    const origin = process.env.PUBLIC_APP_URL ?? new URL(req.url).origin;
-    const mail = await sendMail({
-      to: user.email,
-      subject: "Reset your BEAN FX password",
-      body: `Someone requested a password reset for your BEAN FX account.\n\nOpen this link within 30 minutes to choose a new password:\n${origin}/reset-password?token=${raw}\n\nIf you did not request this, ignore this email — your password stays unchanged.`,
-    });
+    const mail = await sendPasswordResetEmail(user.email, raw, process.env.PUBLIC_APP_URL ?? new URL(req.url).origin);
     await audit("auth.password_reset_requested", { userId: user.id, ip: clientIp(req), detail: `delivered=${mail.delivered}` });
     // IDENTICAL body for known and unknown emails (anti-enumeration) — the
     // only behavioral difference is the mail actually being sent.

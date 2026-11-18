@@ -2,6 +2,19 @@ import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
   output: "standalone",
+  /**
+   * M20 — the sandbox recycle progressively chowned top-level artifact
+   * directories to root (mode 700). Turbopack's standalone file-tracing walk
+   * panics on unreadable directories, so exclude them from tracing by name.
+   * These paths are runtime artifacts and never part of the server bundle.
+   */
+  outputFileTracingExcludes: {
+    "*": [
+      "backups/**", "authdata/**", "models/**", "sidecar/**", "bench/**",
+      ".deps-mirror*/**", "download.root-owned/**", "BEAN-FX-Source-Export/**",
+      ".models-mirror/**", ".zscripts/**", "upload/**", "download/**", "skills/**",
+    ],
+  },
   /* Type errors fail the build — the app code is type-clean and must stay so. */
   typescript: {
     ignoreBuildErrors: false,

@@ -258,7 +258,7 @@ export function filterSpec(type: EffectType): FilterEffectSpec | null {
  * FFmpeg filter chain for a clip's enabled visual effects. Color `eq`
  * parameters merge into ONE eq filter (FFmpeg single-instance constraint).
  */
-export function ffmpegEffectChain(effects: Effect[]): string | null {
+export function ffmpegEffectChain(effects: Effect[], outFit?: { width: number; height: number }): string | null {
   const eqParts: string[] = [];
   const otherParts: string[] = [];
   for (const effect of effects) {
@@ -274,6 +274,16 @@ export function ffmpegEffectChain(effects: Effect[]): string | null {
   const parts: string[] = [];
   if (eqParts.length > 0) parts.push(`eq=${eqParts.join(":")}`);
   parts.push(...otherParts);
+  // M19 crop fix: a crop back-scale changes the segment dimensions (and can
+  // round to odd sizes libx264 rejects) — when the caller provides the output
+  // fit, end every dimension-changing chain with the canonical seq fit so the
+  // segment always arrives at exact sequence dimensions.
+  const hasCrop = otherParts.some((f) => f.startsWith("crop="));
+  if (outFit && hasCrop) {
+    parts.push(
+      `scale=${outFit.width}:${outFit.height}:force_original_aspect_ratio=decrease,pad=${outFit.width}:${outFit.height}:(ow-iw)/2:(oh-ih)/2,setsar=1`,
+    );
+  }
   return parts.length > 0 ? parts.join(",") : null;
 }
 

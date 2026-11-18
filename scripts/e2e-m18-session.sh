@@ -31,10 +31,24 @@ $AB cookies set beanfx_session "$TOKEN" --domain localhost >/dev/null
 $AB open "$BASE/" >/dev/null
 $AB screenshot "$SHOTS/10-session-01-open.png" >/dev/null
 
-step 2 "create a project through the UI"
-$AB eval "(() => { const inp = [...document.querySelectorAll('input')].find((i) => (i.placeholder || '').toLowerCase().includes('project') || (i.getAttribute('aria-label') || '').toLowerCase().includes('project')); if (inp) { const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set; setter.call(inp, 'M18 Session Feature'); inp.dispatchEvent(new Event('input', { bubbles: true })); return 'NAMED'; } return 'NOINPUT'; })()" 2>/dev/null | tail -1 | tr -d '"'
-$AB eval "(() => { const btn = [...document.querySelectorAll('button')].find((b) => /create|new project/i.test((b.textContent || '') + (b.getAttribute('title') || ''))); btn?.click(); return btn ? 'CLICKED' : 'NOBTN'; })()" >/dev/null 2>&1
-sleep 2
+step 2 "register through the real auth UI, then create a project via the + button"
+$AB eval "(() => { const b = [...document.querySelectorAll('button,a')].find((e) => (e.textContent || '').trim().toUpperCase().includes('GET STARTED')); b?.click(); return b ? 'OK' : 'NOBTN'; })()" >/dev/null 2>&1
+sleep 1.5
+$AB eval "(() => { const b = [...document.querySelectorAll('button,a')].find((e) => (e.textContent || '').includes('Create one')); b?.click(); return b ? 'OK' : 'NOBTN'; })()" >/dev/null 2>&1
+sleep 1.5
+$AB eval "(() => { const em = document.querySelector('input[type=email]'); const pw = document.querySelector('input[type=password]'); const name = [...document.querySelectorAll('input')].find((i) => i.type === 'text'); const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set; if (name) { setter.call(name, 'M18 Session'); name.dispatchEvent(new Event('input', { bubbles: true })); } setter.call(em, '$EMAIL'); em.dispatchEvent(new Event('input', { bubbles: true })); setter.call(pw, 'session-pass-1234'); pw.dispatchEvent(new Event('input', { bubbles: true })); return 'FILLED'; })()" >/dev/null 2>&1
+$AB eval "(() => { const b = [...document.querySelectorAll('button')].find((e) => /create account|sign up|register/i.test(e.textContent || '')); b?.click(); return b ? 'OK' : 'NOBTN'; })()" >/dev/null 2>&1
+sleep 3.5
+$AB eval "(() => { const plus = [...document.querySelectorAll('button')].find((b) => (b.textContent || '').trim() === '+'); plus?.click(); return plus ? 'OK' : 'NOBTN'; })()" >/dev/null 2>&1
+sleep 1.2
+$AB eval "(() => { const inp = document.querySelector('input[placeholder=\"New project…\"]'); if (!inp) return 'NOINPUT'; const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set; setter.call(inp, 'M18 Session Feature'); inp.dispatchEvent(new Event('input', { bubbles: true })); inp.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true })); return 'ENTERED'; })()" 2>/dev/null | tail -1 | tr -d '"'
+sleep 2.5
+# Sync the browser's session into the curl jar so API checks share the session.
+$AB cookies 2>/dev/null | grep -a "^beanfx_session=" > /tmp/e2e-token.txt
+TOKEN=$(cut -d= -f2 /tmp/e2e-token.txt)
+[ -n "$TOKEN" ] || fail 2 "no session cookie after UI registration"
+printf '.localhost	TRUE	/	TRUE	0	beanfx_session	%s
+' "$TOKEN" > "$JAR"
 PROJ=$(curl -s -b "$JAR" "$BASE/api/projects" | python3 -c "
 import sys, json
 ps = json.load(sys.stdin).get('projects') or []
@@ -66,7 +80,13 @@ $AB screenshot "$SHOTS/10-session-04-media.png" >/dev/null
 step 5 "place two video clips on the timeline via + place (real control)"
 $AB eval "(() => { const items = [...document.querySelectorAll('div,button')].filter((e) => (e.textContent || '').includes('session-video')); items[0]?.scrollIntoView({block: 'center'}); return 'OK'; })()" >/dev/null 2>&1
 sleep 0.5
-$AB eval "(() => { const btn = [...document.querySelectorAll('button')].find((b) => (b.textContent || '').trim() === '+ place'); if (!btn) return 'NOBTN'; btn.click(); return 'CLICKED'; })()" 2>/dev/null | tail -1 | tr -d '"' | grep -q CLICKED || fail 5 "place button"
+# A fresh project has no tracks — add a video + audio track via the V/A buttons.
+$AB eval "(() => { const btn = [...document.querySelectorAll('button')].find((b) => (b.getAttribute('title') || '') === 'Add video track'); btn?.click(); return btn ? 'VTRACK' : 'NOV'; })()" 2>/dev/null | tail -1 | tr -d '"' | grep -q VTRACK || fail 5 "add video track button"
+sleep 1
+$AB eval "(() => { const btn = [...document.querySelectorAll('button')].find((b) => (b.getAttribute('title') || '').toLowerCase() === 'add audio track'); btn?.click(); return btn ? 'ATRACK' : 'NOA'; })()" >/dev/null 2>&1
+sleep 1
+# Each asset card is itself the + place button (onPlace per asset).
+$AB eval "(() => { const li = [...document.querySelectorAll('li')].find((e) => (e.textContent || '').includes('session-video')); const btn = li ? li.querySelector('button') : null; if (!btn) return 'NOBTN'; btn.scrollIntoView({block: 'center'}); btn.click(); return 'CLICKED'; })()" 2>/dev/null | tail -1 | tr -d '"' | grep -q CLICKED || fail 5 "place button"
 sleep 2
 $AB eval "(() => document.querySelectorAll('[data-clip-id]').length + ' clips')" 2>&1 | tail -1 | tr -d '"' | grep -q "clips" || fail 5 "no clips"
 

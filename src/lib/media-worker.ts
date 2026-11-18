@@ -70,6 +70,8 @@ import { runCompositionRender } from "@/lib/creative/m14/render";
  */
 
 const TICK_MS = 2_000;
+/** M20 §3: independent recovery cadence (cannot be starved by a stuck claim tick). */
+const RECOVERY_MS = 10_000;
 /** A PROCESSING job silent this long is considered dead with its worker. */
 const CLAIM_STALE_MS = 90_000;
 /** Global concurrent MEDIA_* jobs. */
@@ -97,6 +99,15 @@ const USER_MAX_ACTIVE: Record<string, number> = {
   [JOB_TYPE_TEMPORAL_INTELLIGENCE]: 1,
   [JOB_TYPE_COMPOSITION_RENDER]: 1,
 };
+/**
+ * M20 §3: timeline renders are the single heaviest workload (a 1080p x264
+ * encode can transiently reserve >1.4GB virtual / ~300MB resident even with
+ * bounded thread caps). On memory-constrained hosts two concurrent renders
+ * pushed the container into global OOM (dmesg: three ffmpeg SIGKILLs in six
+ * seconds during the M20 suite). Renders are therefore serialized GLOBALLY,
+ * independent of the per-user limits above.
+ */
+const RENDER_GLOBAL_MAX_ACTIVE = 1;
 /** Scratch sweeps run at most this often. */
 const SWEEP_INTERVAL_MS = 15 * 60_000;
 const UPLOAD_SESSION_TTL_MS = 24 * 60 * 60_000;
@@ -135,14 +146,17 @@ const HANDLERS: Record<string, MediaJobHandler> = {
 
 interface WorkerState {
   timer: ReturnType<typeof setInterval> | null;
+  recoveryTimer: ReturnType<typeof setInterval> | null;
   ticking: boolean;
+  tickStartedAt: number;
   lastSweepAt: number;
 }
 
 // Module state must survive dev-time route re-evaluation (same pattern as db.ts).
 const globalForWorker = globalThis as unknown as { __beanfxMediaWorker?: WorkerState };
 const state: WorkerState =
-  globalForWorker.__beanfxMediaWorker ?? (globalForWorker.__beanfxMediaWorker = { timer: null, ticking: false, lastSweepAt: 0 });
+  globalForWorker.__beanfxMediaWorker ??
+  (globalForWorker.__beanfxMediaWorker = { timer: null, recoveryTimer: null, ticking: false, tickStartedAt: 0, lastSweepAt: 0 });
 
 /**
  * Re-queue (or fail) PROCESSING jobs whose worker died: no heartbeat for
@@ -156,7 +170,36 @@ async function recoverStaleClaims(): Promise<void> {
   });
   for (const job of stale) {
     const guarded = { id: job.id, status: "PROCESSING", lastHeartbeatAt: { lt: cut } };
+    // M20 §3: an OOM kill is deterministic on a memory-constrained host —
+    // retrying the same render would OOM again and starve the queue (observed
+    // in M19: a 600s render OOM-retry loop blocked every other render job).
+    // Interrupted-but-healthy workers still recover normally below.
+    const previouslyOomKilled = (job.message ?? "").includes("killed by the system");
+    if (previouslyOomKilled) {
+      await db.job.updateMany({
+        where: guarded,
+        data: {
+          status: "FAILED",
+          stage: "Failed",
+          message: "Not retried: the previous attempt was killed by the system (out of memory). Requires a larger host, a shorter timeline or proxy media — see the deployment runbook.",
+          claimedAt: null,
+        },
+      });
+      continue;
+    }
     if (job.attempts < job.maxAttempts) {
+      // M20 §3: the claim is stale, which means the worker that owned it died
+      // mid-encode. Any ffmpeg it spawned is now an orphan that would keep
+      // consuming memory alongside the retry (observed during the M20 suite:
+      // orphaned encoders from interrupted attempts compounded into global
+      // OOM). With renders serialized globally, killing the orphan encoders
+      // before requeueing is safe — nothing else is rendering.
+      if (job.type === JOB_TYPE_RENDER_TIMELINE) {
+        try {
+          const { execSync } = await import("child_process");
+          execSync("pkill -9 ffmpeg || true", { timeout: 5_000 });
+        } catch { /* best effort — no orphan to kill, or kill not permitted */ }
+      }
       const resumed = await db.job.updateMany({
         where: guarded,
         data: {
@@ -280,6 +323,7 @@ async function executeClaimed(job: {
 export async function tickWorkerOnce(): Promise<void> {
   if (state.ticking) return;
   state.ticking = true;
+  state.tickStartedAt = Date.now();
   try {
     await recoverStaleClaims();
     await claimAndRun();
@@ -310,6 +354,7 @@ async function claimAndRun(): Promise<void> {
     select: { userId: true, type: true },
   });
   let globalActive = active.length;
+  let activeRenders = active.filter((r) => r.type === JOB_TYPE_RENDER_TIMELINE).length;
   const perUser = new Map<string, Map<string, number>>();
   for (const row of active) {
     const byType = perUser.get(row.userId) ?? new Map<string, number>();
@@ -319,6 +364,8 @@ async function claimAndRun(): Promise<void> {
 
   for (const candidate of candidates) {
     if (globalActive >= GLOBAL_MAX_ACTIVE) break;
+    // M20 §3: global serialization for timeline renders (see RENDER_GLOBAL_MAX_ACTIVE).
+    if (candidate.type === JOB_TYPE_RENDER_TIMELINE && activeRenders >= RENDER_GLOBAL_MAX_ACTIVE) continue;
     const userActive = perUser.get(candidate.userId)?.get(candidate.type) ?? 0;
     if (userActive >= (USER_MAX_ACTIVE[candidate.type] ?? 1)) continue;
 
@@ -331,6 +378,7 @@ async function claimAndRun(): Promise<void> {
 
     await markAssetProcessing(candidate.type, candidate.paramsJson);
     globalActive += 1;
+    if (candidate.type === JOB_TYPE_RENDER_TIMELINE) activeRenders += 1;
     const byType = perUser.get(candidate.userId) ?? new Map<string, number>();
     byType.set(candidate.type, userActive + 1);
     perUser.set(candidate.userId, byType);
@@ -343,7 +391,24 @@ async function claimAndRun(): Promise<void> {
       maxAttempts: candidate.maxAttempts,
       paramsJson: candidate.paramsJson,
       timeoutSec: candidate.timeoutSec,
-    }).catch(() => undefined);
+      // M20 §3: never swallow execution crashes silently — an unlogged crash
+      // left jobs claimed PROCESSING forever (the per-claim heartbeat interval
+      // kept the row fresh, so the stale-claim sweep never recovered it).
+      // Log the crash and fail the job row so the durable surface reflects it.
+    }).catch(async (crash) => {
+      console.error(`[media-worker] job ${candidate.id} (${candidate.type}) crashed:`, crash);
+      await db.job
+        .updateMany({
+          where: { id: candidate.id, status: "PROCESSING" },
+          data: {
+            status: "FAILED",
+            stage: "Failed",
+            message: `Worker crashed while executing the job: ${crash instanceof Error ? crash.message : String(crash)}`.slice(0, 480),
+            claimedAt: null,
+          },
+        })
+        .catch(() => undefined);
+    });
   }
 }
 
@@ -407,6 +472,24 @@ export function ensureMediaWorker(): void {
   // Unref so bun test runs and CLI scripts importing this module can exit.
   timer.unref?.();
   state.timer = timer;
+  // M20 §3 hardening: recovery must never be starved by a stuck claim tick.
+  // tickWorkerOnce() guards with state.ticking, so one never-settling
+  // claimAndRun() await (hung child, lost wakeup) would permanently block the
+  // 2s recovery pass — observed once in suite run 6 (a simulated stale OOM job
+  // sat un-recovered after the previous tick had finished all work). A
+  // dedicated interval re-asserts the sweep while the claim tick is wedged.
+  const recoveryTimer = setInterval(() => {
+    // Watchdog: a tick wedged >10min is pathological (legit renders carry
+    // their own timeoutSec and heartbeat) — unstick it so ticking can resume.
+    if (state.ticking && Date.now() - state.tickStartedAt > 600_000) {
+      state.ticking = false;
+    }
+    if (state.ticking) {
+      void recoverStaleClaims().catch(() => undefined);
+    }
+  }, RECOVERY_MS);
+  recoveryTimer.unref?.();
+  state.recoveryTimer = recoveryTimer;
   void tickWorkerOnce().catch(() => undefined);
 }
 

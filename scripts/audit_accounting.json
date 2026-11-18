@@ -1,0 +1,33 @@
+{
+ "run": {
+  "resultFile": "media-store/analysis-results/cmw8ob0qo000tr4vl7955v6o1.json",
+  "mediaId": "cmw3274ja0009r6vm7y2hg32k",
+  "storageHashMatchesUploadedOriginal": "97f0444364193127fe0f6d2b65fc9cd4f459fa2e8babfc53bc1cd48f74c7d2da",
+  "durationSec": 1219.728,
+  "implementation": "latest calibrated build (commit a8221fe; energy-verified phantom-word rule present)"
+ },
+ "candidates": {
+  "total": 56,
+  "REMOVE": 5,
+  "REVIEW": 51,
+  "KEEP_cards": 0,
+  "KEEP_suppressedBySafetyAndInference": "see inferenceNote in result (semantic KEEP drops; none carried into the panel)"
+ },
+ "durationAccounting": {
+  "sumOfAllCandidateDurations": 75.51,
+  "unionOfAllCandidateIntervals": 75.51,
+  "unionOfREMOVEIntervals": 18.42,
+  "unionOfREVIEWIntervals": 57.09,
+  "overlapPairs": 0,
+  "planIntervals": 5,
+  "planRemovedSec": 18.42
+ },
+ "screenshotReconciliation": {
+  "proposedCutsDisplay": "56 = cuts.length (all panel cards; KEEP cards are spliced out by the safety layer and never rendered)",
+  "proposedRemovedDisplay": "1:15 = SUM of individual candidate durations (line 1088: cuts.filter(review!=='KEEP').reduce(a+c.duration)) \u2014 NOT a union",
+  "approvedCutsDisplay": "6 = cards with review==='REMOVE' (5 engine REMOVE + 1 user-promoted REVIEW card)",
+  "approvedRemovedDisplay": "0:19 = UNION of those 6 intervals (normalizeRanges; line 1086-1087)",
+  "finalDisplay": "20:00 = original \u2212 approved union (line 1089)",
+  "percentDisplay": "1.6% = approved union / original"
+ }
+}
