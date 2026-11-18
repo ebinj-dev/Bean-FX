@@ -257,6 +257,7 @@ export function ClipInspector({
       {/* ── M16 Effects + Color correction ─────────────────────────────── */}
       <EffectsSection clip={clip} session={session} notice={notice} playhead={playhead ?? 0} />
       {(clip.missingMedia || !clip.sourceAssetId) && <MissingMediaRelink session={session} clipId={clip.id} sequence={sequence} />}
+      {clip.sourceAssetId && !clip.missingMedia && <MediaSourcePanel session={session} clipId={clip.id} sequence={sequence} sourceAssetId={clip.sourceAssetId} />}
     </div>
   );
 }
@@ -605,14 +606,36 @@ function VolumeAutomationStrip({ clip, session }: { clip: import("@/lib/editor/m
  *  validated, reversible command; the relink is honest — the source in/out
  *  are reset to the new asset's full length at the sequence fps). */
 function MissingMediaRelink({ session, clipId, sequence }: { session: EditorSession; clipId: string; sequence: Sequence }) {
-  const [assets, setAssets] = useState<Array<{ id: string; originalName: string; durationSec: number | null }>>([]);
+  const [assets, setAssets] = useState<Array<{ id: string; originalName: string; kind: string; durationSec: number | null; fps: number | null; channels: number | null }>>([]);
   const [picked, setPicked] = useState("");
   useEffect(() => {
     fetch("/api/media/list")
       .then((r) => (r.ok ? r.json() : { assets: [] }))
-      .then((d: { assets?: Array<{ id: string; originalName: string; durationSec: number | null }> }) => setAssets((d.assets ?? []).slice(0, 100)))
+      .then((d: { assets?: Array<{ id: string; originalName: string; kind: string; durationSec: number | null; fps: number | null; channels: number | null }> }) => setAssets((d.assets ?? []).slice(0, 100)))
       .catch(() => setAssets([]));
   }, []);
+  // M28 P3 — compatibility diagnostics BEFORE the relink: the timeline keeps
+  // its placement (ReplaceClip resets in/out to the replacement's full length),
+  // so surface duration/fps/audio mismatches instead of surprising the editor.
+  const pickedAsset = assets.find((a) => a.id === picked);
+  const diagnostics = pickedAsset
+    ? (() => {
+        const seqFps = sequence.fps.num / sequence.fps.den;
+        const want = sequence.clips.find((c) => c.id === clipId);
+        const expectedSec = want ? want.timelineDurationFrames / seqFps : null;
+        const warns: string[] = [];
+        if (expectedSec !== null && pickedAsset.durationSec !== null && Math.abs(pickedAsset.durationSec - expectedSec) > 0.5) {
+          warns.push(`duration ${pickedAsset.durationSec.toFixed(1)}s vs the clip's ${expectedSec.toFixed(1)}s — in/out reset to the full replacement`);
+        }
+        if (pickedAsset.fps !== null && Math.abs(pickedAsset.fps - seqFps) / seqFps > 0.005) {
+          warns.push(`frame rate ${pickedAsset.fps.toFixed(2)} ≠ sequence ${seqFps.toFixed(2)} — resampled on the timeline`);
+        }
+        if (pickedAsset.kind === "VIDEO" && pickedAsset.channels === 0) {
+          warns.push("video-only source — no audio in this replacement");
+        }
+        return warns;
+      })()
+    : [];
   const relink = () => {
     const asset = assets.find((a) => a.id === picked);
     if (!asset) return;
@@ -641,9 +664,80 @@ function MissingMediaRelink({ session, clipId, sequence }: { session: EditorSess
           <option value="">Select a library asset…</option>
           {assets.map((a) => <option key={a.id} value={a.id}>{a.originalName.slice(0, 60)}</option>)}
         </select>
-        <button type="button" onClick={relink} disabled={!picked} className="rounded border border-[#d4a017] bg-[#d4a017]/10 px-2 py-1 text-[10px] text-[#d4a017] hover:bg-[#d4a017]/20 disabled:opacity-40">
+
+          <button type="button" onClick={relink} disabled={!picked} className="rounded border border-[#d4a017] bg-[#d4a017]/10 px-2 py-1 text-[10px] text-[#d4a017] hover:bg-[#d4a017]/20 disabled:opacity-40">
           Relink
         </button>
+      </div>
+      {diagnostics.length > 0 && (
+        <ul className="mt-1.5 space-y-0.5" aria-label="Relink compatibility warnings">
+          {diagnostics.map((w) => (
+            <li key={w} className="text-[9px] leading-snug text-[#c47f4c]">⚠ {w}</li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
+/** M28 P9 — compact media-source panel: real ffprobe metadata, proxy status
+ *  and the explicit regeneration path (stale/failed proxies included). */
+function MediaSourcePanel({ session, clipId, sequence, sourceAssetId }: { session: EditorSession; clipId: string; sequence: Sequence; sourceAssetId: string }) {
+  const [meta, setMeta] = useState<{
+    originalName: string; kind: string; width: number | null; height: number | null; fps: number | null;
+    videoCodec: string | null; audioCodec: string | null; channels: number | null; sampleRate: number | null;
+    durationSec: number | null; isVfr: boolean | null; rotation: number | null; probeStatus: string | null;
+    probeError: string | null; proxyStatus: string | null; proxyError: string | null; mimeType: string | null;
+  } | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [missing, setMissing] = useState(false);
+  useEffect(() => {
+    setMeta(null);
+    setMissing(false);
+    fetch(`/api/media/${sourceAssetId}`)
+      .then((r) => {
+        if (!r.ok) {
+          // M28 P3 — the source asset is gone (deleted or foreign workspace):
+          // surface the missing-media relink path right here.
+          setMissing(true);
+          return null;
+        }
+        return r.json();
+      })
+      .then((d) => setMeta(d?.media ?? null))
+      .catch(() => setMissing(true));
+  }, [sourceAssetId]);
+  if (missing) return <MissingMediaRelink session={session} clipId={clipId} sequence={sequence} />;
+  if (!meta) return null;
+  const regenerate = async () => {
+    setBusy(true);
+    try {
+      const r = await fetch(`/api/media/${sourceAssetId}/proxy`, { method: "POST" });
+      const d = await r.json().catch(() => ({}));
+      if (!r.ok && r.status !== 409) window.alert(d.error ?? "Proxy regeneration failed.");
+    } finally {
+      setBusy(false);
+    }
+  };
+  const proxyLabel: Record<string, string> = { READY: "READY", QUEUED: "QUEUED", PROCESSING: "PROCESSING", FAILED: "FAILED", UNSUPPORTED: "NOT NEEDED", NONE: "—" };
+  return (
+    <div className="mt-2 rounded border border-[#1c1c1a] bg-[#111110] p-2">
+      <span className="bean-label text-[9px] text-[#6a6a64]">SOURCE MEDIA</span>
+      <div className="mt-1 grid grid-cols-2 gap-x-2 gap-y-0.5 text-[9px] leading-snug text-[#a8a8a0]">
+        <span>Resolution</span><span className="text-right text-[#d8d8d2]">{meta.width && meta.height ? `${meta.width}×${meta.height}` : "—"}</span>
+        <span>Frame rate</span><span className="text-right text-[#d8d8d2]">{meta.fps ? `${meta.fps.toFixed(2)}${meta.isVfr ? " (VFR)" : ""}` : "—"}</span>
+        <span>Video codec</span><span className="text-right text-[#d8d8d2]">{meta.videoCodec ?? "—"}</span>
+        <span>Audio</span><span className="text-right text-[#d8d8d2]">{meta.audioCodec ? `${meta.audioCodec} ${meta.sampleRate ? `${(meta.sampleRate / 1000).toFixed(1)}kHz` : ""} ${meta.channels ? `${meta.channels}ch` : ""}`.trim() : "—"}</span>
+        <span>Duration</span><span className="text-right text-[#d8d8d2]">{meta.durationSec ? `${meta.durationSec.toFixed(2)}s` : "—"}</span>
+        <span>Rotation</span><span className="text-right text-[#d8d8d2]">{meta.rotation ? `${meta.rotation}°` : "0°"}</span>
+        <span>Probe</span><span className={`text-right ${meta.probeStatus === "READY" ? "text-[#4cc47f]" : meta.probeStatus === "FAILED" ? "text-[#c45c4c]" : "text-[#8f8f8a]"}`}>{meta.probeStatus ?? "—"}{meta.probeError ? " — see message" : ""}</span>
+        <span>Proxy</span>
+        <span className="flex items-center justify-end gap-1 text-right">
+          <span className={meta.proxyStatus === "READY" ? "text-[#4cc47f]" : meta.proxyStatus === "FAILED" ? "text-[#c45c4c]" : "text-[#8f8f8a]"} title={meta.proxyError ?? undefined}>{proxyLabel[meta.proxyStatus ?? ""] ?? meta.proxyStatus ?? "—"}</span>
+          <button type="button" disabled={busy || meta.proxyStatus === "QUEUED" || meta.proxyStatus === "PROCESSING"} onClick={regenerate} title="Regenerate the editing proxy (stale or failed proxies included)" className="rounded border border-[#2a2a2a] px-1 text-[8px] text-[#8f8f8a] hover:border-[#d4a017] hover:text-[#d4a017] disabled:opacity-30">
+            ↻
+          </button>
+        </span>
       </div>
     </div>
   );

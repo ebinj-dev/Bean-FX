@@ -19,7 +19,7 @@
 import { mkdir, stat, unlink, writeFile } from "fs/promises";
 import path from "path";
 import { db } from "@/lib/db";
-import { pathInsideMediaRoot } from "@/lib/media-storage";
+import { pathInsideMediaRoot, assertDiskSpace, MEDIA_ROOT } from "@/lib/media-storage";
 import { clipEndFrame, type Clip, type Sequence } from "@/lib/editor/model";
 import { sequenceEndFrame } from "@/lib/editor/preview";
 import { ffmpegEffectChain, ffmpegEffectChainAnimated, segmentSplitFrames } from "@/lib/editor/filters";
@@ -430,6 +430,9 @@ export async function runTimelineRenderJob(job: { id: string; userId: string; pa
   const fps = seq.fps.num / seq.fps.den;
   const totalSec = (endFrame - startFrame) / fps;
   if (totalSec <= 0) throw new Error("Render window is empty — the sequence has no clips.");
+  // M28: refuse to start a render on a nearly full volume — ENOSPC mid-render
+  // would truncate the output and waste the whole encode.
+  await assertDiskSpace(MEDIA_ROOT);
 
   // Distinct assets → ffmpeg inputs.
   const used = new Map<string, { index: number; isImage: boolean; hasAudio: boolean }>();
@@ -574,6 +577,16 @@ export async function runTimelineRenderJob(job: { id: string; userId: string; pa
     // Register the assembled output (validation happens below via the shared path).
     const probe = await probeMediaDeep(outPath);
     if (!probe.hasVideo) throw new Error("Rendered file has no video stream — rejected.");
+    // M28: conformance gates before publication — a successful ffmpeg exit
+    // alone is not evidence of a valid output. Duration must track the window
+    // (tolerance max(0.5s, 2%) for container rounding); dimensions must equal
+    // the sequence fit exactly (the pad/scale chain targets them).
+    if (probe.durationSec !== null && Math.abs(probe.durationSec - totalSec) > Math.max(0.5, totalSec * 0.02)) {
+      throw new Error(`Rendered duration ${probe.durationSec.toFixed(2)}s does not match the requested window ${totalSec.toFixed(2)}s — output rejected, retry the render.`);
+    }
+    if (probe.width && probe.height && (probe.width !== seq.width || probe.height !== seq.height)) {
+      throw new Error(`Rendered dimensions ${probe.width}×${probe.height} do not match the sequence fit ${seq.width}×${seq.height} — output rejected.`);
+    }
     const st = await stat(outPath);
     const exportRow = await db.exportFile.create({
       data: {

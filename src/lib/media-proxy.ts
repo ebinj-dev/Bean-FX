@@ -3,7 +3,7 @@ import path from "path";
 import { db } from "@/lib/db";
 import { jobManager } from "@/lib/job-runner";
 import { PermanentJobError, completeJob } from "@/lib/job-helpers";
-import { MEDIA_ROOT, PROXIES_DIR, evenDim, pathExists, removeFileQuiet } from "@/lib/media-storage";
+import { MEDIA_ROOT, PROXIES_DIR, assertDiskSpace, evenDim, pathExists, removeFileQuiet } from "@/lib/media-storage";
 import { probeMediaDeep, proxyEligible } from "@/lib/media-analysis";
 
 /**
@@ -15,6 +15,22 @@ import { probeMediaDeep, proxyEligible } from "@/lib/media-analysis";
 
 /** Proxy target: long edge capped at 960 px, source aspect ratio preserved. */
 export const PROXY_LONG_EDGE = 960;
+
+/** Poll until the asset's probe metadata is READY (M28 race fix). */
+async function waitForProbe(mediaId: string, timeoutMs: number): Promise<{ width: number | null; height: number | null; durationSec: number | null; videoCodec: string | null } | null> {
+  const deadline = Date.now() + timeoutMs;
+  for (;;) {
+    await new Promise((r) => setTimeout(r, 500));
+    const fresh = await db.mediaAsset.findUnique({
+      where: { id: mediaId },
+      select: { probeStatus: true, width: true, height: true, durationSec: true, videoCodec: true },
+    });
+    if (!fresh) return null;
+    if (fresh.probeStatus === "READY") return fresh;
+    if (fresh.probeStatus === "FAILED") return null; // judge with what exists
+    if (Date.now() > deadline) return null;
+  }
+}
 
 export interface ProxyPlan {
   args: string[];
@@ -91,6 +107,15 @@ export async function runProxyJob(job: {
   if (!asset) throw new PermanentJobError("Media asset no longer exists.");
   if (asset.userId !== job.userId) throw new PermanentJobError("Media asset does not belong to the job owner.");
   if (asset.kind !== "VIDEO") throw new PermanentJobError("Proxies apply only to video assets.");
+  // M28: probe and proxy jobs may be claimed concurrently — an eligibility
+  // decision made on a pre-probe asset row misjudges 1080p sources as "not
+  // justified" (observed: auto-queue read width/duration before the probe
+  // committed them). Wait briefly for probe metadata before judging.
+  if (asset.probeStatus !== "READY") {
+    const fresh = await waitForProbe(asset.id, 10_000);
+    if (!fresh) throw new Error("Probe metadata is not ready yet — proxy generation deferred to a retry.");
+    Object.assign(asset, fresh);
+  }
   if (!proxyEligible({ hasVideo: Boolean(asset.videoCodec), width: asset.width, height: asset.height, durationSec: asset.durationSec })) {
     await db.mediaAsset.update({ where: { id: asset.id }, data: { proxyStatus: "UNSUPPORTED" } }).catch(() => undefined);
     await completeJob(job.id, "Source does not justify a proxy — original will be used.");
@@ -105,6 +130,9 @@ export async function runProxyJob(job: {
   if (!(await pathExists(asset.storagePath))) {
     throw new PermanentJobError("Original media file is missing from storage.");
   }
+  // M28: refuse to start a transcode on a nearly full volume — a silent
+  // mid-encode ENOSPC would corrupt the proxy and waste the attempt.
+  await assertDiskSpace(MEDIA_ROOT);
 
   await db.mediaAsset.updateMany({
     where: { id: asset.id, proxyStatus: { in: ["QUEUED", "PROCESSING", "FAILED"] } },

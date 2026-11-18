@@ -1,4 +1,5 @@
 import { promises as fs } from "fs";
+import { existsSync } from "fs";
 import path from "path";
 import { db } from "@/lib/db";
 import { jobManager } from "@/lib/job-runner";
@@ -413,7 +414,7 @@ async function claimAndRun(): Promise<void> {
 }
 
 /** Storage hygiene: abandoned upload sessions, stale scratch, orphan proxies. */
-export async function runScratchSweeps(): Promise<{ sessions: number; scratch: number; orphans: number }> {
+export async function runScratchSweeps(): Promise<{ sessions: number; scratch: number; orphans: number; stale: number }> {
   const now = Date.now();
   let sessions = 0;
   let scratch = 0;
@@ -460,7 +461,27 @@ export async function runScratchSweeps(): Promise<{ sessions: number; scratch: n
       orphans += 1;
     }
   }
-  return { sessions, scratch, orphans };
+
+  // 4. M28: stale READY references in the OTHER direction — an asset claiming
+  //    a READY proxy whose file is gone (storage moved, partial cleanup).
+  //    Honest repair only: mark FAILED with an actionable message; the user
+  //    regenerates explicitly (POST /api/media/[id]/proxy). Bounded batch.
+  const readyAssets = await db.mediaAsset.findMany({
+    where: { proxyStatus: "READY", proxyPath: { not: null } },
+    select: { id: true, proxyPath: true },
+    take: 200,
+  });
+  let stale = 0;
+  for (const asset of readyAssets) {
+    if (!existsSync(asset.proxyPath!)) {
+      await db.mediaAsset.updateMany({
+        where: { id: asset.id, proxyStatus: "READY" },
+        data: { proxyStatus: "FAILED", proxyError: "Stale proxy reference — the proxy file is no longer on disk. Regenerate." },
+      });
+      stale += 1;
+    }
+  }
+  return { sessions, scratch, orphans, stale };
 }
 
 /** Start the worker loop once per process (idempotent across module re-evals). */
