@@ -540,7 +540,7 @@ export function EditorTool({ user }: { user: { id: string }; onLogout: () => voi
               <span className="bean-label text-[10px] text-[#d4a017]">PROJECT SETTINGS &amp; HISTORY</span>
               <button type="button" onClick={() => setDrawer(null)} className="text-[#8f8f8a] hover:text-[#d8d8d2]">✕</button>
             </div>
-            <ProjectSettings projectId={projectId} onNotice={setNotice} onDuplicate={() => void duplicateProject()} />
+            <ProjectSettings projectId={projectId} onNotice={setNotice} onDuplicate={() => void duplicateProject()} onRestored={() => session.reload()} />
           </div>
         </div>
       )}
@@ -621,22 +621,53 @@ function BusTimecode({ fpsRational, fallback }: { fpsRational: Rational; fallbac
   );
 }
 
-/** Settings drawer body: real project detail + version history + duplicate. */
-function ProjectSettings({ projectId, onNotice, onDuplicate }: { projectId: string; onNotice: (m: string | null) => void; onDuplicate: () => void }) {
+/** Settings drawer body: real project detail + version history (with restore) + duplicate. */
+function ProjectSettings({ projectId, onNotice, onDuplicate, onRestored }: { projectId: string; onNotice: (m: string | null) => void; onDuplicate: () => void; onRestored: () => Promise<void> }) {
   const [detail, setDetail] = useState<{ project: { id: string; name: string; description: string | null; createdAt: string }; versions: { versionNo: number; autosave: boolean; createdAt: string }[] } | null>(null);
   const [error, setError] = useState<string | null>(null);
-  useEffect(() => {
-    let live = true;
-    fetch(`/api/projects/${projectId}`)
-      .then((r) => r.json())
-      .then((d) => live && setDetail(d.project ? d : null))
-      .catch(() => live && setError("Could not load project detail."));
-    return () => {
-      live = false;
-    };
+  const [restoring, setRestoring] = useState<number | null>(null);
+  const [restoreMsg, setRestoreMsg] = useState<string | null>(null);
+  const loadDetail = useCallback(async () => {
+    try {
+      const r = await fetch(`/api/projects/${projectId}`);
+      const d = await r.json();
+      if (d.project) setDetail(d);
+    } catch {
+      setError("Could not load project detail.");
+    }
   }, [projectId]);
+  useEffect(() => {
+    void loadDetail();
+  }, [loadDetail]);
+  /** M24 §3.J — restore an older version as a NEW append-only version (real
+   *  /api/editor/.../timeline/restore; conflict → honest 409 message). */
+  const restoreVersion = async (versionNo: number, headVersion: number) => {
+    setRestoreMsg(null);
+    setRestoring(versionNo);
+    try {
+      const res = await fetch(`/api/editor/projects/${projectId}/timeline/restore`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ versionNumber: versionNo, baseVersion: headVersion }),
+      });
+      const body = (await res.json().catch(() => ({}))) as { version?: { versionNumber?: number }; error?: string };
+      if (res.ok) {
+        setRestoreMsg(`Restored v${versionNo} as new v${body.version?.versionNumber ?? "?"} — timeline reloaded.`);
+        await loadDetail();
+        await onRestored();
+        onNotice(`Timeline restored to v${versionNo} (saved as a new version).`);
+      } else {
+        setRestoreMsg(body.error ?? `Restore failed (${res.status}).`);
+      }
+    } catch {
+      setRestoreMsg("Restore failed (network).");
+    } finally {
+      setRestoring(null);
+    }
+  };
   if (error) return <p className="text-[11px] text-[#c45c4c]">{error}</p>;
   if (!detail) return <Loader2 className="h-4 w-4 animate-spin text-[#d4a017]" />;
+  const headVersion = detail.versions.reduce((m, v) => Math.max(m, v.versionNo), 0);
   return (
     <div className="space-y-3 text-[11px]">
       <div className="rounded border border-[#2a2a2a] p-2">
@@ -653,10 +684,22 @@ function ProjectSettings({ projectId, onNotice, onDuplicate }: { projectId: stri
             <li key={v.versionNo} className="flex items-center justify-between rounded bg-[#111110] px-2 py-1">
               <span className="font-mono text-[10px] text-[#d4a017]">v{v.versionNo}</span>
               <span className="text-[9px] text-[#6a6a64]">{v.autosave ? "autosave" : "manual"} · {new Date(v.createdAt).toLocaleTimeString()}</span>
+              {v.versionNo < headVersion && (
+                <button
+                  type="button"
+                  onClick={() => void restoreVersion(v.versionNo, headVersion)}
+                  disabled={restoring !== null}
+                  className="rounded border border-[#2a2a2a] px-1.5 py-0.5 text-[9px] text-[#d4a017] hover:border-[#d4a017] disabled:opacity-40"
+                  title={`Restore v${v.versionNo} as a new version (append-only)`}
+                >
+                  {restoring === v.versionNo ? "…" : "Restore"}
+                </button>
+              )}
             </li>
           ))}
           {detail.versions.length === 0 && <li className="text-[10px] text-[#6a6a64]">No versions yet.</li>}
         </ul>
+        {restoreMsg && <p className="mt-1 text-[10px] text-[#a0a09a]" role="status">{restoreMsg}</p>}
       </div>
       <p className="text-[9px] text-[#6a6a64]">Recovery: the newest version reloads automatically when the project is reopened; undo/redo steps remain available in-session. Conflict handling reloads the authoritative version and tells you honestly.</p>
       <button type="button" onClick={() => onNotice(null)} className="text-[9px] text-[#8f8f8a]">close</button>

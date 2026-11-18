@@ -71,8 +71,12 @@ export function JazmiiPanel({ sequence, session }: { sequence: Sequence; session
   const [suggestions, setSuggestions] = useState<Suggestion[]>([]);
   const [job, setJob] = useState<JobLite | null>(null);
   const [outputs, setOutputs] = useState<OutputAsset[]>([]);
-  const [busy, setBusy] = useState<null | "suggest" | "generate" | "insert">(null);
+  const [busy, setBusy] = useState<null | "suggest" | "generate" | "insert" | "analyze">(null);
   const [notice, setNotice] = useState<string | null>(null);
+  // M24 §3.E — footage analysis access (real /api/jazmii/analyze → background job).
+  const [videoAssets, setVideoAssets] = useState<Array<{ id: string; originalName: string }>>([]);
+  const [analyzeMediaId, setAnalyzeMediaId] = useState("");
+  const [analyzeBusy, setAnalyzeBusy] = useState(false);
 
   const seqEnd = useMemo(
     () => Math.ceil(sequence.clips.reduce((m, c) => Math.max(m, c.timelineStartFrame + c.timelineDurationFrames), 0)),
@@ -99,6 +103,48 @@ export function JazmiiPanel({ sequence, session }: { sequence: Sequence; session
   useEffect(() => {
     void refreshOutputs();
   }, [refreshOutputs]);
+
+  // M24 §3.E — load the user's video assets once for the analyze selector.
+  useEffect(() => {
+    fetch("/api/media/list?kind=VIDEO")
+      .then((r) => (r.ok ? r.json() : { assets: [] }))
+      .then((d: { assets?: Array<{ id: string; originalName: string }> }) => setVideoAssets((d.assets ?? []).slice(0, 50)))
+      .catch(() => setVideoAssets([]));
+  }, []);
+
+  /** M24 §3.E — analyze a library video: real job (shot detection + keyframes),
+   *  same durable pipeline as generation; polls /api/jobs/[id] like generate(). */
+  const analyzeFootage = useCallback(async () => {
+    if (!analyzeMediaId || analyzeBusy) return;
+    setAnalyzeBusy(true);
+    setNotice(null);
+    try {
+      const { jobId } = await jfetch<{ jobId: string }>("/api/jazmii/analyze", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ mediaId: analyzeMediaId }),
+      });
+      const deadline = Date.now() + 10 * 60_000;
+      for (;;) {
+        if (Date.now() > deadline) throw new Error("Analysis polling timed out (10 min) — the job may still finish; check history later.");
+        await new Promise((r) => setTimeout(r, 3000));
+        const res = await jfetch<{ job: JobLite }>(`/api/jobs/${jobId}`);
+        setJob(res.job);
+        if (res.job.status === "COMPLETED") {
+          setNotice(`Analysis complete: ${res.job.message ?? ""}`);
+          break;
+        }
+        if (res.job.status === "FAILED" || res.job.status === "CANCELLED") {
+          setNotice(`Analysis did not complete: ${res.job.message ?? res.job.status}`);
+          break;
+        }
+      }
+    } catch (err) {
+      setNotice(err instanceof Error ? err.message : "Analysis failed.");
+    } finally {
+      setAnalyzeBusy(false);
+    }
+  }, [analyzeMediaId, analyzeBusy]);
 
   const suggest = useCallback(async () => {
     setBusy("suggest");
@@ -236,6 +282,32 @@ export function JazmiiPanel({ sequence, session }: { sequence: Sequence; session
           ))}
         </div>
       )}
+
+      {/* M24 §3.E — footage analysis (shot detection + keyframes) on library videos. */}
+      <div className="mt-3 space-y-1.5 text-[10px] text-[#8f8f8a]">
+        <h3 className="bean-label text-[9px] text-[#7a7a76]">ANALYZE FOOTAGE (SHOT DETECTION + KEYFRAMES)</h3>
+        <div className="flex gap-1">
+          <select
+            aria-label="Video to analyze"
+            value={analyzeMediaId}
+            onChange={(e) => setAnalyzeMediaId(e.target.value)}
+            className="min-w-0 flex-1 rounded border border-[#2a2a2a] bg-[#111110] px-1 py-0.5 text-[10px] text-[#d4d4d0]"
+          >
+            <option value="">Select a video from your library…</option>
+            {videoAssets.map((a) => <option key={a.id} value={a.id}>{a.originalName.slice(0, 60)}</option>)}
+          </select>
+          <button
+            type="button"
+            onClick={() => void analyzeFootage()}
+            disabled={analyzeBusy || busy !== null || !analyzeMediaId}
+            className="flex items-center gap-1 rounded border border-[#d4a017] bg-[#d4a017]/10 px-2 py-1 text-[#d4a017] hover:bg-[#d4a017]/20 disabled:opacity-40"
+            title="Run real footage analysis as a background job"
+          >
+            {analyzeBusy ? <Loader2 className="h-3 w-3 animate-spin" /> : <Sparkles className="h-3 w-3" />} ANALYZE
+          </button>
+        </div>
+        {videoAssets.length === 0 && <p className="text-[9px] text-[#5a5a55]">No videos in your library yet — upload or generate one first.</p>}
+      </div>
 
       <div className="mt-3 space-y-1.5 text-[10px] text-[#8f8f8a]">
         <h3 className="bean-label text-[9px] text-[#7a7a76]">DIRECT GENERATION (PROVIDER OPTIONS ONLY)</h3>
