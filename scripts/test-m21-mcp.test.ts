@@ -55,7 +55,9 @@ describe("MCP shared registry (M21 §4.1-4.3)", () => {
   test("tools/list exposes the shared registry with mutation annotations", () => {
     const payload = tools.toolListPayload();
     const names = payload.tools.map((t) => t.name);
-    expect(names).toEqual(["server.capabilities", "projects.list", "project.canonical", "jobs.status", "jobs.submit", "jobs.cancel"]);
+    // M22: the shared registry grew to 8 tools (MY AI added in P7 via
+    // bootstrap registration) — assert the six base tools are present.
+    expect(names.slice(0, 6).sort()).toEqual(["jobs.cancel", "jobs.status", "jobs.submit", "project.canonical", "projects.list", "server.capabilities"]);
     const submit = payload.tools.find((t) => t.name === "jobs.submit")!;
     expect(submit.annotations.mutates).toBe(true);
     expect(submit.annotations.scope).toBe("jobs:submit");

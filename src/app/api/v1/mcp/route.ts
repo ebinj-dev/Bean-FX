@@ -41,6 +41,10 @@ export async function POST(req: NextRequest) {
   if (!parsed.success) return rpcError(undefined, -32700, "parse error");
 
   const { id, method, params } = parsed.data;
+  if (id === undefined) {
+    // JSON-RPC notification (e.g. notifications/initialized) — accepted, no payload.
+    return new NextResponse(null, { status: 202 });
+  }
   try {
     switch (method) {
       case "initialize":
@@ -56,7 +60,7 @@ export async function POST(req: NextRequest) {
         const p = (params ?? {}) as { name?: string; arguments?: Record<string, unknown> };
         if (!p.name) return rpcError(id, -32602, "params.name required");
         const out = await callTool({ auth: t }, p.name, p.arguments ?? {});
-        return rpcResult(id, { content: [{ type: "json", json: out }], isError: false });
+        return rpcResult(id, { content: [{ type: "text", text: JSON.stringify(out) }], isError: false });
       }
       default:
         return rpcError(id, -32601, `method not found: ${method}`);
