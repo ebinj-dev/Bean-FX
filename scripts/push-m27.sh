@@ -34,6 +34,9 @@ rsync -a "$SRC/prisma/" "$CLONE/prisma/"
 rsync -a --exclude "*.log" "$SRC/docs/" "$CLONE/docs/"
 rsync -a "$SRC/scripts/" "$CLONE/scripts/"
 rsync -a "$SRC/public/" "$CLONE/public/" 2>/dev/null || true
+# M27: milestone evidence bundle (measured logs + screenshots; no secrets).
+mkdir -p "$CLONE/download/m27-evidence"
+rsync -a "$SRC/download/m27-evidence/" "$CLONE/download/m27-evidence/"
 for f in package.json bun.lock next.config.ts tsconfig.json postcss.config.mjs eslint.config.mjs components.json VERSION .gitignore .env.example; do
   [ -f "$SRC/$f" ] && cp "$SRC/$f" "$CLONE/$f" || true
 done
