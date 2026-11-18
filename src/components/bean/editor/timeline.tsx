@@ -132,6 +132,8 @@ export function EditorTimeline({
   snap = true,
   notice,
   assetDurations,
+  range,
+  onRangeChange,
 }: {
   sequence: Sequence;
   playhead: number;
@@ -141,6 +143,8 @@ export function EditorTimeline({
   activeTool?: EditToolId;
   snap?: boolean;
   notice?: (message: string | null) => void;
+  range?: { in: number; out: number } | null;
+  onRangeChange?: (range: { in: number; out: number } | null) => void;
   /** M16: real asset durations (frames) from the media library — enables
    *  roll/slide extensions beyond the used window when media allows it. */
   assetDurations?: Map<string, number>;
@@ -155,6 +159,8 @@ export function EditorTimeline({
   const [multiSelect, setMultiSelect] = useState<Set<string>>(new Set());
   const [trackHeights, setTrackHeights] = useState<Record<string, number>>({});
   const [clipboard, setClipboard] = useState<Clip | null>(null);
+  // M26 P1 — group id counter (client-generated; engine tags clips).
+  const groupCounter = useRef(0);
   const fps = sequence.fps;
   const ppf = 60 * Math.max(0.1, Math.min(8, zoom)) * (fps.den / fps.num);
   const end = Math.max(sequenceEndFrame(sequence) + Math.round(30 * fps.num / fps.den), 60 * Math.round(fps.num / fps.den));
@@ -520,10 +526,24 @@ export function EditorTimeline({
         e.preventDefault();
         pasteClipboard(null);
       }
+      // M26 P1 — group/ungroup on the current multi-selection.
+      else if ((e.metaKey || e.ctrlKey) && (e.key === "g" || e.key === "G")) {
+        e.preventDefault();
+        if (multiSelect.size < 2) { notice?.("Select at least two clips to group."); return; }
+        if (e.shiftKey) {
+          if (session.apply([{ type: "UngroupClips", clipIds: [...multiSelect] }])) notice?.("Ungrouped.");
+          else notice?.("Ungroup refused.");
+        } else {
+          const gid = `grp-${++groupCounter.current}-${Date.now().toString(36)}`;
+          if (session.apply([{ type: "GroupClips", clipIds: [...multiSelect], groupId: gid }])) notice?.(`Grouped ${multiSelect.size} clips.`);
+          else notice?.("Group refused.");
+        }
+      }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [sequence, session, pasteClipboard, notice]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sequence, session, pasteClipboard, notice, multiSelect]);
 
   const ticks = useMemo(() => {
     const list: number[] = [];
@@ -626,6 +646,64 @@ export function EditorTimeline({
                 <span className="ml-1 font-mono text-[9px] leading-[24px] text-[#8f8f8a]">{formatTimecode(f, fps)}</span>
               </div>
             ))}
+            {/* M26 P1 — range in/out brackets on the ruler. */}
+            {range && (
+              <div className="pointer-events-none absolute top-0 h-full border-x-2 border-[#4cc47f] bg-[#4cc47f]/10" style={{ left: frameToX(range.in, zoom, fps, 0), width: Math.max(2, frameToX(range.out, zoom, fps, 0) - frameToX(range.in, zoom, fps, 0)) }} />
+            )}
+            {/* M26 P1 — timeline markers (flags; click seeks, context button removes). */}
+            {sequence.markers.map((m) => (
+              <div key={m.id} className="group absolute top-0 z-10" style={{ left: frameToX(m.frame, zoom, fps, 0) }} title={m.label || "marker"}>
+                <button
+                  type="button"
+                  onClick={(e) => { e.stopPropagation(); session.setPlayhead(m.frame); }}
+                  onContextMenu={(e) => { e.preventDefault(); e.stopPropagation(); }}
+                  className="block h-full w-3 cursor-pointer border-l-2 border-[#c45c4c] bg-[#c45c4c]/20 hover:bg-[#c45c4c]/40"
+                  style={{ height: RULER_HEIGHT }}
+                >
+                  <span className="ml-0.5 font-mono text-[8px] leading-[10px] text-[#c45c4c]">▼</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={(e) => { e.stopPropagation(); session.apply([{ type: "RemoveMarker", markerId: m.id }]); }}
+                  className="absolute -top-0 left-3 hidden rounded border border-[#2a2a2a] bg-[#111110] px-1 text-[8px] text-[#c45c4c] hover:border-[#c45c4c] group-hover:block"
+                  title="Remove marker"
+                >
+                  ×
+                </button>
+              </div>
+            ))}
+          </div>
+          {/* M26 P1 — editing tools strip: markers, range, gaps, alignment,
+              grouping. Every action is a reversible engine command. */}
+          <div className="flex flex-wrap items-center gap-1 border-b border-[#2a2a2a] bg-[#0b0b0a] px-2 py-1 text-[9px]">
+            <span className="bean-label text-[8px] text-[#7a7a76]">EDIT</span>
+            <button type="button" onClick={() => session.apply([{ type: "AddMarker", marker: { id: `mk-${Date.now().toString(36)}`, frame: playhead, label: "" } }])} className="rounded border border-[#2a2a2a] px-1.5 py-0.5 text-[#d8d8d2] hover:border-[#d4a017] hover:text-[#d4a017]" title="Add marker at playhead (M)">+ MARKER</button>
+            <button type="button" onClick={() => onRangeChange?.({ in: playhead, out: Math.max(playhead + 1, range?.out ?? playhead + 1) })} className="rounded border border-[#2a2a2a] px-1.5 py-0.5 text-[#d8d8d2] hover:border-[#4cc47f] hover:text-[#4cc47f]" title="Set range in-point (I)">IN</button>
+            <button type="button" onClick={() => { if (range) onRangeChange?.({ in: range.in, out: Math.max(range.in + 1, playhead) }); else onRangeChange?.({ in: Math.max(0, playhead - 1), out: playhead }); }} className="rounded border border-[#2a2a2a] px-1.5 py-0.5 text-[#d8d8d2] hover:border-[#4cc47f] hover:text-[#4cc47f]" title="Set range out-point (O)">OUT</button>
+            <button type="button" onClick={() => onRangeChange?.(null)} disabled={!range} className="rounded border border-[#2a2a2a] px-1.5 py-0.5 text-[#8f8f8a] hover:border-[#c45c4c] hover:text-[#c45c4c] disabled:opacity-40" title="Clear range (Esc)">CLR</button>
+            <button type="button" disabled={!range} onClick={() => {
+              if (!range) return;
+              const ids = sequence.clips.filter((c) => c.timelineStartFrame < range.out && c.timelineStartFrame + c.timelineDurationFrames > range.in).map((c) => c.id);
+              const op = compileLift(sequence, ids);
+              if (op && session.apply(op.commands)) { onRangeChange?.(null); notice?.(op.summary); }
+              else notice?.("Lift refused (locked tracks).");
+            }} className="rounded border border-[#2a2a2a] px-1.5 py-0.5 text-[#d8d8d2] hover:border-[#c45c4c] hover:text-[#c45c4c] disabled:opacity-40" title="Remove clips intersecting the range (gap left open)">LIFT RANGE</button>
+            <button type="button" onClick={() => { if (session.apply([{ type: "CloseGaps" }])) notice?.(null); else notice?.("Gap closing refused — check locked tracks or transitions."); }} className="rounded border border-[#2a2a2a] px-1.5 py-0.5 text-[#d8d8d2] hover:border-[#d4a017] hover:text-[#d4a017]" title="Close all inter-clip gaps (per track)">CLOSE GAPS</button>
+            <button type="button" disabled={multiSelect.size === 0} onClick={() => {
+              const ids = [...multiSelect];
+              if (session.apply([{ type: "AlignClipsToPlayhead", clipIds: ids, frame: playhead }])) notice?.(`Aligned ${ids.length} clip(s) to playhead.`);
+              else notice?.("Align refused (locked track).");
+            }} className="rounded border border-[#2a2a2a] px-1.5 py-0.5 text-[#d8d8d2] hover:border-[#d4a017] hover:text-[#d4a017] disabled:opacity-40" title="Align selected clip starts to the playhead">ALIGN SEL</button>
+            <button type="button" disabled={multiSelect.size < 2} onClick={() => {
+              const gid = `grp-${++groupCounter.current}-${Date.now().toString(36)}`;
+              if (session.apply([{ type: "GroupClips", clipIds: [...multiSelect], groupId: gid }])) notice?.(`Grouped ${multiSelect.size} clips.`);
+              else notice?.("Group refused.");
+            }} className="rounded border border-[#2a2a2a] px-1.5 py-0.5 text-[#d8d8d2] hover:border-[#d4a017] hover:text-[#d4a017] disabled:opacity-40" title="Group selected clips (Ctrl+G)">GROUP</button>
+            <button type="button" disabled={multiSelect.size === 0} onClick={() => {
+              const ids = [...multiSelect];
+              if (session.apply([{ type: "UngroupClips", clipIds: ids }])) notice?.("Ungrouped.");
+              else notice?.("Ungroup refused.");
+            }} className="rounded border border-[#2a2a2a] px-1.5 py-0.5 text-[#d8d8d2] hover:border-[#d4a017] hover:text-[#d4a017] disabled:opacity-40" title="Ungroup selected clips (Ctrl+Shift+G)">UNGROUP</button>
           </div>
           {/* Tracks */}
           <div className="relative" onContextMenu={(e) => e.preventDefault()}>

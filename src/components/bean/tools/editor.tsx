@@ -32,13 +32,17 @@ import { MediaBrowser, useMediaImport } from "@/components/bean/editor/media-bro
 import { EffectsBrowser } from "@/components/bean/editor/effects-browser";
 import { AiStudio } from "@/components/bean/editor/ai-studio";
 import { PublishingPanel } from "@/components/bean/editor/publishing-panel";
+import { AudioMixerPanel } from "@/components/bean/editor/audio-mixer-panel";
+import { PresetsPanel } from "@/components/bean/editor/presets-panel";
+import { BatchExportPanel } from "@/components/bean/editor/batch-export-panel";
+import { WorkflowsPanel } from "@/components/bean/editor/workflows-panel";
 import { StudioPanel } from "@/components/bean/editor/studio-panel";
 import type { EditToolId } from "@/lib/editor/tools";
 import { subscribeFrame } from "@/lib/editor/playback";
 
 const DEFAULT_IMAGE_TIMELINE_SEC = 5;
 
-type Drawer = "ai-studio" | "export" | "settings" | null;
+type Drawer = "ai-studio" | "export" | "settings" | "mixer" | "presets" | "workflows" | null;
 type LeftTab = "media" | "effects";
 
 export function EditorTool({ user }: { user: { id: string }; onLogout: () => void }) {
@@ -52,6 +56,8 @@ export function EditorTool({ user }: { user: { id: string }; onLogout: () => voi
   const [notice, setNotice] = useState<string | null>(null);
   const [activeTool, setActiveTool] = useState<EditToolId>("select");
   const [snap, setSnap] = useState(true);
+  // M26 P1 — in/out range selection (I/O keys; cleared with Esc or after lift).
+  const [range, setRange] = useState<{ in: number; out: number } | null>(null);
   const [guides, setGuides] = useState(false);
   const [drawer, setDrawer] = useState<Drawer>(null);
   const [leftTab, setLeftTab] = useState<LeftTab>("media");
@@ -319,6 +325,16 @@ export function EditorTool({ user }: { user: { id: string }; onLogout: () => voi
         e.preventDefault();
         void session.flushNow().then(() => setNotice(null));
       } else if (!e.metaKey && !e.ctrlKey) {
+        // M26 P1 — range in/out + marker keys (frame-accurate, integer playhead).
+        if (e.key === "i" || e.key === "I") {
+          setRange((r) => ({ in: session.playheadFrame, out: Math.max(session.playheadFrame + 1, r?.out ?? session.playheadFrame + 1) }));
+        } else if (e.key === "o" || e.key === "O") {
+          setRange((r) => (r ? { in: r.in, out: Math.max(r.in + 1, session.playheadFrame) } : { in: Math.max(0, session.playheadFrame - 1), out: session.playheadFrame }));
+        } else if (e.key === "m" || e.key === "M") {
+          session.apply([{ type: "AddMarker", marker: { id: `mk-${Date.now().toString(36)}`, frame: session.playheadFrame, label: "" } }]);
+        } else if (e.key === "Escape" && range) {
+          setRange(null);
+        }
         const toolKeys: Record<string, EditToolId> = { v: "select", a: "track-select", c: "razor", y: "slip", u: "slide", h: "hand", z: "zoom", t: "text", r: "transform" };
         const tool = toolKeys[e.key.toLowerCase()];
         if (tool) setActiveTool(tool);
@@ -326,7 +342,8 @@ export function EditorTool({ user }: { user: { id: string }; onLogout: () => voi
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [togglePlay, step, splitAtPlayhead, deleteSelection, session, snap]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [togglePlay, step, splitAtPlayhead, deleteSelection, session, snap, range]);
 
   // Unsaved-changes guard: never discard a pending autosave silently.
   useEffect(() => {
@@ -424,6 +441,15 @@ export function EditorTool({ user }: { user: { id: string }; onLogout: () => voi
           <button type="button" onClick={() => setDrawer(drawer === "ai-studio" ? null : "ai-studio")} className={`flex items-center gap-1.5 rounded border px-2.5 py-1.5 text-[11px] ${drawer === "ai-studio" ? "border-[#d4a017] text-[#d4a017]" : "border-[#2a2a2a] text-[#d8d8d2] hover:border-[#d4a017] hover:text-[#d4a017]"}`}>
             <Bot className="h-3.5 w-3.5" /> AI STUDIO
           </button>
+          <button type="button" onClick={() => setDrawer(drawer === "workflows" ? null : "workflows")} className={`flex items-center gap-1.5 rounded border px-2.5 py-1.5 text-[11px] ${drawer === "workflows" ? "border-[#d4a017] text-[#d4a017]" : "border-[#2a2a2a] text-[#d8d8d2] hover:border-[#d4a017] hover:text-[#d4a017]"}`} title="Workflow automation: multi-step production runs with approval gates">
+            WORKFLOWS
+          </button>
+          <button type="button" onClick={() => setDrawer(drawer === "presets" ? null : "presets")} className={`flex items-center gap-1.5 rounded border px-2.5 py-1.5 text-[11px] ${drawer === "presets" ? "border-[#d4a017] text-[#d4a017]" : "border-[#2a2a2a] text-[#d8d8d2] hover:border-[#d4a017] hover:text-[#d4a017]"}`} title="Creative presets: save, apply, rename, duplicate">
+            PRESETS
+          </button>
+          <button type="button" onClick={() => setDrawer(drawer === "mixer" ? null : "mixer")} className={`flex items-center gap-1.5 rounded border px-2.5 py-1.5 text-[11px] ${drawer === "mixer" ? "border-[#d4a017] text-[#d4a017]" : "border-[#2a2a2a] text-[#d8d8d2] hover:border-[#d4a017] hover:text-[#d4a017]"}`} title="Per-track faders with real meters">
+            MIXER
+          </button>
           <button type="button" onClick={() => setDrawer(drawer === "export" ? null : "export")} className={`flex items-center gap-1.5 rounded border px-2.5 py-1.5 text-[11px] ${drawer === "export" ? "border-[#d4a017] text-[#d4a017]" : "border-[#2a2a2a] text-[#d8d8d2] hover:border-[#d4a017] hover:text-[#d4a017]"}`}>
             <Download className="h-3.5 w-3.5" /> EXPORT
           </button>
@@ -488,7 +514,7 @@ export function EditorTool({ user }: { user: { id: string }; onLogout: () => voi
           <EditingToolbar activeTool={activeTool} onToolChange={setActiveTool} snap={snap} onSnapChange={setSnap} />
           <div className="flex min-h-[220px] flex-1 flex-col p-2 pt-0">
             {sequence ? (
-              <EditorTimeline sequence={sequence} playhead={session.playheadFrame} session={session} zoom={zoom} onZoomChange={setZoom} activeTool={activeTool} snap={snap} notice={setNotice} assetDurations={assetFrameDurations} />
+              <EditorTimeline sequence={sequence} playhead={session.playheadFrame} session={session} zoom={zoom} onZoomChange={setZoom} activeTool={activeTool} snap={snap} notice={setNotice} assetDurations={assetFrameDurations} range={range} onRangeChange={setRange} />
             ) : (
               <div className="flex flex-1 items-center justify-center rounded-lg border border-[#2a2a2a] bg-[#0b0b0a]">
                 {session.saveState === "loading" ? <Loader2 className="h-5 w-5 animate-spin text-[#d4a017]" /> : <p className="text-sm text-[#8f8f8a]">Create or select a project to start editing.</p>}
@@ -501,7 +527,7 @@ export function EditorTool({ user }: { user: { id: string }; onLogout: () => voi
         {/* Right dock: inspector */}
         <div className="flex shrink-0 flex-col overflow-y-auto border-l border-[#2a2a2a] bg-[#0b0b0a]" style={{ width: rightWidth }}>
           <div className="border-b border-[#2a2a2a] px-3 py-1.5 bean-label text-[10px] text-[#8f8f8a]">PROPERTIES INSPECTOR</div>
-          {sequence && <ClipInspector sequence={sequence} session={session} />}
+          {sequence && <ClipInspector sequence={sequence} session={session} notice={setNotice} />}
           {sequence && selectedClip && selectedClip.keyframes.length > 0 && (
             <div className="border-t border-[#2a2a2a] px-3 py-2 text-[10px] text-[#8f8f8a]">
               {selectedClip.keyframes.length} keyframe(s) — diamonds on the timeline block; edit via NIIKI (AI STUDIO) or effect parameters.
@@ -530,6 +556,28 @@ export function EditorTool({ user }: { user: { id: string }; onLogout: () => voi
             </div>
             <PublishingPanel projectId={projectId} />
             <TimelineRenderPanel projectId={projectId} onNotice={setNotice} />
+            <BatchExportPanel projectId={projectId} onNotice={setNotice} />
+          </div>
+        </div>
+      )}
+      {drawer === "workflows" && projectId && (
+        <div className="border-t border-[#2a2a2a] bg-[#0b0b0a] px-4 py-3">
+          <div className="mx-auto max-w-4xl">
+            <WorkflowsPanel projectId={projectId} onNotice={setNotice} />
+          </div>
+        </div>
+      )}
+      {drawer === "presets" && (
+        <div className="border-t border-[#2a2a2a] bg-[#0b0b0a] px-4 py-3">
+          <div className="mx-auto max-w-4xl">
+            <PresetsPanel sequence={sequence} session={session} notice={setNotice} />
+          </div>
+        </div>
+      )}
+      {drawer === "mixer" && sequence && (
+        <div className="border-t border-[#2a2a2a] bg-[#0b0b0a] px-4 py-3">
+          <div className="mx-auto max-w-4xl">
+            <AudioMixerPanel sequence={sequence} session={session} />
           </div>
         </div>
       )}

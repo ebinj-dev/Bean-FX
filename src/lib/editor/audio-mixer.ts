@@ -91,7 +91,8 @@ export class AudioPreviewMixer {
         this.trackGains.set(track.id, node);
       }
       const audible = !track.muted && (!solo || track.solo);
-      node.gain.value = audible ? 1 : 0;
+      // M26 P2 — the track fader is real in preview too (matches the export).
+      node.gain.value = audible ? Math.min(4, Math.max(0, track.volume ?? 1)) : 0;
     }
     // Drop gain nodes for tracks that no longer exist.
     for (const id of [...this.trackGains.keys()]) {
@@ -141,13 +142,14 @@ export class AudioPreviewMixer {
       const cEnd = clipEndFrame(seq, clip);
       if (frame >= cEnd || clipEndFrame(seq, clip) < frame - horizonFrames) continue;
       const playhead = Math.max(clip.timelineStartFrame, frame);
-      const pan = 0; // clip-level pan (volume automation rides keyframes; pan is clip-static)
+      // M26 P2 — clip-level pan is real now; track fader multiplies the clip gain.
+      const pan = Math.min(1, Math.max(-1, clip.pan));
       out.push({
         clip,
         trackId: track.id,
         startFrame: playhead,
         endFrame: cEnd,
-        gain: Math.min(4, Math.max(0, clip.volume)) * fadeMultiplierAt(clip, playhead),
+        gain: Math.min(16, Math.max(0, clip.volume * (track.volume ?? 1))) * fadeMultiplierAt(clip, playhead),
         pan,
       });
     }
@@ -272,9 +274,53 @@ export class AudioPreviewMixer {
   dispose(): void {
     this.stop();
     this.trackGains.clear();
+    this.trackMeters.clear();
     this.buffers.clear();
     if (this.ctx) void this.ctx.close().catch(() => undefined);
     this.ctx = null;
     this.master = null;
+    if (activeMixer === this) activeMixer = null;
   }
+
+  // ── M26 P2 — real metering: an AnalyserNode taps each track gain node.
+  private trackMeters = new Map<string, AnalyserNode>();
+
+  /** Lazily attach a meter tap to a track's gain node (post-fader). */
+  meterFor(trackId: string): AnalyserNode | null {
+    if (!this.ctx) return null;
+    const gain = this.trackGains.get(trackId);
+    if (!gain) return null;
+    let meter = this.trackMeters.get(trackId);
+    if (!meter) {
+      meter = this.ctx.createAnalyser();
+      meter.fftSize = 512;
+      gain.connect(meter);
+      this.trackMeters.set(trackId, meter);
+    }
+    return meter;
+  }
+
+  /** Peak level 0..1 for a track (read from the live analyser; 0 when idle). */
+  trackLevel(trackId: string): number {
+    const meter = this.trackMeters.get(trackId);
+    if (!meter || !this.playing) return 0;
+    const buf = new Float32Array(meter.fftSize);
+    meter.getFloatTimeDomainData(buf);
+    let peak = 0;
+    for (let i = 0; i < buf.length; i++) {
+      const v = Math.abs(buf[i]);
+      if (v > peak) peak = v;
+    }
+    return Math.min(1, peak);
+  }
+}
+
+// M26 P2 — registry of the live preview mixer (the monitor owns the instance;
+// UI panels such as the mixer drawer read meters through this accessor).
+let activeMixer: AudioPreviewMixer | null = null;
+export function setActiveMixer(m: AudioPreviewMixer | null): void {
+  activeMixer = m;
+}
+export function getActiveMixer(): AudioPreviewMixer | null {
+  return activeMixer;
 }

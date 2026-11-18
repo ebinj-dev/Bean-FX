@@ -286,8 +286,23 @@ export function buildTimelineGraph(seq: Sequence, startFrame: number, endFrame: 
     // timeline is segment-local (clip-local seconds) — matching the preview
     // evaluator. After adelay the PTS shift would break the automation map.
     const volArgs = ffmpegVolumeArgs(plan.clip, seq.fps);
-    if (volArgs) seg.push(`volume=${volArgs.expr}:eval=frame`);
-    else seg.push(`volume=${q(gain)}`);
+    const track = seq.tracks.find((t) => t.id === plan.clip.trackId);
+    const solo = seq.tracks.some((t) => t.solo);
+    const trackGain = track && !track.muted && (!solo || track.solo) ? Math.min(4, Math.max(0, track.volume ?? 1)) : 0;
+    const pan = Math.min(1, Math.max(-1, plan.clip.pan ?? 0));
+    if (volArgs) {
+      // Automation expression × track fader (both frame-evaluable: fold the
+      // fader into the expression head so the map stays segment-local).
+      seg.push(`volume='${volArgs.expr}*${q(trackGain)}':eval=frame`);
+    } else {
+      seg.push(`volume=${q(gain * trackGain)}`);
+    }
+    if (pan !== 0) {
+      // Equal-power pan: left = cos((pan+1)*π/4), right = sin((pan+1)*π/4).
+      const l = Math.cos(((pan + 1) * Math.PI) / 4);
+      const r = Math.sin(((pan + 1) * Math.PI) / 4);
+      seg.push(`pan=stereo|c0=c0*${q(l)}+c1*0|c1=c1*${q(r)}+c0*0`);
+    }
     seg.push(`adelay=${Math.max(0, Math.round(offsetSec * 1000))}:all=1`);
     if (plan.clip.fadeInFrames > 0) seg.push(`afade=in:st=0:d=${q(plan.clip.fadeInFrames / fps)}`);
     if (plan.clip.fadeOutFrames > 0) seg.push(`afade=out:st=${q(durSec - plan.clip.fadeOutFrames / fps)}:d=${q(plan.clip.fadeOutFrames / fps)}`);

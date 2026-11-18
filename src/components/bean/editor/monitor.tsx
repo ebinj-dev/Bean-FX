@@ -28,7 +28,7 @@ import { formatTimecode } from "@/lib/editor/time";
 import { api } from "@/lib/client-api";
 import type { Rational } from "@/lib/editor/time";
 import { PlaybackController, publishFrame, subscribeFrame } from "@/lib/editor/playback";
-import { AudioPreviewMixer } from "@/lib/editor/audio-mixer";
+import { AudioPreviewMixer, setActiveMixer } from "@/lib/editor/audio-mixer";
 import { cssEffectFilter } from "@/lib/editor/filters";
 import { volumeAutomationAt } from "@/lib/editor/audio";
 import { unsupportedCodecMessage } from "@/lib/editor/codec-support";
@@ -207,6 +207,11 @@ export function ProgramMonitor({
 
   // ---- audio mixer (master when available) ---------------------------------
   const mixer = useMemo(() => new AudioPreviewMixer(), []);
+  // M26 P2 — expose the live mixer for metering (mixer drawer reads levels).
+  useEffect(() => {
+    setActiveMixer(mixer);
+    return () => setActiveMixer(null);
+  }, [mixer]);
   useEffect(() => () => mixer.dispose(), [mixer]);
   const mixerReady = mixer.available;
   // M17 benchmark telemetry: window-scoped counters (never project state).
