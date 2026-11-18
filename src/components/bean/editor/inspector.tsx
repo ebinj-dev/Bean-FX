@@ -40,6 +40,9 @@ export function ClipInspector({
     );
   }
 
+  // M25 P4 — honest missing-media surfacing + real relink via ReplaceClip;
+  // rendered at the bottom of the inspector body (see MissingMediaRelink).
+
   const applyProps = (patch: Record<string, unknown>) => {
     session.apply([{ type: "UpdateClipProperties", clipId: clip.id, ...patch }]);
   };
@@ -227,6 +230,7 @@ export function ClipInspector({
 
       {/* ── M16 Effects + Color correction ─────────────────────────────── */}
       <EffectsSection clip={clip} session={session} />
+      {(clip.missingMedia || !clip.sourceAssetId) && <MissingMediaRelink session={session} clipId={clip.id} sequence={sequence} />}
     </div>
   );
 }
@@ -484,6 +488,54 @@ function VolumeAutomationStrip({ clip, session }: { clip: import("@/lib/editor/m
         {points.length === 0 && (
           <span className="pointer-events-none absolute inset-x-0 top-1 text-center text-[8px] text-[#5a5a55]">click to add volume automation points</span>
         )}
+      </div>
+    </div>
+  );
+}
+
+/** M25 P4 — relink a missing clip to a real library asset (ReplaceClip is the
+ *  validated, reversible command; the relink is honest — the source in/out
+ *  are reset to the new asset's full length at the sequence fps). */
+function MissingMediaRelink({ session, clipId, sequence }: { session: EditorSession; clipId: string; sequence: Sequence }) {
+  const [assets, setAssets] = useState<Array<{ id: string; originalName: string; durationSec: number | null }>>([]);
+  const [picked, setPicked] = useState("");
+  useEffect(() => {
+    fetch("/api/media/list")
+      .then((r) => (r.ok ? r.json() : { assets: [] }))
+      .then((d: { assets?: Array<{ id: string; originalName: string; durationSec: number | null }> }) => setAssets((d.assets ?? []).slice(0, 100)))
+      .catch(() => setAssets([]));
+  }, []);
+  const relink = () => {
+    const asset = assets.find((a) => a.id === picked);
+    if (!asset) return;
+    const fps = sequence.fps.num / sequence.fps.den;
+    const outFrames = Math.max(1, Math.round((asset.durationSec ?? 5) * fps));
+    session.apply([
+      {
+        type: "ReplaceClip",
+        clipId,
+        newSourceAssetId: asset.id,
+        newSourceInFrame: 0,
+        newSourceOutFrame: outFrames,
+        newSourceFps: asset.durationSec ? { num: Math.round(fps * 1000), den: 1000 } : undefined,
+      },
+    ]);
+    setPicked("");
+  };
+  return (
+    <div className="mt-2 rounded border border-[#c45c4c]/40 bg-[#c45c4c]/5 p-2">
+      <span className="bean-label text-[9px] text-[#c45c4c]">MISSING MEDIA</span>
+      <p className="mt-1 text-[10px] leading-relaxed text-[#8f8f8a]">
+        This clip&apos;s source asset is not in the library (deleted or from another workspace). The timeline keeps it as an honest placeholder — nothing is faked. Pick a replacement below to relink it.
+      </p>
+      <div className="mt-1.5 flex gap-1">
+        <select aria-label="Replacement asset" value={picked} onChange={(e) => setPicked(e.target.value)} className="min-w-0 flex-1 rounded border border-[#2a2a2a] bg-[#111110] px-1.5 py-1 text-[10px] text-[#d4d4d0]">
+          <option value="">Select a library asset…</option>
+          {assets.map((a) => <option key={a.id} value={a.id}>{a.originalName.slice(0, 60)}</option>)}
+        </select>
+        <button type="button" onClick={relink} disabled={!picked} className="rounded border border-[#d4a017] bg-[#d4a017]/10 px-2 py-1 text-[10px] text-[#d4a017] hover:bg-[#d4a017]/20 disabled:opacity-40">
+          Relink
+        </button>
       </div>
     </div>
   );

@@ -74,3 +74,25 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
     return badRequest((err as Error).message.slice(0, 200));
   }
 }
+
+/** M25 P4 — project deletion with a typed-name safeguard. The user's media
+ *  library is NEVER touched (assets are shared across projects); only the
+ *  project row (and its cascaded timeline versions) is removed. */
+export async function DELETE(req: NextRequest, ctx: { params: Promise<{ id: string }> }) {
+  const user = await getCurrentUser();
+  if (!user) return NextResponse.json({ error: "Authentication required." }, { status: 401 });
+  const { id } = await ctx.params;
+  const confirm = req.nextUrl.searchParams.get("confirm") ?? "";
+  const project = await db.project.findUnique({ where: { id } });
+  if (!project || project.userId !== user.id) return NextResponse.json({ error: "Project not found." }, { status: 404 });
+  if (confirm !== project.name) {
+    return NextResponse.json(
+      { error: `Safeguard: type the exact project name ("${project.name}") as the confirm parameter to delete it.` },
+      { status: 412 },
+    );
+  }
+  const versionCount = await db.timelineVersion.count({ where: { projectId: id } });
+  await db.project.delete({ where: { id } }); // TimelineVersion cascades (schema FK)
+  await db.auditEvent.create({ data: { userId: user.id, action: "project.deleted", detail: JSON.stringify({ projectId: id, versionsRemoved: versionCount }) } }).catch(() => {});
+  return NextResponse.json({ deleted: true, versionsRemoved: versionCount, mediaUntouched: true });
+}

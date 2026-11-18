@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
+import { assertWithinLimit, PlanLimitError, planLimitResponse } from "@/lib/billing/entitlements";
 import { getCurrentUser } from "@/lib/auth";
 
 export async function GET() {
@@ -29,6 +30,17 @@ export async function POST(req: NextRequest) {
   const body = await req.json().catch(() => null);
   const name = typeof body?.name === "string" ? body.name.trim().slice(0, 120) : "";
   if (!name) return NextResponse.json({ error: "Project name is required." }, { status: 400 });
+  // M25 P2 — plan entitlement (server-side; FREE is unlimited so this never
+  // affects existing users unless an admin assigns a limited plan).
+  try {
+    await assertWithinLimit(user.id, "maxProjects");
+  } catch (err) {
+    if (err instanceof PlanLimitError) {
+      const { body: limitBody, status } = planLimitResponse(err);
+      return NextResponse.json(limitBody, { status });
+    }
+    throw err;
+  }
   const project = await db.project.create({
     data: {
       userId: user.id,

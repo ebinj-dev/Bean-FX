@@ -38,6 +38,8 @@ model User {
   mcpApprovals      McpApproval[]
   automationAudits AutomationAudit[] @relation("AutomationAudit")
   aiUsage       AIUsage[]      @relation("AIUsage")
+  subscription  Subscription?
+  billingEvents BillingEvent[]
   studioPlans   StudioPlan[]   @relation("StudioPlans")
   studioScenes  StudioScene[]  @relation("StudioScenes")
   studioBatches StudioBatch[]  @relation("StudioBatches")
@@ -1058,4 +1060,52 @@ model McpApproval {
   consumedBy  String?
   expiresAt   DateTime
   @@index([userId, action])
+}
+
+/// M25 P2 — billing & subscription foundation. Payments are DISABLED by
+/// design: no provider, no prices, no checkout. Paid plans activate only via
+/// admin manual assignment (audited) until the owner authorizes payments.
+model SubscriptionPlan {
+  id               String         @id // "free" | "creator" | "studio"
+  name             String
+  sort             Int            @default(0)
+  /// JSON entitlements: limits (null = unlimited), feature flags, requiresPayment, selfServe.
+  entitlementsJson String
+  active           Boolean        @default(true)
+  createdAt        DateTime       @default(now())
+  subscriptions    Subscription[]
+}
+
+model Subscription {
+  id                 String           @id @default(cuid())
+  userId             String           @unique
+  user               User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  planId             String
+  plan               SubscriptionPlan @relation(fields: [planId], references: [id])
+  /// ACTIVE | ENDED (downgraded after a cancelled period rolled over)
+  status             String           @default("ACTIVE")
+  cancelAtPeriodEnd  Boolean          @default(false)
+  /// payments disabled → always "none"; a real provider is an owner action.
+  provider           String           @default("none")
+  currentPeriodStart DateTime          @default(now())
+  currentPeriodEnd   DateTime
+  createdAt          DateTime         @default(now())
+  updatedAt          DateTime         @updatedAt
+  events             BillingEvent[]
+  @@index([status])
+}
+
+model BillingEvent {
+  id         String       @id @default(cuid())
+  userId     String
+  user       User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  /// SUBSCRIPTION_ACTIVATED | PLAN_ASSIGNED | PLAN_CHANGED_SELF_SERVE |
+  /// PAYMENTS_DISABLED_BLOCK | CANCEL_SCHEDULED | CANCEL_RESUMED |
+  /// SUBSCRIPTION_ENDED | PERIOD_RENEWED | ADMIN_OVERRIDE
+  type       String
+  detailJson String?
+  createdAt  DateTime     @default(now())
+  subscriptionId String?
+  subscription   Subscription? @relation(fields: [subscriptionId], references: [id], onDelete: SetNull)
+  @@index([userId, createdAt])
 }

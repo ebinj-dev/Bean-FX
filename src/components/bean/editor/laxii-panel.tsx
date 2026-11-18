@@ -9,7 +9,7 @@
  * adaptations are CHILD assets (originals never modified). Inserting a still
  * onto a video/graphics track uses M1 commands; NIIKI can then animate it.
  */
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Image as ImageIcon, Loader2, Plus, RefreshCw, Sparkles, Wand2 } from "lucide-react";
 import type { Sequence } from "@/lib/editor/model";
 import type { EditorSession } from "@/hooks/use-editor-session";
@@ -60,6 +60,8 @@ export function LaxiiPanel({ sequence, session }: { sequence: Sequence; session:
   const [imageAssets, setImageAssets] = useState<OutputAsset[]>([]);
   const [outputs, setOutputs] = useState<OutputAsset[]>([]);
   const [job, setJob] = useState<JobLite | null>(null);
+  // M25 P5 — last generation params for honest retry + cancel support.
+  const lastGen = useRef<{ prompt: string } | null>(null);
   const [busy, setBusy] = useState<null | "generate" | "insert">(null);
   const [notice, setNotice] = useState<string | null>(null);
 
@@ -85,6 +87,7 @@ export function LaxiiPanel({ sequence, session }: { sequence: Sequence; session:
 
   const generate = useCallback(async () => {
     if (!prompt.trim() || busy) return;
+    lastGen.current = { prompt };
     setBusy("generate");
     setNotice(null);
     try {
@@ -204,6 +207,16 @@ export function LaxiiPanel({ sequence, session }: { sequence: Sequence; session:
           <select value={aspect} onChange={(e) => setAspect(e.target.value as typeof aspect)} className="rounded border border-[#2a2a2a] bg-[#111110] px-1 py-0.5 text-[#d4d4d0]" title="Local aspect adaptation (child asset; original preserved)">
             {ASPECTS.map((a) => <option key={a} value={a}>{a}</option>)}
           </select>
+          {busy === "generate" && job && (
+            <button type="button" onClick={() => void fetch(`/api/jobs/${job.id}`, { method: "DELETE" }).catch(() => undefined)} className="rounded border border-[#c45c4c]/40 bg-[#c45c4c]/10 px-2 py-1 text-[#c45c4c] hover:bg-[#c45c4c]/20" title="Cancel the active generation job">
+              CANCEL JOB
+            </button>
+          )}
+          {busy !== "generate" && job?.status === "FAILED" && lastGen.current && (
+            <button type="button" onClick={() => void generate()} className="rounded border border-[#d4a017] px-2 py-1 text-[#d4a017] hover:bg-[#d4a017]/10" title="Retry the last generation">
+              RETRY
+            </button>
+          )}
           <button type="button" onClick={() => void generate()} disabled={busy !== null || !prompt.trim() || (mode === "edit" && !referenceId)} className="flex items-center gap-1 rounded border border-[#d4a017] bg-[#d4a017]/10 px-2 py-1 text-[#d4a017] hover:bg-[#d4a017]/20 disabled:opacity-40">
             {busy === "generate" ? <Loader2 className="h-3 w-3 animate-spin" /> : <Sparkles className="h-3 w-3" />} GENERATE
           </button>

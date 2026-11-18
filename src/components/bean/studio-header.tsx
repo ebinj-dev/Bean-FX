@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { ArrowRight, ChevronDown, LogOut, LayoutDashboard } from "lucide-react";
+import { ArrowRight, ChevronDown, LogOut, LayoutDashboard, Settings } from "lucide-react";
 import { BeanLogo } from "@/components/bean/logo";
 import { SITE_NAV_ITEMS } from "@/components/bean/nav-items";
 import type { SessionUser } from "@/lib/types";
@@ -74,6 +74,15 @@ export function StudioHeader({ user, onLogout, route }: { user: SessionUser; onL
                   <p className="truncate text-xs font-semibold text-white">{user.name ?? "Creator"}</p>
                   <p className="truncate text-[11px] text-[#8f8f8a]">{user.email}</p>
                 </div>
+                {/* M24 — /settings was previously unreachable from the UI; added to the existing user menu in the same style. */}
+                <a
+                  href="/settings"
+                  className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs font-semibold text-[#c9c9c4] hover:bg-[#1a1a1a] hover:text-white"
+                  role="menuitem"
+                >
+                  <Settings className="h-3.5 w-3.5" />
+                  SETTINGS
+                </a>
                 <button
                   onClick={onLogout}
                   className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs font-semibold text-[#c9c9c4] hover:bg-[#1a1a1a] hover:text-white"

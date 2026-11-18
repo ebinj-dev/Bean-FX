@@ -9,6 +9,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { db } from "@/lib/db";
+import { assertWithinLimit, PlanLimitError, planLimitResponse } from "@/lib/billing/entitlements";
 import { getCurrentUser } from "@/lib/auth";
 import { badRequest, notFound, unauthorized } from "@/lib/process-helpers";
 import { resolveProjectContext } from "@/lib/my-ai/context/resolver";
@@ -27,6 +28,16 @@ export const maxDuration = 120;
 export async function POST(req: NextRequest) {
   const user = await getCurrentUser();
   if (!user) return unauthorized();
+  // M25 P2 — plan entitlement: monthly AI call budget (server-side).
+  try {
+    await assertWithinLimit(user.id, "monthlyAiCalls");
+  } catch (err) {
+    if (err instanceof PlanLimitError) {
+      const { body: limitBody, status } = planLimitResponse(err);
+      return NextResponse.json(limitBody, { status });
+    }
+    throw err;
+  }
   const parsed = Schema.safeParse(await req.json().catch(() => null));
   if (!parsed.success) return badRequest("Invalid chat payload.");
 

@@ -6,6 +6,7 @@
  */
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
+import { assertWithinLimit, PlanLimitError, planLimitResponse } from "@/lib/billing/entitlements";
 import { getCurrentUser } from "@/lib/auth";
 import { badRequest, unauthorized } from "@/lib/process-helpers";
 import { jobManager } from "@/lib/job-runner";
@@ -18,6 +19,16 @@ export const runtime = "nodejs";
 export async function POST(req: NextRequest) {
   const user = await getCurrentUser();
   if (!user) return unauthorized();
+  // M25 P2 — plan entitlement: monthly AI call budget (server-side).
+  try {
+    await assertWithinLimit(user.id, "monthlyAiCalls");
+  } catch (err) {
+    if (err instanceof PlanLimitError) {
+      const { body: limitBody, status } = planLimitResponse(err);
+      return NextResponse.json(limitBody, { status });
+    }
+    throw err;
+  }
   if (laxiiProviderIds().length === 0) {
     return NextResponse.json({ error: "No LAXII generation provider is configured on this deployment." }, { status: 503 });
   }
