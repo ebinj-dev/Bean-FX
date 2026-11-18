@@ -37,8 +37,10 @@ for (const tool of MCP_TOOLS as McpToolDef[]) {
       });
       const body = (await res.json()) as { result?: { content?: Array<{ type: string; json?: unknown }> }; error?: { code: number; message: string } };
       if (body.error) return { content: [{ type: "text", text: `MCP error ${body.error.code}: ${body.error.message}` }], isError: true };
-      const json0 = body.result?.content?.[0]?.json;
-      return { content: [{ type: "text", text: JSON.stringify(json0) }] };
+      // Server returns MCP-standard text content carrying JSON.
+      const rawText = body.result?.content?.[0]?.text;
+      const parsedOut = rawText ? JSON.parse(rawText) : body.result?.content?.[0]?.json;
+      return { content: [{ type: "text", text: JSON.stringify(parsedOut) }] };
     } catch (e) {
       return { content: [{ type: "text", text: e instanceof Error ? e.message : "transport failure" }], isError: true };
     }

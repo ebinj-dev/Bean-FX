@@ -11,8 +11,9 @@
  * The bridge is an UNTRUSTED client: the server enforces scopes/quotas.
  * No shell execution, no arbitrary code paths, no secrets in responses.
  */
-import { mkdirSync, readFileSync, writeFileSync, existsSync, statSync, unlinkSync, readdirSync } from "node:fs";
+import { mkdirSync, readFileSync, writeFileSync, existsSync } from "node:fs";
 import { join } from "node:path";
+import { createCredentialStore } from "../src/lib/core/credential-store";
 import {
   BRIDGE_PROTOCOL_VERSION, assertLoopbackBind, newNonce, verifyChallenge,
   type ChallengeInfo, type CacheEntry, reapCache, fileChecksum,
@@ -28,31 +29,50 @@ const HOST = process.env.BEANFX_BRIDGE_HOST ?? "127.0.0.1";
 assertLoopbackBind(HOST);
 mkdirSync(STATE_DIR, { recursive: true });
 mkdirSync(CACHE_DIR, { recursive: true });
+// M22 P2 — OS-native credential storage; provider is always surfaced
+// (never a silent plaintext fallback).
+const credentials = createCredentialStore(STATE_DIR);
 
 interface BridgeState { bridgeId: string; deviceToken: string; pairedAt: string; scopes: string[] }
 let state: BridgeState | null = null;
 if (existsSync(STATE_FILE)) {
-  try { state = JSON.parse(readFileSync(STATE_FILE, "utf8")) as BridgeState; } catch { state = null; }
+  try {
+    const persisted = JSON.parse(readFileSync(STATE_FILE, "utf8")) as Omit<BridgeState, "deviceToken">;
+    const token = await credentials.load("bridge-device-token");
+    state = token ? { ...persisted, deviceToken: token } : null;
+  } catch { state = null; }
 }
 
 function persistState() {
   if (!state) return;
-  writeFileSync(STATE_FILE, JSON.stringify(state), { mode: 0o600 });
+  // M22 P2: the device token is stored via the credential store (Windows
+  // Credential Manager on Windows; 0600 file fallback EXPLICITLY reported
+  // otherwise). The state file never contains the token itself.
+  writeFileSync(STATE_FILE, JSON.stringify({ bridgeId: state.bridgeId, pairedAt: state.pairedAt, scopes: state.scopes, credentialProvider: credentials.provider }), { mode: 0o600 });
+  credentials.save("bridge-device-token", state.deviceToken).catch(() => {});
 }
 
-let challenge: (ChallengeInfo & { answer: string }) | null = null;
+// M22 fix (found by the concurrency test): a SINGLE challenge slot made
+// parallel flows clobber each other. Active challenges are a map with TTLs;
+// each nonce is consumed exactly once on successful use.
+const activeChallenges = new Map<string, number>(); // nonce → expiresAt
 const cache = new Map<string, CacheEntry>();
 
 function requireAuthz(req: Request): Response | null {
-  // Proof of possession: X-Bridge-Nonce + X-Bridge-Proof must match the
-  // ACTIVE challenge (single-flight, 60s TTL).
   if (!state) return json({ ok: false, error: "bridge not paired" }, 401);
-  if (!challenge || Date.now() > challenge.expiresAt) return json({ ok: false, error: "no active challenge" }, 401);
   const nonce = req.headers.get("x-bridge-nonce");
   const proof = req.headers.get("x-bridge-proof");
-  if (nonce !== challenge.nonce || !proof || !verifyChallenge(challenge.nonce, state.deviceToken, proof)) {
+  if (!nonce || !proof) return json({ ok: false, error: "no active challenge" }, 401);
+  const expiresAt = activeChallenges.get(nonce);
+  if (expiresAt === undefined || Date.now() > expiresAt) {
+    activeChallenges.delete(nonce);
+    return json({ ok: false, error: "no active challenge" }, 401);
+  }
+  if (!verifyChallenge(nonce, state.deviceToken, proof)) {
     return json({ ok: false, error: "challenge verification failed" }, 401);
   }
+  // Single-use: consume only on successful verification.
+  activeChallenges.delete(nonce);
   return null;
 }
 
@@ -79,7 +99,7 @@ const server = Bun.serve({
   async fetch(req): Promise<Response> {
     const url = new URL(req.url);
     if (url.pathname === "/health") {
-      return json({ ok: true, protocol: BRIDGE_PROTOCOL_VERSION, paired: !!state, bridgeId: state?.bridgeId ?? null });
+      return json({ ok: true, protocol: BRIDGE_PROTOCOL_VERSION, paired: !!state, bridgeId: state?.bridgeId ?? null, credentialProvider: credentials.provider });
     }
     if (url.pathname === "/pair") {
       if (req.method !== "POST") return json({ ok: false, error: "POST required" }, 405);
@@ -97,18 +117,23 @@ const server = Bun.serve({
         scopes: ["projects:read", "jobs:submit", "jobs:read", "jobs:cancel", "media:upload"],
       };
       persistState();
-      challenge = null; // force re-challenge after pairing
-      return json({ ok: true, bridgeId: state.bridgeId, protocol: BRIDGE_PROTOCOL_VERSION, serverFeatures: caps.features ?? [] });
+      activeChallenges.clear(); // force re-challenge after pairing
+      return json({ ok: true, bridgeId: state.bridgeId, protocol: BRIDGE_PROTOCOL_VERSION, credentialProvider: credentials.provider, serverFeatures: caps.features ?? [] });
     }
     if (url.pathname === "/challenge") {
       if (!state) return json({ ok: false, error: "bridge not paired" }, 401);
-      challenge = { nonce: newNonce(), issuedAt: Date.now(), expiresAt: Date.now() + 60000, answer: "" };
-      return json({ nonce: challenge.nonce, expiresAt: challenge.expiresAt, protocol: BRIDGE_PROTOCOL_VERSION });
+      const nonce = newNonce();
+      const expiresAt = Date.now() + 60000;
+      activeChallenges.set(nonce, expiresAt);
+      if (activeChallenges.size > 256) { // prune stale nonces
+        const now = Date.now();
+        for (const [n, exp] of activeChallenges) if (exp < now) activeChallenges.delete(n);
+      }
+      return json({ nonce, expiresAt, protocol: BRIDGE_PROTOCOL_VERSION });
     }
     if (url.pathname.startsWith("/api/")) {
       const denied = requireAuthz(req);
       if (denied) return denied;
-      challenge = null; // single-use challenge
       return proxy(req, url);
     }
     if (url.pathname === "/cache/list") {
@@ -140,6 +165,7 @@ console.log(JSON.stringify({
   url: `http://${HOST}:${server.port}`,
   pid: process.pid,
   paired: !!state,
+  credentialProvider: credentials.provider,
 }));
 
 export { server };
