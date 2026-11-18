@@ -47,4 +47,6 @@ The video composite previously truncated at the first clip's end on multi-clip t
 - CONFIGURATION REQUIRED (unchanged): LAXII/JAZMII providers for AI template steps.
 
 ## 9. GitHub
-Commit: see final report (SHA + URL verified after push). Fast-forward only; main untouched by us.
+- Implementation commit: `46cadb6` — https://github.com/ebinj-dev/Bean-FX/commit/46cadb69737bd46eb0010873cb4b728a1ea6b170
+- Final tip: `b363b14` (evidence bundle) — https://github.com/ebinj-dev/Bean-FX/commit/b363b14860ef8a565c2c30c94d4849c94dc2346b
+- Chain verified in a fresh authenticated clone: 46cadb6 → ab24109 → b363b14, all fast-forward; M26 `f12549b` IS an ancestor; main `fb051dd` untouched by this work; `m27-evidence/` (8 files incl. render-evidence.log, regression log, T1, sync, screenshots) present in the remote tree.
