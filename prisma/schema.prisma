@@ -34,6 +34,8 @@ model User {
   conversations Conversation[] @relation("Conversations")
   aiPlans       AIPlan[]       @relation("AIPlans")
   automationTokens AutomationToken[] @relation("AutomationToken")
+  integrationTokens IntegrationToken[]
+  mcpApprovals      McpApproval[]
   automationAudits AutomationAudit[] @relation("AutomationAudit")
   aiUsage       AIUsage[]      @relation("AIUsage")
   studioPlans   StudioPlan[]   @relation("StudioPlans")
@@ -1018,4 +1020,42 @@ model AuditEvent {
   createdAt DateTime @default(now())
   @@index([userId])
   @@index([action])
+}
+
+/// M21 P2 — integration tokens for API v1 (Desktop Bridge, MCP agents,
+/// Premiere panel). Only the SHA-256 hash is stored; the raw `bfx_…` token
+/// is shown exactly once at creation. Scopes can only NARROW what the
+/// owning user may do (never widen).
+model IntegrationToken {
+  id         String    @id @default(cuid())
+  userId     String
+  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name       String
+  /// sha256(raw token) hex — timing-safe compared, never reversible.
+  tokenHash  String    @unique
+  /// Display prefix (first 12 chars, e.g. "bfx_9f2c1a77") for UI lists.
+  tokenPrefix String
+  /// JSON array of TokenScope strings (see src/lib/core/types.ts).
+  scopes     String
+  createdAt  DateTime  @default(now())
+  lastUsedAt DateTime?
+  revokedAt  DateTime?
+  expiresAt  DateTime?
+}
+
+/// M21 P4 — one-time, hash-bound approval for a MCP mutation (external
+/// agents can never mutate without a human-approved record created through
+/// the authenticated web session). Consumed exactly once; payload hash must
+/// match the tool-call arguments or the call is rejected.
+model McpApproval {
+  id          String    @id @default(cuid())
+  userId      String
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  action      String
+  payloadHash String
+  createdAt   DateTime  @default(now())
+  consumedAt  DateTime?
+  consumedBy  String?
+  expiresAt   DateTime
+  @@index([userId, action])
 }

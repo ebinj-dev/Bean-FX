@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- M21 P5 — UXP manifest for the BEAN FX Premiere panel (UXP spec v7).
+     Requires Premiere Pro 24+ (UXP APIs). The panel only requests the
+     APIs it actually uses; it never claims deeper host access. -->
+<ExtensionManifest Version="7.0" ExtensionBundleId="com.beanfx.premiere-panel"
+  ExtensionBundleVersion="1.0.0" ExtensionBundleName="BEAN FX">
+  <ExtensionList>
+    <Extension Id="com.beanfx.premiere-panel.main" Version="1.0.0" />
+  </ExtensionList>
+  <ExecutionEnvironment>
+    <HostList>
+      <!-- PPRO = Premiere Pro; minimum 24.0 -->
+      <Host Name="PPRO" Version="[24.0,99.9]" />
+    </HostList>
+    <LocaleList><Locale Code="All" /></LocaleList>
+    <RequiredRuntimeList><RequiredRuntime Name="CSXS" Version="9.0" /></RequiredRuntimeList>
+  </ExecutionEnvironment>
+  <DispatchInfoList>
+    <Extension Id="com.beanfx.premiere-panel.main">
+      <DispatchInfo>
+        <Resources>
+          <Html src="index.html" />
+          <Script src="panel.js" />
+        </Resources>
+        <UI>
+          <Type>Panel</Type>
+          <Menu>BEAN FX</Menu>
+          <Geometry>
+            <Size><Height>420</Height><Width>340</Width></Size>
+          </Geometry>
+        </UI>
+      </DispatchInfo>
+    </Extension>
+  </DispatchInfoList>
+</ExtensionManifest>

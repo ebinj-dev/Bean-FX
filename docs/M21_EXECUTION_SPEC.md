@@ -1,6 +1,6 @@
 # M21 Execution Specification — BEAN FX Core SDK & Integration Architecture
 
-**Status:** SPECIFICATION ONLY — no M21 implementation is started. This document turns `BEAN_FX_ECOSYSTEM_ARCHITECTURE.md` into an execution plan: scope items, concrete deliverables, and acceptance criteria per item. One shared Core SDK; no per-host AI systems; no Ollama. M20 (production readiness, `0.3.0-m20-rc1`) is closed and pushed; M21 builds on it without touching M1–M20 behavior.
+**Status:** DELIVERED (2026-11-18) — all 13 scope areas implemented and test-proven across phases P1–P7; see `M21_RESULTS.md` for measured results and limitations. The original plan below is preserved for traceability. This document turns `BEAN_FX_ECOSYSTEM_ARCHITECTURE.md` into an execution plan: scope items, concrete deliverables, and acceptance criteria per item. One shared Core SDK; no per-host AI systems; no Ollama. M20 (production readiness, `0.3.0-m20-rc1`) is closed and pushed; M21 builds on it without touching M1–M20 behavior.
 
 ## Execution order (proposed phases, each independently shippable)
 
