@@ -43,3 +43,8 @@
 | SQLite→PostgreSQL switch | >1 writer node or >~100 concurrent sessions | DATABASE_URL to PostgreSQL (drill-verified path) |
 | Media disk | 5 GiB/user quota × active users | per-user quota + deferred cleanup retention |
 | SMTP | — | CONFIGURATION REQUIRED (owner provider) |
+
+
+## Closeout concurrency smoke (2026-11-18, 2 vCPU / 3.9 GiB sandbox)
+
+8 virtual users × 3 rounds (24 requests/scenario, download/m20-render-logs/concurrency-smoke.json): public pages p50 9.9–16.2 ms / p95 17.9–26.9 ms (all 200); register p50 166.1 ms / p95 225.1 ms (bcrypt cost dominates — intentional); invalid login p50 15.7 ms (401). Render admission control unchanged (GLOBAL_MAX_ACTIVE). These are sandbox-only measurements; production sizing remains the ≥8 GB / 4 vCPU recommendation below — no capacity claims are extrapolated from them.

@@ -44,14 +44,14 @@ $AB screenshot "$SHOTS/03-pricing.png" >/dev/null
 
 step 4 "Register through the real auth UI"
 $AB open "$BASE/" >/dev/null; sleep 3
-$AB eval "(() => { const b = [...document.querySelectorAll('button,a')].find((x) => (x.textContent || '').toUpperCase().includes('GET STARTED')); b?.click(); return b ? 'OK' : 'NOBTN'; })()" >/dev/null
+$AB eval "(function(){  const b = [...document.querySelectorAll('button,a')].find((x) => (x.textContent || '').toUpperCase().includes('GET STARTED')); b?.click(); return b ? 'OK' : 'NOBTN'; })()" >/dev/null
 for i in $(seq 1 10); do
   $AB eval "document.body.innerText.includes('Sign in to access')" 2>/dev/null | tail -1 | tr -d '"' | grep -q true && break
   sleep 1
 done
-$AB eval "(() => { const t = [...document.querySelectorAll('button')].find((x) => (x.textContent || '').includes('Create one')); t?.click(); return t ? 'OK' : 'NOTOGGLE'; })()" >/dev/null
+$AB eval "(function(){  const t = [...document.querySelectorAll('button')].find((x) => (x.textContent || '').includes('Create one')); t?.click(); return t ? 'OK' : 'NOTOGGLE'; })()" >/dev/null
 sleep 1
-$AB eval "(() => {
+$AB eval "(function(){ 
   const set = (el, v) => { const s = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set; s.call(el, v); el.dispatchEvent(new Event('input', { bubbles: true })); };
   const email = [...document.querySelectorAll('input')].find((i) => i.type === 'email' || (i.placeholder || '').includes('@'));
   const pws = [...document.querySelectorAll('input')].filter((i) => i.type === 'password');
@@ -60,7 +60,7 @@ $AB eval "(() => {
   set(email, '$EMAIL'); pws.forEach((p) => set(p, '$PW')); if (name) set(name, 'M20 Journey');
   return 'FILLED';
 })()" 2>/dev/null | tail -1 | tr -d '"' | grep -q FILLED || fail 4 "auth form fill"
-$AB eval "(() => { const f = document.querySelector('form'); const b = f && (f.querySelector('button[type=submit]') || f.querySelector('button')); b?.click(); return b ? 'OK' : 'NOBTN'; })()" >/dev/null
+$AB eval "(function(){  const f = document.querySelector('form'); const b = f && (f.querySelector('button[type=submit]') || f.querySelector('button')); b?.click(); return b ? 'OK' : 'NOBTN'; })()" >/dev/null
 for i in $(seq 1 15); do
   H=$($AB eval "location.hash" 2>/dev/null | tail -1 | tr -d '"')
   echo "$H" | grep -q "#/editor" && break
@@ -84,19 +84,19 @@ PYEOF
 [ -s /tmp/m20-jtoken.txt ] || fail 5 "verification email not captured"
 VT=$(cat /tmp/m20-jtoken.txt)
 $AB open "$BASE/verify-email?token=$VT" >/dev/null; sleep 3
-$AB eval "(() => { const inp = document.querySelector('input[name=token]'); if (!inp) return 'NOINP'; const s = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set; s.call(inp, '$VT'); inp.dispatchEvent(new Event('input', { bubbles: true })); return 'OK'; })()" >/dev/null
-$AB eval "(() => { const b = [...document.querySelectorAll('button')].find((x) => (x.textContent || '').trim() === 'Verify'); b?.click(); return b ? 'OK' : 'NOBTN'; })()" >/dev/null
+$AB eval "(function(){  const inp = document.querySelector('input[name=token]'); if (!inp) return 'NOINP'; const s = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set; s.call(inp, '$VT'); inp.dispatchEvent(new Event('input', { bubbles: true })); return 'OK'; })()" >/dev/null
+$AB eval "(function(){  const b = [...document.querySelectorAll('button')].find((x) => (x.textContent || '').trim() === 'Verify'); b?.click(); return b ? 'OK' : 'NOBTN'; })()" >/dev/null
 sleep 2
 waitfor "verified" 8 || fail 5 "verify-email control did not confirm"
 $AB screenshot "$SHOTS/05-verified.png" >/dev/null
 
 step 6 "Sign in (explicit sign-out, then real login form)"
-$AB eval "(() => { const b = [...document.querySelectorAll('button,a')].find((x) => /^LOG ?OUT$/i.test((x.textContent || '').trim())); b?.click(); return b ? 'OK' : 'NOBTN'; })()" >/dev/null
+$AB eval "(function(){  const b = [...document.querySelectorAll('button,a')].find((x) => /^LOG ?OUT$/i.test((x.textContent || '').trim())); b?.click(); return b ? 'OK' : 'NOBTN'; })()" >/dev/null
 sleep 2
 $AB open "$BASE/" >/dev/null; sleep 3
-$AB eval "(() => { const b = [...document.querySelectorAll('button,a')].find((x) => /^(LOG ?IN|SIGN IN)$/i.test((x.textContent || '').trim())); b?.click(); return b ? 'OK' : 'NOBTN'; })()" >/dev/null
+$AB eval "(function(){  const b = [...document.querySelectorAll('button,a')].find((x) => /^(LOG ?IN|SIGN IN)$/i.test((x.textContent || '').trim())); b?.click(); return b ? 'OK' : 'NOBTN'; })()" >/dev/null
 sleep 2
-$AB eval "(() => {
+$AB eval "(function(){ 
   const set = (el, v) => { const s = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set; s.call(el, v); el.dispatchEvent(new Event('input', { bubbles: true })); };
   const email = [...document.querySelectorAll('input')].find((i) => i.type === 'email' || (i.placeholder || '').includes('@'));
   const pw = [...document.querySelectorAll('input')].find((i) => i.type === 'password');
@@ -104,7 +104,7 @@ $AB eval "(() => {
   set(email, '$EMAIL'); set(pw, '$PW');
   return 'OK';
 })()" >/dev/null
-$AB eval "(() => { const f = document.querySelector('form'); const b = f && (f.querySelector('button[type=submit]') || f.querySelector('button')); b?.click(); return b ? 'OK' : 'NOBTN'; })()" >/dev/null
+$AB eval "(function(){  const f = document.querySelector('form'); const b = f && (f.querySelector('button[type=submit]') || f.querySelector('button')); b?.click(); return b ? 'OK' : 'NOBTN'; })()" >/dev/null
 for i in $(seq 1 15); do
   H=$($AB eval "location.hash" 2>/dev/null | tail -1 | tr -d '"')
   echo "$H" | grep -q "#/editor" && break
@@ -112,8 +112,8 @@ for i in $(seq 1 15); do
 done
 echo "$H" | grep -q "#/editor" || { echo "sign-in page state: $($AB eval "location.href + ' :: ' + document.body.innerText.slice(0,200)" 2>/dev/null | tail -1)";
   $AB open "$BASE/#/login" >/dev/null; sleep 3;
-  $AB eval "(() => { const set = (el, v) => { const s = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set; s.call(el, v); el.dispatchEvent(new Event('input', { bubbles: true })); }; const email = [...document.querySelectorAll('input')].find((i) => i.type === 'email' || (i.placeholder || '').includes('@')); const pw = [...document.querySelectorAll('input')].find((i) => i.type === 'password'); if (!email || !pw) return 'NOFORM'; set(email, '$EMAIL'); set(pw, '$PW'); return 'OK'; })()" >/dev/null;
-  $AB eval "(() => { const f = document.querySelector('form'); const b = f && (f.querySelector('button[type=submit]') || f.querySelector('button')); b?.click(); return 'OK'; })()" >/dev/null;
+  $AB eval "(function(){  const set = (el, v) => { const s = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set; s.call(el, v); el.dispatchEvent(new Event('input', { bubbles: true })); }; const email = [...document.querySelectorAll('input')].find((i) => i.type === 'email' || (i.placeholder || '').includes('@')); const pw = [...document.querySelectorAll('input')].find((i) => i.type === 'password'); if (!email || !pw) return 'NOFORM'; set(email, '$EMAIL'); set(pw, '$PW'); return 'OK'; })()" >/dev/null;
+  $AB eval "(function(){  const f = document.querySelector('form'); const b = f && (f.querySelector('button[type=submit]') || f.querySelector('button')); b?.click(); return 'OK'; })()" >/dev/null;
   for i in $(seq 1 15); do H=$($AB eval "location.hash" 2>/dev/null | tail -1 | tr -d '"'); echo "$H" | grep -q "#/editor" && break; sleep 1; done;
   echo "$H" | grep -q "#/editor" || fail 6 "sign-in failed"; }
 $AB screenshot "$SHOTS/06-signed-in.png" >/dev/null
@@ -128,9 +128,9 @@ printf '.localhost	TRUE	/	TRUE	0	beanfx_session	%s
 ' "$TOKEN" > /tmp/m20-j-jar.txt
 
 step 8 "Create a project via the real + control"
-$AB eval "(() => { const plus = [...document.querySelectorAll('button')].find((b) => (b.textContent || '').trim() === '+'); plus?.click(); return plus ? 'OK' : 'NOBTN'; })()" >/dev/null
+$AB eval "(function(){  const plus = [...document.querySelectorAll('button')].find((b) => (b.textContent || '').trim() === '+'); plus?.click(); return plus ? 'OK' : 'NOBTN'; })()" >/dev/null
 sleep 1.5
-$AB eval "(() => { const inp = document.querySelector('input[placeholder=\"New project…\"]'); if (!inp) return 'NOINPUT'; const s = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set; s.call(inp, 'M20 Journey Project'); inp.dispatchEvent(new Event('input', { bubbles: true })); inp.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true })); return 'ENTERED'; })()" >/dev/null
+$AB eval "(function(){  const inp = document.querySelector('input[placeholder=\"New project…\"]'); if (!inp) return 'NOINPUT'; const s = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set; s.call(inp, 'M20 Journey Project'); inp.dispatchEvent(new Event('input', { bubbles: true })); inp.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true })); return 'ENTERED'; })()" >/dev/null
 sleep 3
 PROJ=$(curl -s -b /tmp/m20-j-jar.txt "$BASE/api/projects" | python3 -c "
 import sys, json
@@ -143,18 +143,18 @@ step 9 "Import media through the real upload control (file inputs)"
 ffmpeg -y -loglevel error -f lavfi -i "testsrc2=size=640x360:rate=30:duration=6" -f lavfi -i "sine=frequency=440:duration=6" -c:v libx264 -pix_fmt yuv420p -c:a aac -shortest /tmp/m20-j-video.mp4
 ffmpeg -y -loglevel error -f lavfi -i "sine=frequency=660:duration=10" -c:a aac /tmp/m20-j-music.m4a
 ffmpeg -y -loglevel error -f lavfi -i "color=c=#20201c:s=320x180:d=1" -frames:v 1 /tmp/m20-j-still.png
-$AB eval "(() => { const t = [...document.querySelectorAll('button')].find((b) => (b.textContent || '').trim().toUpperCase() === 'EDITOR'); t?.click(); return t ? 'OK' : 'NOBTN'; })()" >/dev/null
+$AB eval "(function(){  const t = [...document.querySelectorAll('button')].find((b) => (b.textContent || '').trim().toUpperCase() === 'EDITOR'); t?.click(); return t ? 'OK' : 'NOBTN'; })()" >/dev/null
 sleep 3
 $AB snapshot -c >/tmp/m20-ws.txt 2>&1
 grep -aq "PROGRAM MONITOR" /tmp/m20-ws.txt || fail 9 "editor workspace"
 UP=$(grep -acE 'input\[type="file"\]|type="file"' /tmp/m20-ws.txt)
-$AB eval "(() => 'n:' + [...document.querySelectorAll('input[type=file]')].length)" 2>/dev/null | tail -1 | tr -d '"' > /tmp/m20-ninputs.txt
+$AB eval "(function(){ return 'n:' + [...document.querySelectorAll('input[type=file]')].length })()" 2>/dev/null | tail -1 | tr -d '"' > /tmp/m20-ninputs.txt
 NINPUTS=$(cat /tmp/m20-ninputs.txt)
 echo "file inputs on editor: $NINPUTS"
 if [ "$NINPUTS" -ge 1 ]; then
   # Real upload: drive the import file input(s) directly.
   SEL='input[type=file]'
-  $AB upload "$SEL" /tmp/m20-j-video.mp4 >/dev/null 2>&1 || $AB eval "(() => 'upload-fallback')" >/dev/null
+  $AB upload "$SEL" /tmp/m20-j-video.mp4 >/dev/null 2>&1 || $AB eval "(function(){ return 'upload-fallback' })()" >/dev/null
   sleep 4
 fi
 # Ensure the assets are really in the library (upload through the real gate;
@@ -164,71 +164,71 @@ curl -s -b /tmp/m20-j-jar.txt -X POST "$BASE/api/media" -H "x-filename: journey-
 curl -s -b /tmp/m20-j-jar.txt -X POST "$BASE/api/media" -H "x-filename: journey-music.m4a" -H "x-role: MUSIC" --data-binary @/tmp/m20-j-music.m4a -H "Content-Type: application/octet-stream" >/dev/null
 curl -s -b /tmp/m20-j-jar.txt -X POST "$BASE/api/media" -H "x-filename: journey-still.png" -H "x-role: BROLL" --data-binary @/tmp/m20-j-still.png -H "Content-Type: application/octet-stream" >/dev/null
 grep -q "api-upload video: cmw" /tmp/m20-mid.txt || fail 9 "media import"
-$AB eval "(() => { const r = [...document.querySelectorAll('button')].find((b) => (b.textContent || '').toLowerCase().includes('refresh')); r?.click(); return 'OK'; })()" >/dev/null
+$AB eval "(function(){  const r = [...document.querySelectorAll('button')].find((b) => (b.textContent || '').toLowerCase().includes('refresh')); r?.click(); return 'OK'; })()" >/dev/null
 sleep 2
 $AB snapshot -c >/tmp/m20-media.txt 2>&1
 grep -aq "journey-video" /tmp/m20-media.txt || fail 9 "imported video not visible in media browser"
 $AB screenshot "$SHOTS/09-media.png" >/dev/null
 
 step 10 "Edit a multitrack sequence (video track + audio track + placed clips)"
-$AB eval "(() => { const b = [...document.querySelectorAll('button')].find((x) => (x.getAttribute('title') || '') === 'Add video track'); b?.click(); return b ? 'OK' : 'NOV'; })()" 2>/dev/null | tail -1 | tr -d '"' | grep -q OK || fail 10 "add video track"
+$AB eval "(function(){  const b = [...document.querySelectorAll('button')].find((x) => (x.getAttribute('title') || '') === 'Add video track'); b?.click(); return b ? 'OK' : 'NOV'; })()" 2>/dev/null | tail -1 | tr -d '"' | grep -q OK || fail 10 "add video track"
 sleep 1
-$AB eval "(() => { const b = [...document.querySelectorAll('button')].find((x) => (x.getAttribute('title') || '').toLowerCase() === 'add audio track'); b?.click(); return b ? 'OK' : 'NOA'; })()" >/dev/null
+$AB eval "(function(){  const b = [...document.querySelectorAll('button')].find((x) => (x.getAttribute('title') || '').toLowerCase() === 'add audio track'); b?.click(); return b ? 'OK' : 'NOA'; })()" >/dev/null
 sleep 1
 # M20 fix: the media item's place action is the button titled
 # "Place at playhead…" (the li's first button may be a different control).
-PLACE_EVAL="(() => { const li = [...document.querySelectorAll('li')].find((e) => (e.textContent || '').includes('journey-video')); const b = li && ([...li.querySelectorAll('button')].find((x) => (x.getAttribute('title') || '').includes('Place at playhead')) || li.querySelector('button')); b?.scrollIntoView({block: 'center'}); b?.click(); return b ? 'OK' : 'NOBTN'; })()"
+PLACE_EVAL="(function(){  const li = [...document.querySelectorAll('li')].find((e) => (e.textContent || '').includes('journey-video')); const b = li && ([...li.querySelectorAll('button')].find((x) => (x.getAttribute('title') || '').includes('Place at playhead')) || li.querySelector('button')); b?.scrollIntoView({block: 'center'}); b?.click(); return b ? 'OK' : 'NOBTN'; })()"
 $AB eval "$PLACE_EVAL" >/dev/null
 sleep 2
-CLIPS=$($AB eval "(() => 'n:' + document.querySelectorAll('[data-clip-id]').length)" 2>/dev/null | tail -1 | tr -d '"' | tr -d '\\' | sed 's/^n://')
+CLIPS=$($AB eval "(function(){ return 'n:' + document.querySelectorAll('[data-clip-id]').length })()" 2>/dev/null | tail -1 | tr -d '"' | tr -d '\\' | sed 's/^n://')
 if [ "${CLIPS:-0}" -lt 1 ]; then
   $AB eval "$PLACE_EVAL" >/dev/null; sleep 2
-  CLIPS=$($AB eval "(() => 'n:' + document.querySelectorAll('[data-clip-id]').length)" 2>/dev/null | tail -1 | tr -d '"' | tr -d '\\' | sed 's/^n://')
+  CLIPS=$($AB eval "(function(){ return 'n:' + document.querySelectorAll('[data-clip-id]').length })()" 2>/dev/null | tail -1 | tr -d '"' | tr -d '\\' | sed 's/^n://')
 fi
 if [ "${CLIPS:-0}" -lt 1 ]; then
-  echo "DEBUG10: tracks=$($AB eval "(() => 't:' + document.querySelectorAll('[data-track-id]').length)" 2>/dev/null | tail -1) clips_raw=$($AB eval "(() => 'c:' + document.querySelectorAll('[data-clip-id]').length)" 2>/dev/null | tail -1) li=$($AB eval "(() => 'li:' + [...document.querySelectorAll('li')].some((e) => (e.textContent || '').includes('journey-video')))" 2>/dev/null | tail -1) body=$($AB eval "document.body.innerText.slice(0, 300).replace(/\n/g, '|')" 2>/dev/null | tail -1)"
+  echo "DEBUG10: tracks=$($AB eval "(function(){ return 't:' + document.querySelectorAll('[data-track-id]').length })()" 2>/dev/null | tail -1) clips_raw=$($AB eval "(function(){ return 'c:' + document.querySelectorAll('[data-clip-id]').length })()" 2>/dev/null | tail -1) li=$($AB eval "(function(){ return 'li:' + [...document.querySelectorAll('li')].some((e) => (e.textContent || '').includes('journey-video')) })()" 2>/dev/null | tail -1) body=$($AB eval "document.body.innerText.slice(0, 300).replace(/\n/g, '|')" 2>/dev/null | tail -1)"
   fail 10 "no clips placed"
 fi
 $AB screenshot "$SHOTS/10-multitrack.png" >/dev/null
 echo "clips placed: $CLIPS"
 
 step 11 "Use captions (inspector caption control on the placed clip)"
-CLIP1=$($AB eval "(() => { const c = [...document.querySelectorAll('[data-clip-id]')][0]; return c ? c.dataset.clipId : ''; })()" 2>/dev/null | tail -1 | tr -d '"')
+CLIP1=$($AB eval "(function(){  const c = [...document.querySelectorAll('[data-clip-id]')][0]; return c ? c.dataset.clipId : ''; })()" 2>/dev/null | tail -1 | tr -d '"')
 [ -n "$CLIP1" ] || fail 11 "no clip for caption"
-$AB eval "(() => { const c = document.querySelector('[data-clip-id=\"$CLIP1\"]'); c?.dispatchEvent(new MouseEvent('mousedown', { bubbles: true })); c?.dispatchEvent(new MouseEvent('mouseup', { bubbles: true })); return 'OK'; })()" >/dev/null
+$AB eval "(function(){  const c = document.querySelector('[data-clip-id=\"$CLIP1\"]'); c?.dispatchEvent(new MouseEvent('mousedown', { bubbles: true })); c?.dispatchEvent(new MouseEvent('mouseup', { bubbles: true })); return 'OK'; })()" >/dev/null
 sleep 1
-$AB eval "(() => { const tab = [...document.querySelectorAll('button')].find((b) => (b.textContent || '').trim().toLowerCase() === 'captions'); tab?.click(); return 'OK'; })()" >/dev/null
+$AB eval "(function(){  const tab = [...document.querySelectorAll('button')].find((b) => (b.textContent || '').trim().toLowerCase() === 'captions'); tab?.click(); return 'OK'; })()" >/dev/null
 sleep 1
-$AB eval "(() => { const inp = document.querySelector('textarea[aria-label=\"Caption text\"], input[aria-label=\"Caption text\"], textarea[placeholder*=\"caption\" i]'); if (!inp) return 'NOINP'; const s = Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, 'value').set; s.call(inp, 'M20 journey caption'); inp.dispatchEvent(new Event('input', { bubbles: true })); return 'OK'; })()" 2>/dev/null | tail -1 | tr -d '"'
+$AB eval "(function(){  const inp = document.querySelector('textarea[aria-label=\"Caption text\"], input[aria-label=\"Caption text\"], textarea[placeholder*=\"caption\" i]'); if (!inp) return 'NOINP'; const s = Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, 'value').set; s.call(inp, 'M20 journey caption'); inp.dispatchEvent(new Event('input', { bubbles: true })); return 'OK'; })()" 2>/dev/null | tail -1 | tr -d '"'
 sleep 0.5
 $AB screenshot "$SHOTS/11-captions.png" >/dev/null
 
 step 12 "Use audio controls and automation (volume + automation strip clicks)"
-$AB eval "(() => { const tab = [...document.querySelectorAll('button')].find((b) => (b.textContent || '').trim().toLowerCase() === 'media'); tab?.click(); return 'OK'; })()" >/dev/null
+$AB eval "(function(){  const tab = [...document.querySelectorAll('button')].find((b) => (b.textContent || '').trim().toLowerCase() === 'media'); tab?.click(); return 'OK'; })()" >/dev/null
 sleep 1
-$AB eval "(() => { const vol = document.querySelector('input[aria-label=\"Clip volume\"]'); if (!vol) return 'NOVOL'; const s = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set; s.call(vol, '1.5'); vol.dispatchEvent(new Event('input', { bubbles: true })); return 'OK'; })()" 2>/dev/null | tail -1 | tr -d '"'
-$AB eval "(() => { const strip = [...document.querySelectorAll('div')].find((d) => (d.title || '').toLowerCase().includes('automation')); if (!strip) return 'NOSTRIP'; const r = strip.getBoundingClientRect(); return Math.round(r.left + r.width * 0.3) + ',' + Math.round(r.top + r.height * 0.4) + ',' + Math.round(r.left + r.width * 0.7) + ',' + Math.round(r.top + r.height * 0.7); })()" 2>/dev/null | tail -1 | tr -d '"' > /tmp/m20-strip.txt
+$AB eval "(function(){  const vol = document.querySelector('input[aria-label=\"Clip volume\"]'); if (!vol) return 'NOVOL'; const s = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set; s.call(vol, '1.5'); vol.dispatchEvent(new Event('input', { bubbles: true })); return 'OK'; })()" 2>/dev/null | tail -1 | tr -d '"'
+$AB eval "(function(){  const strip = [...document.querySelectorAll('div')].find((d) => (d.title || '').toLowerCase().includes('automation')); if (!strip) return 'NOSTRIP'; const r = strip.getBoundingClientRect(); return Math.round(r.left + r.width * 0.3) + ',' + Math.round(r.top + r.height * 0.4) + ',' + Math.round(r.left + r.width * 0.7) + ',' + Math.round(r.top + r.height * 0.7); })()" 2>/dev/null | tail -1 | tr -d '"' > /tmp/m20-strip.txt
 P=$(cat /tmp/m20-strip.txt)
 if [ -n "$P" ] && [[ "$P" == *","* ]]; then
   $AB mouse move $(echo "$P" | cut -d, -f1) $(echo "$P" | cut -d, -f2) >/dev/null && $AB mouse down left >/dev/null && $AB mouse up left >/dev/null
   $AB mouse move $(echo "$P" | cut -d, -f3) $(echo "$P" | cut -d, -f4) >/dev/null && $AB mouse down left >/dev/null && $AB mouse up left >/dev/null
 fi
-KFS=$($AB eval "(() => 'n:' + document.querySelectorAll('[data-kf]').length)" 2>&1 | tail -1 | tr -d '"' | tr -d '\\' | sed 's/^n://')
+KFS=$($AB eval "(function(){ return 'n:' + document.querySelectorAll('[data-kf]').length })()" 2>&1 | tail -1 | tr -d '"' | tr -d '\\' | sed 's/^n://')
 echo "automation points: $KFS"
 $AB screenshot "$SHOTS/12-audio-automation.png" >/dev/null
 
 step 13 "Apply effects and transitions (effects browser + transition control)"
-$AB eval "(() => { const t = [...document.querySelectorAll('button')].find((b) => (b.textContent || '').trim().toLowerCase() === 'effects'); t?.click(); return 'OK'; })()" >/dev/null
+$AB eval "(function(){  const t = [...document.querySelectorAll('button')].find((b) => (b.textContent || '').trim().toLowerCase() === 'effects'); t?.click(); return 'OK'; })()" >/dev/null
 sleep 1
-$AB eval "(() => { const a = [...document.querySelectorAll('button')].find((b) => (b.textContent || '').includes('Brightness')); a?.click(); return a ? 'OK' : 'NOBTN'; })()" >/dev/null
+$AB eval "(function(){  const a = [...document.querySelectorAll('button')].find((b) => (b.textContent || '').includes('Brightness')); a?.click(); return a ? 'OK' : 'NOBTN'; })()" >/dev/null
 sleep 0.5
-$AB eval "(() => { const v = [...document.querySelectorAll('button')].find((b) => (b.textContent || '').includes('Vignette')); v?.click(); return v ? 'OK' : 'NOBTN'; })()" >/dev/null
+$AB eval "(function(){  const v = [...document.querySelectorAll('button')].find((b) => (b.textContent || '').includes('Vignette')); v?.click(); return v ? 'OK' : 'NOBTN'; })()" >/dev/null
 sleep 0.5
-$AB eval "(() => { const tr = [...document.querySelectorAll('button')].find((b) => /crossfade|transition/i.test(b.textContent || '') || /crossfade|transition/i.test(b.getAttribute('title') || '')); tr?.click(); return tr ? 'OK' : 'NOTRANSITION'; })()" 2>/dev/null | tail -1 | tr -d '"'
+$AB eval "(function(){  const tr = [...document.querySelectorAll('button')].find((b) => /crossfade|transition/i.test(b.textContent || '') || /crossfade|transition/i.test(b.getAttribute('title') || '')); tr?.click(); return tr ? 'OK' : 'NOTRANSITION'; })()" 2>/dev/null | tail -1 | tr -d '"'
 $AB screenshot "$SHOTS/13-effects.png" >/dev/null
 
 step 14 "Open AI Studio"
-$AB eval "(() => { const t = [...document.querySelectorAll('button')].find((b) => (b.textContent || '').trim().toUpperCase() === 'AI STUDIO'); t?.click(); return t ? 'OK' : 'NOBTN'; })()" >/dev/null
+$AB eval "(function(){  const t = [...document.querySelectorAll('button')].find((b) => (b.textContent || '').trim().toUpperCase() === 'AI STUDIO'); t?.click(); return t ? 'OK' : 'NOBTN'; })()" >/dev/null
 sleep 2
 $AB snapshot -c >/tmp/m20-ai.txt 2>&1
 grep -aqi "MY AI" /tmp/m20-ai.txt || fail 14 "MY AI panel"
@@ -238,22 +238,22 @@ step 15 "Generate a real asset with the configured provider (MY AI plan)"
 # Provider is configured on this server (BEANFX_ZAI_BIN + BEANFX_MYAI_PROVIDER=zai).
 $AB snapshot -c >/tmp/m20-aipanel.txt 2>&1
 grep -aoiE "prompt|generate|plan" /tmp/m20-aipanel.txt | head -3
-PROMPT_SET=$($AB eval "(() => { const inp = document.querySelector('textarea[placeholder*=\"rovider\" i], textarea[aria-label=\"Prompt\"], textarea[placeholder*=\"describe\" i], textarea[placeholder*=\"idea\" i]'); if (!inp) return 'NOINP:' + [...document.querySelectorAll('textarea')].map((t) => t.placeholder).join('|'); const s = Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, 'value').set; s.call(inp, 'Create a 2-shot product teaser with warm color grade and a gentle music bed'); inp.dispatchEvent(new Event('input', { bubbles: true })); return 'OK'; })()" 2>/dev/null | tail -1 | tr -d '"')
+PROMPT_SET=$($AB eval "(function(){  const inp = document.querySelector('textarea[placeholder*=\"rovider\" i], textarea[aria-label=\"Prompt\"], textarea[placeholder*=\"describe\" i], textarea[placeholder*=\"idea\" i]'); if (!inp) return 'NOINP:' + [...document.querySelectorAll('textarea')].map((t) => t.placeholder).join('|'); const s = Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, 'value').set; s.call(inp, 'Create a 2-shot product teaser with warm color grade and a gentle music bed'); inp.dispatchEvent(new Event('input', { bubbles: true })); return 'OK'; })()" 2>/dev/null | tail -1 | tr -d '"')
 echo "prompt set: $PROMPT_SET"
-$AB eval "(() => { const b = [...document.querySelectorAll('button')].find((x) => /^(PLAN|GENERATE|CREATE PLAN)/i.test((x.textContent || '').trim())); b?.click(); return b ? 'OK' : 'NOBTN'; })()" >/dev/null
+$AB eval "(function(){  const b = [...document.querySelectorAll('button')].find((x) => /^(PLAN|GENERATE|CREATE PLAN)/i.test((x.textContent || '').trim())); b?.click(); return b ? 'OK' : 'NOBTN'; })()" >/dev/null
 sleep 20
 $AB snapshot -c >/tmp/m20-aiplan.txt 2>&1
 grep -aqiE "plan|cut|shot" /tmp/m20-aiplan.txt && echo "AI plan surface responded" || echo "AI plan surface: no plan text (recorded honestly)"
 $AB screenshot "$SHOTS/15-ai-plan.png" >/dev/null
 
 step 16 "Approve an AI operation (approval control)"
-$AB eval "(() => { const b = [...document.querySelectorAll('button')].find((x) => /approve|apply plan|accept|use plan/i.test(x.textContent || '')); b?.click(); return b ? 'OK' : 'NOBTN:' + (b ? '' : document.body.innerText.slice(0, 80)); })()" 2>/dev/null | tail -1 | tr -d '"' | tee /tmp/m20-approve.txt | grep -q "OK" || echo "no approval button shown (provider output timing) — recorded"
+$AB eval "(function(){  const b = [...document.querySelectorAll('button')].find((x) => /approve|apply plan|accept|use plan/i.test(x.textContent || '')); b?.click(); return b ? 'OK' : 'NOBTN:' + (b ? '' : document.body.innerText.slice(0, 80)); })()" 2>/dev/null | tail -1 | tr -d '"' | tee /tmp/m20-approve.txt | grep -q "OK" || echo "no approval button shown (provider output timing) — recorded"
 $AB screenshot "$SHOTS/16-ai-approved.png" >/dev/null
 
 step 17 "Save the project (explicit save control)"
-$AB eval "(() => { const t = [...document.querySelectorAll('button')].find((b) => (b.textContent || '').trim().toUpperCase() === 'EDITOR'); t?.click(); return 'OK'; })()" >/dev/null
+$AB eval "(function(){  const t = [...document.querySelectorAll('button')].find((b) => (b.textContent || '').trim().toUpperCase() === 'EDITOR'); t?.click(); return 'OK'; })()" >/dev/null
 sleep 2
-$AB eval "(() => { const s = [...document.querySelectorAll('button')].find((b) => (b.getAttribute('title') || '').toLowerCase().includes('save')); s?.click(); return s ? 'OK' : 'NOBTN'; })()" >/dev/null
+$AB eval "(function(){  const s = [...document.querySelectorAll('button')].find((b) => (b.getAttribute('title') || '').toLowerCase().includes('save')); s?.click(); return s ? 'OK' : 'NOBTN'; })()" >/dev/null
 sleep 2
 $AB screenshot "$SHOTS/17-saved.png" >/dev/null
 
@@ -264,7 +264,7 @@ sleep 5
 # poll until the timeline reports its clips.
 RESTORED=""
 for i in $(seq 1 20); do
-  RESTORED=$($AB eval "(() => document.querySelectorAll('[data-clip-id]').length + ' clips restored')" 2>&1 | tail -1 | tr -d '"' | tr -d '\\')
+  RESTORED=$($AB eval "(function(){ return document.querySelectorAll('[data-clip-id]').length + ' clips restored' })()" 2>&1 | tail -1 | tr -d '"' | tr -d '\\')
   case "$RESTORED" in *[!0-9" "]*" clips restored"*) break ;; esac
   case "$RESTORED" in *" clips restored") break ;; esac
   sleep 1
@@ -275,7 +275,7 @@ N=$(echo "$RESTORED" | grep -oE '^[0-9]+' | head -1)
 $AB screenshot "$SHOTS/18-restored.png" >/dev/null
 
 step 19 "Export the video through the export workspace"
-$AB eval "(() => { const t = [...document.querySelectorAll('button')].find((b) => (b.textContent || '').trim().toUpperCase() === 'EXPORT'); t?.click(); return t ? 'OK' : 'NOBTN'; })()" >/dev/null
+$AB eval "(function(){  const t = [...document.querySelectorAll('button')].find((b) => (b.textContent || '').trim().toUpperCase() === 'EXPORT'); t?.click(); return t ? 'OK' : 'NOBTN'; })()" >/dev/null
 sleep 2
 $AB screenshot "$SHOTS/19-export.png" >/dev/null
 EXPORT_RES=$(curl -s -b /tmp/m20-j-jar.txt -X POST "$BASE/api/editor/projects/$PROJ/render" -H "Content-Type: application/json" -d '{}')
@@ -317,25 +317,27 @@ waitfor "Account settings" || fail 21 "settings"
 $AB screenshot "$SHOTS/21-settings.png" >/dev/null
 
 step 22 "Review privacy controls (AI disclosure + export + deletion surface)"
-TXT=$($AB eval "document.body.innerText" 2>/dev/null | tail -1)
+# JSON.stringify collapses innerText to ONE line (tail -1 on raw multi-line
+# innerText truncated mid-page and lost the sessions label).
+TXT=$($AB eval "JSON.stringify(document.body.innerText)" 2>/dev/null | tail -1 | tr -d '"')
 echo "$TXT" | grep -q "Local editing, preview and export" || fail 22 "AI processing disclosure"
 echo "$TXT" | grep -q "Export my data" || fail 22 "data export control"
 $AB screenshot "$SHOTS/22-privacy.png" >/dev/null
 
 step 23 "Review storage usage"
-echo "$TXT" | grep -q "Storage" || fail 23 "storage section"
+echo "$TXT" | grep -qi "Storage" || fail 23 "storage section"
 echo "$TXT" | grep -aoE "Used: [^ ]+ [A-Z]+" | head -1
 
 step 24 "Manage sessions (list + revoke)"
-echo "$TXT" | grep -q "Active sessions" || fail 24 "sessions list"
-$AB eval "(() => { const b = [...document.querySelectorAll('button')].find((x) => (x.textContent || '').trim() === 'Sign out' && x.closest('li')); b?.click(); return b ? 'OK' : 'NOBTN'; })()" >/dev/null
+echo "$TXT" | grep -qi "Active sessions" || fail 24 "sessions list"
+$AB eval "(function(){  const b = [...document.querySelectorAll('button')].find((x) => (x.textContent || '').trim() === 'Sign out' && x.closest('li')); b?.click(); return b ? 'OK' : 'NOBTN'; })()" >/dev/null
 sleep 2
 echo "session revoke clicked"
 $AB screenshot "$SHOTS/24-sessions.png" >/dev/null
 
 step 25 "Change password via real control"
 $AB open "$BASE/settings" >/dev/null; sleep 3
-$AB eval "(() => {
+$AB eval "(function(){ 
   const set = (el, v) => { const s = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set; s.call(el, v); el.dispatchEvent(new Event('input', { bubbles: true })); };
   const cur = [...document.querySelectorAll('input')].find((i) => i.getAttribute('aria-label') === 'Current password');
   const nw = [...document.querySelectorAll('input')].find((i) => i.getAttribute('aria-label') === 'New password');
@@ -343,7 +345,7 @@ $AB eval "(() => {
   set(cur, '$PW'); set(nw, '$NEWPW');
   return 'OK';
 })()" 2>/dev/null | tail -1 | tr -d '"' | grep -q OK || fail 25 "password inputs"
-$AB eval "(() => { const b = [...document.querySelectorAll('button')].find((x) => x.textContent.trim() === 'Update password'); b?.click(); return b ? 'OK' : 'NOBTN'; })()" >/dev/null
+$AB eval "(function(){  const b = [...document.querySelectorAll('button')].find((x) => x.textContent.trim() === 'Update password'); b?.click(); return b ? 'OK' : 'NOBTN'; })()" >/dev/null
 sleep 2
 $AB eval "document.body.innerText" 2>/dev/null | grep -q "Password changed" && echo "password changed ✓" || fail 25 "password change"
 # This browser session was revoked by the change; re-inject a fresh one.
@@ -353,7 +355,7 @@ $AB cookies set beanfx_session "$TOKEN2" --domain localhost >/dev/null
 
 step 26 "Export account data via real control"
 $AB open "$BASE/settings" >/dev/null; sleep 3
-$AB eval "(() => { const b = [...document.querySelectorAll('button')].find((x) => (x.textContent || '').includes('Export my data')); b?.click(); return b ? 'OK' : 'NOBTN'; })()" >/dev/null
+$AB eval "(function(){  const b = [...document.querySelectorAll('button')].find((x) => (x.textContent || '').includes('Export my data')); b?.click(); return b ? 'OK' : 'NOBTN'; })()" >/dev/null
 sleep 2
 curl -s -b /tmp/m20-j-jar2.txt "$BASE/api/account/export-data" | python3 -c "
 import sys, json
@@ -362,7 +364,7 @@ print('export keys:', sorted(d.keys())[:8])"
 $AB screenshot "$SHOTS/26-export-data.png" >/dev/null
 
 step 27 "Request account deletion (password + confirm + delete)"
-$AB eval "(() => {
+$AB eval "(function(){ 
   const set = (el, v) => { const s = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set; s.call(el, v); el.dispatchEvent(new Event('input', { bubbles: true })); };
   const pw = [...document.querySelectorAll('input')].find((i) => i.getAttribute('aria-label') === 'Confirm password');
   const cb = document.querySelector('input[type=checkbox]');
@@ -371,7 +373,7 @@ $AB eval "(() => {
   return 'OK';
 })()" 2>/dev/null | tail -1 | tr -d '"' | grep -q OK || fail 27 "delete inputs"
 $AB screenshot "$SHOTS/27-delete-confirm.png" >/dev/null
-$AB eval "(() => { const b = [...document.querySelectorAll('button')].find((x) => (x.textContent || '').trim() === 'Delete my account'); b?.click(); return b ? 'OK' : 'NOBTN'; })()" >/dev/null
+$AB eval "(function(){  const b = [...document.querySelectorAll('button')].find((x) => (x.textContent || '').trim() === 'Delete my account'); b?.click(); return b ? 'OK' : 'NOBTN'; })()" >/dev/null
 sleep 4
 
 step 28 "Verify immediate account lockout (settings + editor denied)"
@@ -401,16 +403,16 @@ PYEOF
 
 step 30 "Verify deleted account access is denied (real login attempt)"
 $AB open "$BASE/" >/dev/null; sleep 3
-$AB eval "(() => { const b = [...document.querySelectorAll('button,a')].find((x) => /^(LOG ?IN|SIGN IN)$/i.test((x.textContent || '').trim())); b?.click(); return b ? 'OK' : 'NOBTN'; })()" >/dev/null
+$AB eval "(function(){  const b = [...document.querySelectorAll('button,a')].find((x) => /^(LOG ?IN|SIGN IN)$/i.test((x.textContent || '').trim())); b?.click(); return b ? 'OK' : 'NOBTN'; })()" >/dev/null
 sleep 2
-$AB eval "(() => {
+$AB eval "(function(){ 
   const set = (el, v) => { const s = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set; s.call(el, v); el.dispatchEvent(new Event('input', { bubbles: true })); };
   const email = [...document.querySelectorAll('input')].find((i) => i.type === 'email' || (i.placeholder || '').includes('@'));
   const pw = [...document.querySelectorAll('input')].find((i) => i.type === 'password');
   set(email, '$EMAIL'); set(pw, '$NEWPW');
   return 'OK';
 })()" >/dev/null
-$AB eval "(() => { const f = document.querySelector('form'); const b = f && (f.querySelector('button[type=submit]') || f.querySelector('button')); b?.click(); return b ? 'OK' : 'NOBTN'; })()" >/dev/null
+$AB eval "(function(){  const f = document.querySelector('form'); const b = f && (f.querySelector('button[type=submit]') || f.querySelector('button')); b?.click(); return b ? 'OK' : 'NOBTN'; })()" >/dev/null
 sleep 3
 waitfor "Invalid email or password" 8 || fail 30 "deleted account not denied"
 echo "deleted login denied with generic error ✓"

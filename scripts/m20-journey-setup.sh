@@ -23,3 +23,21 @@ PORT=3118 RATE_LIMIT_SCALE=50 \
 nohup bash scripts/dev-server.sh > /tmp/m20-journey-server.log 2>&1 &
 sleep 7
 curl -sf -o /dev/null http://localhost:3118/ && echo "3118 READY" || { tail -5 /tmp/m20-journey-server.log; exit 1; }
+
+# Seed a retention-probe user + media row so the journey's step-29 cleanup
+# check verifies REAL cross-user preservation (an isolated DB has no other
+# users otherwise, making the assertion vacuous).
+DATABASE_URL="file:/tmp/m20-journey.db" bun -e "
+const {PrismaClient} = await import('@prisma/client');
+const db = new PrismaClient();
+const u = await db.user.upsert({
+  where: {email: 'retention-probe@test.local'},
+  update: {},
+  create: {email: 'retention-probe@test.local', name: 'Retention Probe',
+           passwordHash: 'x', emailVerified: true},
+});
+const existing = await db.mediaAsset.findFirst({where: {userId: u.id, originalName: 'probe-asset.mp4'}});
+if (!existing) await db.mediaAsset.create({data: {userId: u.id, originalName: 'probe-asset.mp4', storagePath: '/tmp/probe-asset.mp4', kind: 'VIDEO', mimeType: 'video/mp4', sizeBytes: 1024}});
+console.log('PROBE_USER', u.id);
+await db.\$disconnect();
+" 2>&1 | tail -1

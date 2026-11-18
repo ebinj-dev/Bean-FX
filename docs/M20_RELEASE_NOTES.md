@@ -21,3 +21,11 @@
 ## Verification gate
 
 M20 is complete only when every item in `M20_RESULTS.md` §acceptance carries its honest status. Do not deploy without explicit authorization (§15).
+
+
+## Closeout validation (2026-11-18)
+
+- Browser customer journey: **30/30 steps, exit 0** (isolated :3118 env; export ffprobe-verified; deletion lockout + cross-user media preservation verified with a seeded probe user).
+- Concurrency smoke: 8×3 rounds — public p50 9.9–16.2ms/p95 ≤27ms; register p95 225ms; invalid-login 401 semantics preserved.
+- Final regression: tsc 0 · eslint 0 · prisma valid · mail 4/4 · security 21/21 · OSV 77 pkgs 0 vulns · PG drill restore 0 errors · A/V sync mean -0.052s (5/5 markers) · T1 39.9s on the final build · 16 unit suites · webpack production build exit 0 (servers stopped during build, restarted with worker probe PASS).
+- Known limitation kept honest: sandbox (2 vCPU/3.9GiB) capacity numbers do NOT extrapolate to production sizing (see M20_CAPACITY_BENCHMARKS.md).
