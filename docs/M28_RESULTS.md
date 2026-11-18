@@ -42,4 +42,5 @@
 Ingestion security unchanged (filename traversal checks, sniff-vs-extension, size limits, safe tmp paths, local-only storage). New endpoint follows the same auth/ownership pattern; no user input reaches ffmpeg argument construction (proxy plans are built from persisted, probe-verified fields; render args from project state).
 
 ## 6. GitHub
-Final chain: 46cadb6 (M27 impl) → … → M28 tip — see the final report for SHAs; main untouched.
+- M28 commit: `3e4a14f` — https://github.com/ebinj-dev/Bean-FX/commit/3e4a14faf48f03d3724d1e55bb125bd475f7cd08
+- Verified in a fresh authenticated clone: remote tip `3e4a14f`, M27 `01286f5` IS an ancestor, `m28-evidence/` (6 files) + all three docs present in the remote tree; main `fb051dd` unchanged by this work (before and after).
