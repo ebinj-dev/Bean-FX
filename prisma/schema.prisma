@@ -40,6 +40,8 @@ model User {
   aiUsage       AIUsage[]      @relation("AIUsage")
   subscription  Subscription?
   billingEvents BillingEvent[]
+  creativePresets CreativePreset[]
+  workflowRuns    WorkflowRun[]  @relation("WorkflowRuns")
   studioPlans   StudioPlan[]   @relation("StudioPlans")
   studioScenes  StudioScene[]  @relation("StudioScenes")
   studioBatches StudioBatch[]  @relation("StudioBatches")
@@ -97,6 +99,7 @@ model Project {
   thumbnailDrafts ThumbnailDraft[] @relation("ThumbnailDrafts")
   publishMetadataRows PublishMetadata[] @relation("PublishMetadataRows")
   exportVariants ExportVariant[] @relation("ExportVariants")
+  workflowRuns   WorkflowRun[]  @relation("WorkflowRuns")
   publishPackages PublishPackage[] @relation("PublishPackages")
   creativeReviews CreativeReview[] @relation("CreativeReviews")
   creativeVariants CreativeVariant[] @relation("CreativeVariants")
@@ -1108,4 +1111,45 @@ model BillingEvent {
   subscriptionId String?
   subscription   Subscription? @relation(fields: [subscriptionId], references: [id], onDelete: SetNull)
   @@index([userId, createdAt])
+}
+
+/// M26 P4 — reusable creative presets (per user, per kind). Payloads hold
+/// engine-shaped data (effect stacks, caption styles, export profile sets,
+/// GANGZII processing params) — version-tagged for forward compatibility.
+model CreativePreset {
+  id          String   @id @default(cuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  /// VIDEO_EFFECT | CAPTION | AUDIO | EXPORT
+  kind        String
+  name        String
+  /// Kind-shaped payload (JSON). v1 contracts documented in the API routes.
+  payloadJson String
+  version     Int      @default(1)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  @@unique([userId, kind, name])
+  @@index([userId, kind])
+}
+
+/// M26 P7 — workflow automation runs. Definitions come ONLY from the
+/// server-side whitelisted template library (no arbitrary code); each step
+/// records its durable runtime state (dispatched job id, approval state).
+model WorkflowRun {
+  id         String   @id @default(cuid())
+  userId     String
+  user       User     @relation("WorkflowRuns", fields: [userId], references: [id], onDelete: Cascade)
+  projectId  String?
+  project    Project? @relation("WorkflowRuns", fields: [projectId], references: [id], onDelete: SetNull)
+  templateId String
+  name       String
+  /// PENDING | RUNNING | AWAITING_APPROVAL | COMPLETED | FAILED | CANCELLED
+  status     String   @default("PENDING")
+  /// Ordered steps: [{ id, kind, params, status, jobId?, stepError?, approvalRequired?, approved? }]
+  stepsJson  String
+  error      String?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+  @@index([userId, status])
+  @@index([projectId])
 }

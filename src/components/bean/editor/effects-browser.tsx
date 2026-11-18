@@ -25,6 +25,21 @@ const CLIP_EFFECTS: { type: "opacity" | "volume" | "flipH" | "flipV" | "grayscal
   { type: "blur", label: "Blur", params: { radius: 6 }, note: "Gaussian blur (radius parameter)" },
 ];
 
+// M26 P3 — the REAL filter registry (lib/editor/filters.ts) surfaced as one-
+// click effects. Each entry's FFmpeg/CSS mapping lives in the registry — what
+// renders in preview is exactly what exports.
+const COLOR_EFFECTS: { type: string; label: string; params: Record<string, number | string | boolean>; note: string }[] = [
+  { type: "brightness", label: "Brightness", params: { amount: 0.1 }, note: "eq brightness −1…1" },
+  { type: "contrast", label: "Contrast", params: { amount: 1.3 }, note: "eq contrast 0.25…4" },
+  { type: "saturation", label: "Saturation", params: { amount: 1.2 }, note: "eq saturation 0…3" },
+  { type: "exposure", label: "Exposure", params: { stops: 0.5 }, note: "gamma exposure ±3 stops" },
+  { type: "temperature", label: "Temperature", params: { amount: 0.2 }, note: "colorbalance rs/bs ±1" },
+  { type: "tint", label: "Tint", params: { amount: -0.15 }, note: "colorbalance ±1" },
+  { type: "vignette", label: "Vignette", params: { amount: 0.5 }, note: "vignette filter 0…1" },
+  { type: "sharpen", label: "Sharpen", params: { amount: 1 }, note: "unsharp 0…2 (export-accurate)" },
+  { type: "crop", label: "Crop 10%", params: { top: 0.1, bottom: 0.1, left: 0.1, right: 0.1 }, note: "crop + canonical refit 0–45%" },
+];
+
 const TRANSITIONS: { kind: "CUT" | "CROSS_DISSOLVE" | "FADE_TO_BLACK" | "FADE_FROM_BLACK" | "WIPE_LEFT" | "WIPE_RIGHT" | "SLIDE_LEFT" | "SLIDE_RIGHT"; label: string }[] = [
   { kind: "CROSS_DISSOLVE", label: "Cross Dissolve" },
   { kind: "FADE_TO_BLACK", label: "Fade to Black" },
@@ -48,7 +63,7 @@ export function EffectsBrowser({
   const selectedClip = sequence?.clips.find((c) => c.id === session.selectedClipId) ?? null;
   const q = query.trim().toLowerCase();
 
-  const applyEffect = (type: (typeof CLIP_EFFECTS)[number]["type"], params?: Record<string, number | string | boolean>) => {
+  const applyEffect = (type: string, params?: Record<string, number | string | boolean>) => {
     if (!selectedClip) {
       notice("Select a clip first — effects apply to the selection.");
       return;
@@ -96,6 +111,20 @@ export function EffectsBrowser({
         <div className="bean-label mb-1 text-[9px] text-[#8f8f8a]">CLIP EFFECTS {selectedClip ? `→ ${selectedClip.label || selectedClip.id}` : "(select a clip)"}</div>
         <ul className="mb-3 space-y-1">
           {CLIP_EFFECTS.filter((fx) => !q || fx.label.toLowerCase().includes(q) || fx.type.includes(q)).map((fx) => (
+            <li key={fx.type} className="rounded border border-[#1c1c1a] bg-[#111110] px-2 py-1.5">
+              <div className="flex items-center gap-1.5">
+                <span className="min-w-0 flex-1 truncate text-[#e6e6e0]">{fx.label}</span>
+                <button type="button" onClick={() => applyEffect(fx.type, fx.params)} title={`Apply ${fx.label} to the selected clip`} className="rounded border border-[#2a2a2a] p-0.5 text-[#a8a8a0] hover:border-[#d4a017] hover:text-[#d4a017]">
+                  <Plus className="h-3 w-3" />
+                </button>
+              </div>
+              <div className="text-[9px] text-[#6a6a64]">{fx.note}</div>
+            </li>
+          ))}
+        </ul>
+        <div className="bean-label mb-1 text-[9px] text-[#8f8f8a]">COLOR &amp; LOOKS (M26 — real FFmpeg + preview mappings)</div>
+        <ul className="mb-3 space-y-1">
+          {COLOR_EFFECTS.filter((fx) => !q || fx.label.toLowerCase().includes(q) || fx.type.includes(q)).map((fx) => (
             <li key={fx.type} className="rounded border border-[#1c1c1a] bg-[#111110] px-2 py-1.5">
               <div className="flex items-center gap-1.5">
                 <span className="min-w-0 flex-1 truncate text-[#e6e6e0]">{fx.label}</span>

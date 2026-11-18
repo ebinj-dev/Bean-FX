@@ -129,6 +129,11 @@ export const ClipSchema = z.object({
   graphicStyle: NikkiGraphicStyleSchema.nullable().default(null),
   label: z.string().max(120).nullable().default(null),
   missingMedia: z.boolean().default(false),
+  /** M26 P2 — clip-level stereo pan (-1 left … 1 right). Additive default. */
+  pan: z.number().min(-1).max(1).default(0),
+  /** M26 P1 — editing group id (any set of clips sharing an id moves as one
+   *  via the GroupClips/UngroupClips commands). Null = ungrouped. */
+  groupId: z.string().max(64).nullable().default(null),
   effects: z.array(EffectSchema).max(32).default([]),
   keyframes: z.array(KeyframeSchema).max(512).default([]),
 });
@@ -142,6 +147,9 @@ export const TrackSchema = z.object({
   muted: z.boolean().default(false),
   solo: z.boolean().default(false),
   locked: z.boolean().default(false),
+  /** M26 P2 — per-track fader (multiplicative with clip volume). Additive:
+   *  legacy sequences parse with the default. */
+  volume: z.number().min(0).max(4).default(1),
 });
 export type Track = z.infer<typeof TrackSchema>;
 
@@ -177,6 +185,15 @@ export const TransitionSchema = z.object({
 });
 export type Transition = z.infer<typeof TransitionSchema>;
 
+/** M26 P1 — timeline markers (sequence-level annotations on the sequence
+ *  clock). Additive: legacy sequences parse with an empty list. */
+export const MarkerSchema = z.object({
+  id: z.string().min(1).max(64),
+  frame: z.number().int().min(0),
+  label: z.string().max(120).default(""),
+});
+export type Marker = z.infer<typeof MarkerSchema>;
+
 export const SequenceSchema = z.object({
   id: z.string().min(1).max(64),
   name: z.string().min(1).max(120),
@@ -187,6 +204,7 @@ export const SequenceSchema = z.object({
   tracks: z.array(TrackSchema).max(64),
   clips: z.array(ClipSchema).max(20000),
   transitions: z.array(TransitionSchema).max(4000),
+  markers: z.array(MarkerSchema).max(200).default([]),
 });
 export type Sequence = z.infer<typeof SequenceSchema>;
 

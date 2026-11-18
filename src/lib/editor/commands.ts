@@ -69,6 +69,8 @@ const ClipCore = z.object({
   graphicStyle: NikkiGraphicStyleSchema.nullable().default(null),
   label: z.string().max(120).nullable().default(null),
   missingMedia: z.boolean().default(false),
+  pan: z.number().min(-1).max(1).default(0),
+  groupId: z.string().max(64).nullable().default(null),
   effects: z.array(EffectSchema).max(32).default([]),
   keyframes: z.array(KeyframeSchema).max(512).default([]),
 });
@@ -84,6 +86,7 @@ export const CommandSchema = z.discriminatedUnion("type", [
     solo: z.boolean().optional(),
     locked: z.boolean().optional(),
     name: z.string().min(1).max(80).optional(),
+    volume: z.number().min(0).max(4).optional(),
   }),
   z.object({ type: z.literal("AddClip"), clip: ClipCore }),
   z.object({ type: z.literal("RemoveClip"), clipId: idSchema }),
@@ -149,6 +152,7 @@ export const CommandSchema = z.discriminatedUnion("type", [
     transform: ClipCore.shape.transform.optional(),
     muted: z.boolean().optional(),
     label: z.string().max(120).nullable().optional(),
+    pan: z.number().min(-1).max(1).optional(),
     fadeInFrames: z.number().int().min(0).optional(),
     fadeOutFrames: z.number().int().min(0).optional(),
     captionText: z.string().max(2000).nullable().optional(),
@@ -156,6 +160,25 @@ export const CommandSchema = z.discriminatedUnion("type", [
     graphicTemplateId: z.string().max(64).nullable().optional(),
     graphicStyle: NikkiGraphicStyleSchema.nullable().optional(),
   }),
+  // M26 P1 — markers, groups, gap removal, alignment.
+  z.object({ type: z.literal("AddMarker"), marker: z.object({ id: idSchema, frame: z.number().int().min(0), label: z.string().max(120).default("") }) }),
+  z.object({ type: z.literal("RemoveMarker"), markerId: idSchema }),
+  z.object({
+    type: z.literal("UpdateMarker"),
+    markerId: idSchema,
+    newFrame: z.number().int().min(0).optional(),
+    newLabel: z.string().max(120).optional(),
+  }),
+  z.object({ type: z.literal("GroupClips"), clipIds: z.array(idSchema).min(2).max(200), groupId: idSchema }),
+  z.object({ type: z.literal("UngroupClips"), clipIds: z.array(idSchema).min(1).max(200) }),
+  /** Close inter-clip gaps on the given tracks (default: every track).
+   *  Refuses tracks that carry transitions — moving clips would invalidate
+   *  their frame windows (never silently rewritten). */
+  z.object({ type: z.literal("CloseGaps"), trackIds: z.array(idSchema).max(64).optional() }),
+  /** Align the start of every listed clip to one frame. */
+  z.object({ type: z.literal("AlignClipsToPlayhead"), clipIds: z.array(idSchema).min(1).max(200), frame: z.number().int().min(0) }),
+  /** M26 P1 — low-level group tag (GroupClips/UngroupClips compile to this). */
+  z.object({ type: z.literal("SetClipGroup"), clipId: idSchema, groupId: z.string().max(64).nullable() }),
 ]);
 export type Command = z.infer<typeof CommandSchema>;
 
@@ -580,6 +603,10 @@ function applyUpdateTrack(seq: Sequence, cmd: Extract<Command, { type: "UpdateTr
     restore.locked = track.locked;
     track.locked = cmd.locked;
   }
+  if (cmd.volume !== undefined) {
+    restore.volume = track.volume;
+    track.volume = cmd.volume;
+  }
   if (cmd.name !== undefined) {
     restore.name = track.name;
     track.name = cmd.name;
@@ -601,6 +628,10 @@ function applyUpdateClipProperties(seq: Sequence, cmd: Extract<Command, { type: 
   if (cmd.label !== undefined) {
     restore.label = clip.label;
     clip.label = cmd.label;
+  }
+  if (cmd.pan !== undefined) {
+    restore.pan = clip.pan;
+    clip.pan = cmd.pan;
   }
   if (cmd.fadeInFrames !== undefined) {
     restore.fadeInFrames = clip.fadeInFrames;
@@ -645,6 +676,110 @@ function applyUpdateClipProperties(seq: Sequence, cmd: Extract<Command, { type: 
 }
 
 // -------------------------------------------------------------------------------- dispatcher
+
+
+// ── M26 P1 — markers, groups, gap removal, alignment ────────────────────────
+
+function applyAddMarker(seq: Sequence, cmd: Extract<Command, { type: "AddMarker" }>, inverse: Command[]): void {
+  if (seq.markers.some((m) => m.id === cmd.marker.id)) {
+    throw new EditorError("INVALID_COMMAND", `marker ${cmd.marker.id} already exists`);
+  }
+  const marker = { id: cmd.marker.id, frame: cmd.marker.frame, label: cmd.marker.label ?? "" };
+  seq.markers.push(marker);
+  seq.markers.sort((a, b) => a.frame - b.frame);
+  inverse.unshift({ type: "RemoveMarker", markerId: marker.id });
+}
+
+function applyRemoveMarker(seq: Sequence, cmd: Extract<Command, { type: "RemoveMarker" }>, inverse: Command[]): void {
+  const marker = seq.markers.find((m) => m.id === cmd.markerId);
+  if (!marker) throw new EditorError("INVALID_COMMAND", `marker ${cmd.markerId} not found`);
+  seq.markers = seq.markers.filter((m) => m.id !== cmd.markerId);
+  inverse.unshift({ type: "AddMarker", marker: clone(marker) });
+}
+
+function applyUpdateMarker(seq: Sequence, cmd: Extract<Command, { type: "UpdateMarker" }>, inverse: Command[]): void {
+  const marker = seq.markers.find((m) => m.id === cmd.markerId);
+  if (!marker) throw new EditorError("INVALID_COMMAND", `marker ${cmd.markerId} not found`);
+  const restore: Extract<Command, { type: "UpdateMarker" }> = { type: "UpdateMarker", markerId: marker.id };
+  if (cmd.newFrame !== undefined) {
+    restore.newFrame = marker.frame;
+    marker.frame = cmd.newFrame;
+  }
+  if (cmd.newLabel !== undefined) {
+    restore.newLabel = marker.label;
+    marker.label = cmd.newLabel;
+  }
+  seq.markers.sort((a, b) => a.frame - b.frame);
+  inverse.unshift(restore);
+}
+
+/** Groups share a groupId; grouping NEVER merges clips — it only tags them so
+ *  multi-move/multi-delete UI acts on the set. Reversible per clip. */
+function applyGroupClips(seq: Sequence, cmd: Extract<Command, { type: "GroupClips" }>, inverse: Command[]): void {
+  const previous: Array<{ clipId: string; groupId: string | null }> = [];
+  for (const clipId of cmd.clipIds) {
+    const clip = findClip(seq, clipId);
+    previous.push({ clipId: clip.id, groupId: clip.groupId ?? null });
+    clip.groupId = cmd.groupId;
+  }
+  for (const prev of previous) {
+    inverse.unshift({ type: "SetClipGroup", clipId: prev.clipId, groupId: prev.groupId });
+  }
+}
+
+function applyUngroupClips(seq: Sequence, cmd: Extract<Command, { type: "UngroupClips" }>, inverse: Command[]): void {
+  const previous: Array<{ clipId: string; groupId: string | null }> = [];
+  for (const clipId of cmd.clipIds) {
+    const clip = findClip(seq, clipId);
+    previous.push({ clipId: clip.id, groupId: clip.groupId ?? null });
+    clip.groupId = null;
+  }
+  for (const prev of previous) {
+    inverse.unshift({ type: "SetClipGroup", clipId: prev.clipId, groupId: prev.groupId });
+  }
+}
+
+function applySetClipGroup(seq: Sequence, cmd: Extract<Command, { type: "SetClipGroup" }>, inverse: Command[]): void {
+  const clip = findClip(seq, cmd.clipId);
+  inverse.unshift({ type: "SetClipGroup", clipId: clip.id, groupId: clip.groupId ?? null });
+  clip.groupId = cmd.groupId;
+}
+
+/** CloseGaps: per targeted track, left-shift clips after the first so no two
+ *  consecutive clips leave a gap. The first clip's position is preserved.
+ *  Tracks with transitions are refused (moving clips would invalidate the
+ *  transition windows — never silently rewritten). Inverse = MoveClip batch. */
+function applyCloseGaps(seq: Sequence, cmd: Extract<Command, { type: "CloseGaps" }>, inverse: Command[]): void {
+  const targetIds = cmd.trackIds && cmd.trackIds.length > 0 ? cmd.trackIds : seq.tracks.map((t) => t.id);
+  for (const trackId of targetIds) {
+    const track = findTrack(seq, trackId);
+    if (track.locked) throw new EditorError("INVALID_TIMELINE", `track ${track.id} is locked — edit refused`);
+    if (seq.transitions.some((t) => t.trackId === track.id)) {
+      throw new EditorError("TRANSITION_CONFLICT", `track ${track.id} has transitions — remove them before closing gaps`);
+    }
+    const clips = seq.clips.filter((c) => c.trackId === track.id).sort((a, b) => a.timelineStartFrame - b.timelineStartFrame);
+    let prevEnd: number | null = null;
+    for (const clip of clips) {
+      if (prevEnd !== null && clip.timelineStartFrame > prevEnd) {
+        inverse.unshift({ type: "MoveClip", clipId: clip.id, newTimelineStartFrame: clip.timelineStartFrame });
+        clip.timelineStartFrame = prevEnd;
+      }
+      prevEnd = clip.timelineStartFrame + clip.timelineDurationFrames;
+    }
+  }
+}
+
+function applyAlignClipsToPlayhead(seq: Sequence, cmd: Extract<Command, { type: "AlignClipsToPlayhead" }>, inverse: Command[]): void {
+  for (const clipId of cmd.clipIds) {
+    const clip = findClip(seq, clipId);
+    const track = findTrack(seq, clip.trackId);
+    if (track.locked) throw new EditorError("INVALID_TIMELINE", `track ${track.id} is locked — edit refused`);
+    if (clip.timelineStartFrame !== cmd.frame) {
+      inverse.unshift({ type: "MoveClip", clipId: clip.id, newTimelineStartFrame: clip.timelineStartFrame });
+      clip.timelineStartFrame = cmd.frame;
+    }
+  }
+}
 
 export function applyCommand(inputSeq: Sequence, input: unknown): ApplyResult {
   const cmd = parseCommand(input);
@@ -717,6 +852,30 @@ export function applyCommand(inputSeq: Sequence, input: unknown): ApplyResult {
       break;
     case "UpdateClipProperties":
       applyUpdateClipProperties(seq, cmd, inverse);
+      break;
+    case "AddMarker":
+      applyAddMarker(seq, cmd, inverse);
+      break;
+    case "RemoveMarker":
+      applyRemoveMarker(seq, cmd, inverse);
+      break;
+    case "UpdateMarker":
+      applyUpdateMarker(seq, cmd, inverse);
+      break;
+    case "GroupClips":
+      applyGroupClips(seq, cmd, inverse);
+      break;
+    case "UngroupClips":
+      applyUngroupClips(seq, cmd, inverse);
+      break;
+    case "CloseGaps":
+      applyCloseGaps(seq, cmd, inverse);
+      break;
+    case "AlignClipsToPlayhead":
+      applyAlignClipsToPlayhead(seq, cmd, inverse);
+      break;
+    case "SetClipGroup":
+      applySetClipGroup(seq, cmd, inverse);
       break;
   }
 
