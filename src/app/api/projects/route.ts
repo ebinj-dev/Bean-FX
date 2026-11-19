@@ -6,21 +6,53 @@ import { getCurrentUser } from "@/lib/auth";
 export async function GET() {
   const user = await getCurrentUser();
   if (!user) return NextResponse.json({ error: "Authentication required." }, { status: 401 });
-  const projects = await db.project.findMany({
+  const owned = await db.project.findMany({
     where: { userId: user.id },
     orderBy: { updatedAt: "desc" },
     take: 50,
     include: { _count: { select: { mediaAssets: true } } },
   });
+  // M30: projects shared with the caller (workspace membership or explicit
+  // per-project grants) appear in the same selector with their role.
+  const memberWorkspaces = await db.workspaceMember.findMany({ where: { userId: user.id }, select: { workspaceId: true } });
+  const wsIds = memberWorkspaces.map((m) => m.workspaceId);
+  const sharedRows = await db.project.findMany({
+    where: {
+      userId: { not: user.id },
+      OR: [
+        { workspaceId: { in: wsIds } },
+        { projectShares: { some: { userId: user.id, revokedAt: null } } },
+      ],
+    },
+    orderBy: { updatedAt: "desc" },
+    take: 50,
+    include: { _count: { select: { mediaAssets: true } } },
+  });
+  const roleOf = await Promise.all(sharedRows.map(async (p) => (await import("@/lib/collab")).getProjectAccess(user.id, p)));
+  const shared = sharedRows
+    .map((p, i) => ({ p, role: roleOf[i].role }))
+    .filter((x) => x.role !== "NONE");
   return NextResponse.json({
-    projects: projects.map((p) => ({
-      id: p.id,
-      name: p.name,
-      description: p.description,
-      mediaCount: p._count.mediaAssets,
-      createdAt: p.createdAt.toISOString(),
-      updatedAt: p.updatedAt.toISOString(),
-    })),
+    projects: [
+      ...owned.map((p) => ({
+        id: p.id,
+        name: p.name,
+        description: p.description,
+        mediaCount: p._count.mediaAssets,
+        createdAt: p.createdAt.toISOString(),
+        updatedAt: p.updatedAt.toISOString(),
+        accessRole: "OWNER",
+      })),
+      ...shared.map(({ p, role }) => ({
+        id: p.id,
+        name: p.name,
+        description: p.description,
+        mediaCount: p._count.mediaAssets,
+        createdAt: p.createdAt.toISOString(),
+        updatedAt: p.updatedAt.toISOString(),
+        accessRole: role,
+      })),
+    ],
   });
 }
 

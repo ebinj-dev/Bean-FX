@@ -12,6 +12,8 @@ import { WatermarkTool } from "@/components/bean/tools/watermark";
 import { AudioTool } from "@/components/bean/tools/audio-tool";
 import { BrollTool } from "@/components/bean/tools/broll";
 import { EditorTool } from "@/components/bean/tools/editor";
+import { InviteView } from "@/components/bean/invite-view";
+import { ReviewLinkView } from "@/components/bean/review-link-view";
 import type { SessionUser } from "@/lib/types";
 
 function currentHashRoute(): string {
@@ -110,6 +112,15 @@ export function AppShell() {
     return <AuthView initialMode={route === "/register" ? "register" : "login"} onAuthed={onAuthed} />;
   }
 
+  // M30: collaboration entry points (token capability pages).
+  if (route.startsWith("/invite/")) {
+    const token = route.slice("/invite/".length);
+    return <InviteView token={token} />;
+  }
+  if (route.startsWith("/review/")) {
+    const token = route.slice("/review/".length);
+    return <ReviewLinkView token={token} />;
+  }
   if (route === "/studio") {
     return <StudioDashboard user={user!} onLogout={onLogout} />;
   }

@@ -238,7 +238,14 @@ export async function buildManifest(
   mode: ArchiveMode
 ): Promise<{ manifest: PackageManifest; entries: StreamEntry[]; totalBytes: number; missing: string[] }> {
   const project = await db.project.findUnique({ where: { id: projectId } });
-  if (!project || project.userId !== userId) throw new PermanentJobError("Project not found for this user.");
+  if (!project) throw new PermanentJobError("Project not found for this user.");
+  if (project.userId !== userId) {
+    // M30: collaborators may package shared projects (route checks EDITOR;
+    // the durable job re-validates with the same matrix).
+    const { getProjectAccess, canEdit } = await import("@/lib/collab");
+    const access = await getProjectAccess(userId, project);
+    if (!canEdit(access)) throw new PermanentJobError("Project not found for this user.");
+  }
   const latest = await db.timelineVersion.findFirst({ where: { projectId }, orderBy: { versionNumber: "desc" } });
   if (!latest) throw new PermanentJobError("The project has no sequence to package yet.");
   const seq = SequenceSchema.parse(JSON.parse(latest.sequenceJson));

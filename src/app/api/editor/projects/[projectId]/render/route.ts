@@ -24,7 +24,11 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ projectId:
   if (!user) return unauthorized();
   const { projectId } = await ctx.params;
   const project = await db.project.findUnique({ where: { id: projectId } });
-  if (!project || project.userId !== user.id) return badRequest("Project not found or not owned by the caller.");
+  if (!project) return badRequest("Project not found or not owned by the caller.");
+  // M30: workspace/project EDITORs may render shared projects.
+  { const { getProjectAccess, canEdit } = await import("@/lib/collab");
+    const access = await getProjectAccess(user.id, project);
+    if (!canEdit(access)) return badRequest("Project not found or not owned by the caller."); }
   const parsed = RenderSchema.safeParse(await req.json().catch(() => ({})));
   if (!parsed.success) return badRequest(`Invalid request: ${parsed.error.issues.map((i) => i.message).join("; ")}`);
   const version = await db.timelineVersion.findFirst({ where: { projectId }, orderBy: { versionNumber: "desc" } });

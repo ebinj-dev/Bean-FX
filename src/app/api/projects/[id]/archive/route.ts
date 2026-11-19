@@ -14,7 +14,10 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
   const body = (await req.json().catch(() => ({}))) as { mode?: string };
 
   const project = await db.project.findUnique({ where: { id } });
-  if (!project || project.userId !== user.id) return NextResponse.json({ error: "Project not found." }, { status: 404 });
+  if (!project) return NextResponse.json({ error: "Project not found." }, { status: 404 });
+  { const { getProjectAccess, canEdit } = await import("@/lib/collab");
+    const access = await getProjectAccess(user.id, project);
+    if (!canEdit(access)) return NextResponse.json({ error: "Project not found." }, { status: 404 }); }
 
   const mode = ["FULL", "NO_PROXIES", "METADATA"].includes(body.mode ?? "") ? body.mode! : "FULL";
   const active = await db.job.findFirst({

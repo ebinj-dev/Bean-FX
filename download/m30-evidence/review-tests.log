@@ -1,0 +1,23 @@
+bun test v1.3.14 (0d9b296a)
+
+scripts/test-m30-reviews.test.ts:
+(pass) C. immutable revisions & the real render pipeline > review #1: PROCESSING → READY_FOR_REVIEW with a validated preview [6163.59ms]
+(pass) C. immutable revisions & the real render pipeline > immutability: edits AFTER submission never touch the pinned revision [23.21ms]
+(pass) C. immutable revisions & the real render pipeline > review #2 supersedes review #1; decisions close [21.01ms]
+(pass) D. frame-accurate comments > comment at frame 0 and at a clip boundary; non-owner reply; resolve; reopen [49.96ms]
+(pass) D. frame-accurate comments > negative frame / malformed fps are rejected; two comments may share a frame [31.87ms]
+(pass) D. frame-accurate comments > authorization: stranger cannot comment; author-only edit; guest cannot resolve [20.33ms]
+(pass) D. frame-accurate comments > comments stay attached to their revision (no migration to newer revisions) [12.99ms]
+(pass) E. approval workflow bound to the exact revision > unassigned stranger cannot decide; assigned reviewer approves → APPROVED [30.21ms]
+(pass) E. approval workflow bound to the exact revision > superseded revisions cannot receive decisions (approval cannot carry over) [6.65ms]
+(pass) E. approval workflow bound to the exact revision > changes-requested flow: review #3 → CHANGES_REQUESTED → resubmit #4 → approve [10175.03ms]
+(pass) F. external review links & guest sessions > editor creates VIEW and APPROVE links; tokens returned exactly once [27.29ms]
+(pass) F. external review links & guest sessions > invalid token → 410; VIEW link sees preview but cannot comment; APPROVE link can comment+decide [69.81ms]
+(pass) F. external review links & guest sessions > guest preview streams only the validated render; original media stays private [13.87ms]
+(pass) F. external review links & guest sessions > revocation takes effect on subsequent requests (guest loses access) [24.94ms]
+(pass) F. external review links & guest sessions > notifications recorded for the owner (review.requested / approved chain) [9.51ms]
+
+ 15 pass
+ 0 fail
+ 74 expect() calls
+Ran 15 tests across 1 file. [17.69s]
