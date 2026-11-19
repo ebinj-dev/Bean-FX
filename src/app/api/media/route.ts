@@ -293,6 +293,13 @@ async function finalizeUpload(
         notes: identity.notes,
       },
     });
+    // M29-C: a copy inherits the source row's probe/proxy status — if the
+    // source analysis was still in flight at upload time, the copy would keep
+    // a stale PENDING/PROCESSING status forever (no job was ever attached to
+    // THIS row). Enqueue a probe for the copy so its status settles on its own.
+    if (!["READY", "FAILED", "UNSUPPORTED"].includes(asset.probeStatus ?? "")) {
+      await enqueueMediaJob(userId, JOB_TYPE_MEDIA_PROBE, { mediaId: asset.id }).catch(() => undefined);
+    }
     if (uploadId) {
       await db.uploadSession
         .updateMany({ where: { id: uploadId, userId, status: "OPEN" }, data: { status: "COMPLETED", mediaAssetId: asset.id } })

@@ -39,16 +39,23 @@ export function ProjectPortability({ session, projectId, onNotice }: { session: 
 
   useEffect(() => { void loadStatus(); }, [loadStatus]);
 
-  // Poll packaging progress while running.
+  // Poll packaging progress while running — gated on the ARCHIVE state, not
+  // the (transient) button flag, or the drawer would freeze at "QUEUED 0%".
+  // State updates fire from the deferred timer callback (async polling), not
+  // synchronously in the effect body.
+  // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => {
-    if (!archiving || !archive || ["COMPLETED", "FAILED", "CANCELLED"].includes(archive.status)) return;
+    if (!archive || ["COMPLETED", "FAILED", "CANCELLED"].includes(archive.status)) return;
     const t = setTimeout(async () => {
       const r = await fetch(`/api/projects/${projectId}/archive`).catch(() => null);
       const d = await r?.json().catch(() => null);
-      if (d?.archive) setArchive(d.archive);
+      if (d?.archive) {
+        setArchive(d.archive);
+        if (["COMPLETED", "FAILED", "CANCELLED"].includes(d.archive.status)) setArchiving(false);
+      }
     }, 1500);
     return () => clearTimeout(t);
-  }, [archiving, archive, projectId]);
+  }, [archive, projectId]);
 
   // Poll import progress while running.
   useEffect(() => {
@@ -63,15 +70,11 @@ export function ProjectPortability({ session, projectId, onNotice }: { session: 
 
   const startPackage = async () => {
     setArchiving(true);
-    try {
-      const r = await fetch(`/api/projects/${projectId}/archive`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ mode }) });
-      const d = await r.json().catch(() => ({}));
-      if (!r.ok) { onNotice(d.error ?? "Packaging could not start."); return; }
-      archiveIdRef.current = d.archiveId;
-      setArchive({ status: "QUEUED", progress: 0, stage: "Queued", sizeBytes: null, assetCount: null, error: null });
-    } finally {
-      setArchiving(false);
-    }
+    const r = await fetch(`/api/projects/${projectId}/archive`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ mode }) });
+    const d = await r.json().catch(() => ({}));
+    if (!r.ok) { onNotice(d.error ?? "Packaging could not start."); setArchiving(false); return; }
+    archiveIdRef.current = d.archiveId;
+    setArchive({ status: "QUEUED", progress: 0, stage: "Queued", sizeBytes: null, assetCount: null, error: null });
   };
 
   const downloadPackage = async () => {

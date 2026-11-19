@@ -1,0 +1,172 @@
+──────────────────────────────────────────────────────────────
+SUITE: scripts/test-gangzii-analysis.test.ts (own process)
+  PASS —  9 pass  0 fail Ran 9 tests across 1 file. [477.00ms] 
+──────────────────────────────────────────────────────────────
+SUITE: scripts/test-gangzii-dsp.test.ts (own process)
+  PASS —  11 pass  0 fail Ran 11 tests across 1 file. [3.71s] 
+──────────────────────────────────────────────────────────────
+SUITE: scripts/test-gangzii-jobs.test.ts (own process)
+  PASS —  8 pass  0 fail Ran 8 tests across 1 file. [11.32s] 
+──────────────────────────────────────────────────────────────
+SUITE: scripts/test-nikki-core.test.ts (own process)
+  PASS —  31 pass  0 fail Ran 31 tests across 1 file. [180.00ms] 
+──────────────────────────────────────────────────────────────
+SUITE: scripts/test-nikki-render.test.ts (own process)
+  PASS —  6 pass  0 fail Ran 6 tests across 1 file. [7.19s] 
+──────────────────────────────────────────────────────────────
+SUITE: scripts/test-jazmii.test.ts (own process)
+  PASS —  15 pass  0 fail Ran 15 tests across 1 file. [15.38s] 
+──────────────────────────────────────────────────────────────
+SUITE: scripts/test-laxii.test.ts (own process)
+  PASS —  14 pass  0 fail Ran 14 tests across 1 file. [2.99s] 
+──────────────────────────────────────────────────────────────
+SUITE: scripts/test-ai-registry.test.ts (own process)
+  PASS —  12 pass  0 fail Ran 12 tests across 1 file. [2.17s] 
+──────────────────────────────────────────────────────────────
+SUITE: scripts/test-myai-gateway.test.ts (own process)
+  PASS —  7 pass  0 fail Ran 7 tests across 1 file. [1015.00ms] 
+──────────────────────────────────────────────────────────────
+SUITE: scripts/test-myai-planner.test.ts (own process)
+  PASS —  15 pass  0 fail Ran 15 tests across 1 file. [1.70s] 
+──────────────────────────────────────────────────────────────
+SUITE: scripts/test-automation-mcp.test.ts (own process)
+  PASS —  10 pass  0 fail Ran 10 tests across 1 file. [1263.00ms] 
+──────────────────────────────────────────────────────────────
+SUITE: scripts/test-automation-api.test.ts (own process)
+  PASS —  11 pass  0 fail Ran 11 tests across 1 file. [1.59s] 
+──────────────────────────────────────────────────────────────
+SUITE: scripts/test-studio-core.test.ts (own process)
+  PASS —  16 pass  0 fail Ran 16 tests across 1 file. [2.88s] 
+──────────────────────────────────────────────────────────────
+SUITE: scripts/test-publish-core.test.ts (own process)
+  PASS —  27 pass  0 fail Ran 27 tests across 1 file. [6.52s] 
+──────────────────────────────────────────────────────────────
+SUITE: scripts/test-creative-core.test.ts (own process)
+  PASS —  28 pass  0 fail Ran 28 tests across 1 file. [6.00s] 
+──────────────────────────────────────────────────────────────
+SUITE: scripts/test-creative-live.test.ts (own process)
+  PASS —  5 pass  0 fail Ran 5 tests across 1 file. [61.82s] 
+──────────────────────────────────────────────────────────────
+SUITE: scripts/test-multimodal-core.test.ts (own process)
+  PASS —  26 pass  0 fail Ran 26 tests across 1 file. [7.33s] 
+──────────────────────────────────────────────────────────────
+SUITE: scripts/test-multimodal-live.test.ts (own process)
+  PASS —  5 pass  0 fail Ran 5 tests across 1 file. [32.17s] 
+──────────────────────────────────────────────────────────────
+SUITE: scripts/test-visual-core.test.ts (own process)
+  PASS —  22 pass  0 fail Ran 22 tests across 1 file. [14.91s] 
+──────────────────────────────────────────────────────────────
+SUITE: scripts/test-visual-live.test.ts (own process)
+  PASS —  3 pass  0 fail Ran 3 tests across 1 file. [21.97s] 
+──────────────────────────────────────────────────────────────
+SUITE: scripts/test-temporal-core.test.ts (own process)
+  FAIL —  6 pass  9 fail Ran 15 tests across 1 file. [59.00s] 
+    42 | 
+    43 | /** Build one approved-ready proposal from a track; honest refusals on sparse data. */
+    44 | export async function buildMographProposal(index: TemporalIndex, track: Track, motion: MotionMeasurement | null, opts: { label?: string; primaryText?: string } & MographContext): Promise<{ proposal: MographProposal | null; note: string; warnings: string[] }> {
+    45 |   const warnings: string[] = [];
+    46 |   const usable = track.samples.filter((s) => s.visibility !== "lost" && s.timelineSec !== null);
+                          ^
+    TypeError: undefined is not an object (evaluating 'track.samples')
+          at buildMographProposal (/home/z/my-project/src/lib/creative/visual/temporal/mograph.ts:46:18)
+          at <anonymous> (/home/z/my-project/scripts/test-temporal-core.test.ts:350:33)
+    (fail) M13 temporal intelligence core (REAL OpenCV tracking) > motion-graphics proposal: coordinate-converted keyframes, honest gaps, AddGraphic validates via M1, REAL insertion [4641.51ms]
+    396 |     expect(review?.status).toBe("COMPLETED");
+    397 |     const indexRow = await db.creativeAnalysisArtifact.findFirst({ where: { userId: USER, projectId: mainProjectId, kind: "temporal-index", status: "COMPLETED" } });
+    398 |     expect(indexRow).toBeTruthy();
+    399 |     const idx = JSON.parse(indexRow!.resultJson!) as import("../src/lib/creative/visual/temporal/contracts").TemporalIndex;
+    400 |     expect(idx.measurement.framesSampled).toBeGreaterThan(10);
+    401 |     expect(idx.tracks.length).toBeGreaterThanOrEqual(1);
+                                        ^
+    error: expect(received).toBeGreaterThanOrEqual(expected)
+    
+    Expected: >= 1
+    Received: 0
+    
+          at <anonymous> (/home/z/my-project/scripts/test-temporal-core.test.ts:401:31)
+    (fail) M13 temporal intelligence core (REAL OpenCV tracking) > FULL TEMPORAL_INTELLIGENCE job through the REAL worker: artifacts, reuse, invalidation, cleanup [5677.42ms]
+    (pass) M13 temporal intelligence core (REAL OpenCV tracking) > ownership + no-video: foreign user refused; no-video project fails honestly [816.53ms]
+    
+     6 pass
+     9 fail
+     306 expect() calls
+    Ran 15 tests across 1 file. [59.00s]
+──────────────────────────────────────────────────────────────
+SUITE: scripts/test-temporal-live.test.ts (own process)
+  FAIL —  0 pass  2 fail Ran 2 tests across 1 file. [7.36s] 
+    111 |     expect(idx.tracks.length).toBeGreaterThanOrEqual(1);
+                                        ^
+    error: expect(received).toBeGreaterThanOrEqual(expected)
+    
+    Expected: >= 1
+    Received: 0
+    
+          at <anonymous> (/home/z/my-project/scripts/test-temporal-live.test.ts:111:31)
+    (fail) M13 LIVE temporal intelligence (REAL providers) > REAL job WITH consent: real CSRT tracking + REAL provider subject labeling [3635.87ms]
+    [m13-live] search method=provider-ranking top=undefined score=undefined
+    [m13-live] evidence: undefined
+    141 |     }
+    142 |     const res = await search.searchTemporalIndex(idx, { query: "a bright object moving quickly across the frame", limit: 5 }, { consentVisual: true });
+    143 |     console.log(`[m13-live] search method=${res.method} top=${res.results[0]?.refId} score=${res.results[0]?.relevanceScore}`);
+    144 |     console.log(`[m13-live] evidence: ${res.results[0]?.evidence.slice(0, 160)}`);
+    145 |     expect(res.available).toBe(true);
+    146 |     expect(res.results.length).toBeGreaterThan(0);
+                                         ^
+    error: expect(received).toBeGreaterThan(expected)
+    
+    Expected: > 0
+    Received: 0
+    
+          at <anonymous> (/home/z/my-project/scripts/test-temporal-live.test.ts:146:32)
+    (fail) M13 LIVE temporal intelligence (REAL providers) > REAL provider-ranked temporal search over the REAL index [870.09ms]
+    
+     0 pass
+     2 fail
+     6 expect() calls
+    Ran 2 tests across 1 file. [7.36s]
+──────────────────────────────────────────────────────────────
+SUITE: scripts/test-m14-core.test.ts (own process)
+  PASS —  16 pass  0 fail Ran 16 tests across 1 file. [2.53s] 
+──────────────────────────────────────────────────────────────
+SUITE: scripts/test-m14-live.test.ts (own process)
+  PASS —  3 pass  0 fail Ran 3 tests across 1 file. [85.21s] 
+──────────────────────────────────────────────────────────────
+SUITE: scripts/test-m15-core.test.ts (own process)
+  PASS —  8 pass  0 fail Ran 8 tests across 1 file. [1309.00ms] 
+──────────────────────────────────────────────────────────────
+SUITE: scripts/test-m16-core.test.ts (own process)
+  PASS —  19 pass  0 fail Ran 19 tests across 1 file. [2.05s] 
+──────────────────────────────────────────────────────────────
+SUITE: scripts/test-m17-timeline.test.ts (own process)
+  PASS —  8 pass  0 fail Ran 8 tests across 1 file. [1.66s] 
+──────────────────────────────────────────────────────────────
+SUITE: scripts/test-m17-audio.test.ts (own process)
+  PASS —  6 pass  0 fail Ran 6 tests across 1 file. [93.00ms] 
+──────────────────────────────────────────────────────────────
+SUITE: scripts/test-m17-effects.test.ts (own process)
+  PASS —  8 pass  0 fail Ran 8 tests across 1 file. [145.00ms] 
+──────────────────────────────────────────────────────────────
+SUITE: scripts/test-riishe-timeline.test.ts (own process)
+  PASS —  14 pass  0 fail Ran 14 tests across 1 file. [188.00ms] 
+──────────────────────────────────────────────────────────────
+SUITE: scripts/test-editor-regressions.test.ts (own process)
+  PASS —  4 pass  0 fail Ran 4 tests across 1 file. [83.00ms] 
+──────────────────────────────────────────────────────────────
+SUITE: scripts/test-media-pipeline.test.ts (own process)
+  PASS —  29 pass  0 fail Ran 29 tests across 1 file. [5.73s] 
+──────────────────────────────────────────────────────────────
+SUITE: scripts/p3_union.test.ts (own process)
+  PASS —  3 pass  0 fail Ran 3 tests across 1 file. [32.00ms] 
+──────────────────────────────────────────────────────────────
+SUITE: scripts/test-words-srt.test.ts (own process)
+  PASS —  14 pass  0 fail Ran 14 tests across 1 file. [82.00ms] 
+──────────────────────────────────────────────────────────────
+SUITE: scripts/v5-inference-reliability.test.ts (own process)
+  PASS —  10 pass  0 fail Ran 10 tests across 1 file. [7.58s] 
+──────────────────────────────────────────────────────────────
+SUITE: scripts/test-m19-security.test.ts (own process)
+  PASS —  21 pass  0 fail Ran 21 tests across 1 file. [19.08s] 
+══════════════════════════════════════════════════════════════
+RESULT: 34 suite(s) passed, 2 failed
+FAILED: scripts/test-temporal-core.test.ts
+FAILED: scripts/test-temporal-live.test.ts

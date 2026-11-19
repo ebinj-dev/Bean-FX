@@ -23,7 +23,8 @@ export async function GET(_req: NextRequest, ctx: { params: Promise<{ id: string
   if (!latest) return NextResponse.json({ missing: [], library: [], sequence: null });
   const seq = JSON.parse(latest.sequenceJson) as {
     fps: { num: number; den: number };
-    clips: { id: string; sourceAssetId: string | null; timelineDurationFrames: number; missingMedia: boolean }[];
+    tracks: { id: string; kind: string }[];
+    clips: { id: string; trackId: string; sourceAssetId: string | null; timelineDurationFrames: number; missingMedia: boolean }[];
   };
   const seqFps = seq.fps.num / seq.fps.den;
 
@@ -48,10 +49,14 @@ export async function GET(_req: NextRequest, ctx: { params: Promise<{ id: string
 
   const missing = [...missingByAsset.entries()].map(([deadAssetId, clips]) => {
     // Dead rows are gone — the clip expectation is the honest metadata signal.
+    // Dead rows are gone — the honest metadata signals that remain are the
+    // clip expectation (duration) and the hosting track's kind (VIDEO/AUDIO).
+    const trackKind = seq.tracks.find((t) => t.id === seq.clips.find((c) => c.sourceAssetId === deadAssetId)?.trackId)?.kind ?? null;
     const target: RelinkTarget = {
       deadAssetId, originalName: null, sizeBytes: null, sha256: null,
       durationSec: clips[0]?.expectedDurationSec ?? null, width: null, height: null,
-      fps: null, channels: null, kind: null,
+      fps: null, channels: null,
+      kind: trackKind === "VIDEO" ? "VIDEO" : trackKind === "AUDIO" ? "AUDIO" : null,
     };
     const suggestions = matchRelinkCandidates(target, library)
       .filter((c) => c.quality !== "INVALID")

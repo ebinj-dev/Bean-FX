@@ -11,7 +11,7 @@ import { execSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
 
-const BASE = "http://localhost:3117";
+const BASE = process.env.M29_BASE ?? "http://localhost:3117";
 const STAMP = Date.now().toString(36);
 const EMAIL = `m28render-${STAMP}@test.local`;
 const PW = "m28-render-pass-1";
@@ -165,7 +165,7 @@ async function main() {
   // The render registers an ExportFile (kind TIMELINE_RENDER) — read it via
   // prisma (same DB the worker wrote; local sandbox, same machine).
   const { PrismaClient } = await import("@prisma/client");
-  const db = new PrismaClient({ datasources: { db: { url: "file:/home/z/my-project/db/custom.db" } } });
+  const db = new PrismaClient({ datasources: { db: { url: process.env.M29_DB ?? "file:/home/z/my-project/db/custom.db" } } });
   const jobRow = await db.job.findUnique({ where: { id: jobId }, select: { exportId: true } });
   if (!jobRow?.exportId) throw new Error("render job registered no exportId");
   const exRow = await db.exportFile.findUnique({ where: { id: jobRow.exportId } });

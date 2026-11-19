@@ -9,7 +9,7 @@ import { createHash } from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
 
-const BASE = "http://localhost:3117";
+const BASE = process.env.M29_BASE ?? "http://localhost:3117";
 const STAMP = Date.now().toString(36);
 const EMAIL_A = `m29a-${STAMP}@test.local`;
 const EMAIL_B = `m29b-${STAMP}@test.local`;
@@ -115,11 +115,6 @@ describe("M29 — full portability chain (real media)", () => {
   }, 600_000);
 
   test("FULL package: manifest + verified checksums + dedup + proxies", async () => {
-    const start = await api("POST", `/api/projects/${projectIdA}/archive`, { mode: "FULL" }, cookieA);
-    if (start.status !== 202) console.error("ARCH-POST:", start.status, JSON.stringify(start.json).slice(0, 300));
-    expect(start.status).toBe(202);
-    archiveId = start.json.archiveId;
-    // Wait for the probe→proxy pipeline to settle before polling the package.
     // Wait for BOTH video probes AND the first video's proxy to settle — the
     // worker caps (global 2, per-user 1) make this take several seconds under
     // load, and the archive honestly includes whatever is READY at build time.
@@ -133,6 +128,11 @@ describe("M29 — full portability chain (real media)", () => {
       if ((Date.now() - t0) / 1000 > 300) throw new Error(`proxy/pipeline settle timeout: v1=${p1} probe1=${m1.json?.media?.probeStatus} probe2=${m2.json?.media?.probeStatus}`);
       await new Promise((res) => setTimeout(res, 1500));
     }
+    const start = await api("POST", `/api/projects/${projectIdA}/archive`, { mode: "FULL" }, cookieA);
+    if (start.status !== 202) console.error("ARCH-POST:", start.status, JSON.stringify(start.json).slice(0, 300));
+    expect(start.status).toBe(202);
+    archiveId = start.json.archiveId;
+    // Wait for the probe→proxy pipeline to settle before polling the package.
     const arch = await pollArchive(projectIdA, cookieA);
     if (arch.status !== "COMPLETED") console.error("ARCH-FAIL:", JSON.stringify(arch).slice(0, 400));
     expect(arch.status).toBe("COMPLETED");

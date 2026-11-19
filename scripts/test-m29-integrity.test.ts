@@ -8,13 +8,14 @@ import fs from "node:fs";
 import path from "node:path";
 import { createHash } from "node:crypto";
 
-const BASE = "http://localhost:3117";
+const BASE = process.env.M29_BASE ?? "http://localhost:3117";
 const STAMP = Date.now().toString(36);
 let cookieA = "";
 let cookieB = "";
 let projectIdA = "";
 let assetV = "";
 let packageZip: Buffer | null = null;
+let fullZip: Buffer | null = null;
 
 async function api(method: string, p: string, body?: unknown, cookie?: string, raw?: Buffer, headers: Record<string, string> = {}): Promise<{ status: number; json: any; buf?: Buffer }> {
   const res = await fetch(`${BASE}${p}`, {
@@ -59,8 +60,8 @@ describe("M29 — package integrity & bulk relink", () => {
     expect(up.status).toBe(200);
     assetV = up.json.media.id;
     const clip = {
-      id: "c1", trackId: "v1", sourceAssetId: assetV, sourceInFrame: 0, sourceOutFrame: 60,
-      sourceFps: { num: 30, den: 1 }, timelineStartFrame: 0, timelineDurationFrames: 60,
+      id: "c1", trackId: "v1", sourceAssetId: assetV, sourceInFrame: 0, sourceOutFrame: 90,
+      sourceFps: { num: 30, den: 1 }, timelineStartFrame: 0, timelineDurationFrames: 90,
       playbackSpeed: 1, volume: 1, muted: false, fadeInFrames: 0, fadeOutFrames: 0,
       transform: { x: 0, y: 0, scale: 1, rotation: 0, opacity: 1 },
       captionText: null, captionStyle: null, graphicTemplateId: null, graphicStyle: null,
@@ -84,6 +85,22 @@ describe("M29 — package integrity & bulk relink", () => {
     const dl2 = await api("GET", `/api/project-archives/${list.json.archive.id}/download`, undefined, cookieA);
     expect(dl2.status).toBe(200);
     packageZip = dl2.buf!;
+
+    // A FULL package (contains the real media payload) for the tamper test.
+    const startFull = await api("POST", `/api/projects/${projectIdA}/archive`, { mode: "FULL" }, cookieA);
+    expect(startFull.status).toBe(202);
+    const t1 = Date.now();
+    for (;;) {
+      const r = await api("GET", `/api/projects/${projectIdA}/archive`, undefined, cookieA).catch(() => null);
+      if (r?.json?.archive?.status === "COMPLETED") break;
+      if (r?.json?.archive?.status === "FAILED") throw new Error(`FULL archive failed: ${r.json.archive.error}`);
+      if ((Date.now() - t1) / 1000 > 300) throw new Error("FULL archive timeout");
+      await new Promise((res) => setTimeout(res, 1500));
+    }
+    const listFull = await api("GET", `/api/projects/${projectIdA}/archive`, undefined, cookieA);
+    const dlFull = await api("GET", `/api/project-archives/${listFull.json.archive.id}/download`, undefined, cookieA);
+    expect(dlFull.status).toBe(200);
+    fullZip = dlFull.buf!;
   }, 600_000);
 
   test("valid package imports cleanly", async () => {
@@ -91,22 +108,38 @@ describe("M29 — package integrity & bulk relink", () => {
     expect(imp.status).toBe(202);
     const arch = await pollImport(imp.json.archiveId, cookieB);
     expect(arch.status).toBe("COMPLETED");
+    const projects = await api("GET", "/api/projects", undefined, cookieB);
+    (globalThis as any).__m29cProjectCount = projects.json.projects.length;
   }, 600_000);
 
-  test("corrupted media bytes are rejected with checksum mismatch (nothing imported)", async () => {
-    // Corrupt one byte inside the stored media entry (local header data area).
-    const corrupted = Buffer.from(packageZip!);
-    corrupted[corrupted.length - 200] ^= 0xff;
+  test("tampered media payload is rejected with checksum mismatch (nothing imported)", async () => {
+    // Locate a REAL media payload byte via the ZIP central directory — no
+    // hard-coded offsets — flip it, and require the importer to reach the
+    // integrity stage and refuse the whole import with the exact failure class.
+    fs.writeFileSync("/tmp/m29c-full.zip", fullZip!);
+    execSync(`python3 -c "
+import zipfile, json
+z = zipfile.ZipFile('/tmp/m29c-full.zip')
+m = json.loads(z.read('manifest.json'))
+media = [a for a in m['assets'] if a['role'] == 'ORIGINAL' and a['path']]
+assert media, 'FULL package must contain media'
+info = z.getinfo(media[0]['path'])
+off = info.header_offset + 30 + len(media[0]['path'].encode()) + 10
+open('/tmp/m29c-flip.txt', 'w').write(str(off))
+print('flip at', off)
+"`);
+    const flipOffset = Number(fs.readFileSync("/tmp/m29c-flip.txt", "utf8"));
+    const corrupted = Buffer.from(fullZip!);
+    corrupted[flipOffset] ^= 0xff;
     const imp = await api("POST", "/api/projects/import", undefined, cookieB, corrupted, { "Content-Type": "application/zip" });
-    // METADATA mode ships no media — corrupt bytes break the zip structure or
-    // the manifest read: a loud 4xx now, or 202 with a FAILED archive. Never a
-    // silently successful import.
-    if (imp.status === 202) {
-      const arch = await pollImport(imp.json.archiveId, cookieB);
-      expect(arch.status).toBe("FAILED");
-    } else {
-      expect([400, 409, 422]).toContain(imp.status);
-    }
+    expect(imp.status).toBe(202); // staged; the WORKER must reject it
+    const arch = await pollImport(imp.json.archiveId, cookieB);
+    expect(arch.status).toBe("FAILED");
+    expect(arch.error).toMatch(/checksum|mismatch|corrupted/i);
+    // Nothing was imported: no new project for user B from this attempt.
+    const projects = await api("GET", "/api/projects", undefined, cookieB);
+    const countBefore = (globalThis as any).__m29cProjectCount ?? 0;
+    if (countBefore) expect(projects.json.projects.length).toBe(countBefore);
   }, 600_000);
 
   test("non-zip uploads are rejected by signature sniffing", async () => {
@@ -181,7 +214,6 @@ with zipfile.ZipFile('/tmp/m29-evil.zip', 'w', zipfile.ZIP_STORED) as z:
     z.writestr('manifest.json', json.dumps({'formatVersion': 'beanfx-project/1'}))
 "`);
     const imp = await api("POST", "/api/projects/import", undefined, cookieB, fs.readFileSync("/tmp/m29-evil.zip"), { "Content-Type": "application/zip" });
-    expect([400, 409, 422, 500]).toContain(imp.status);
     // The worker must fail the import loudly with the traversal reason.
     if (imp.status === 202) {
       const arch = await pollImport(imp.json.archiveId, cookieB);
