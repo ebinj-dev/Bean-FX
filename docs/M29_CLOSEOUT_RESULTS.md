@@ -1,6 +1,7 @@
 # M29-C CLOSEOUT RESULTS — Integrity, Clean Environment & Regression
 
 **Date:** 2026-11-19 · **Branch:** feature/ai-creative-studio · **Baseline:** M29 tip `c881e33`
+**Closeout commit:** `85c3bfd` — https://github.com/ebinj-dev/Bean-FX/commit/85c3bfdf1c5b02b6dafd4ce6001b824712240c4b (independently clone-verified: M29+M28 ancestors present, both previously-lost download routes restored, 16 evidence files + 3 closeout docs in the remote tree; main `5db3140` unchanged before/after; diff vs M29 tip: 31 files, +780/−44)
 **Scope:** closeout/validation only — no redesign, no package-format change, no M30.
 
 ## 1. Repository & remote audit (Phase 0)
