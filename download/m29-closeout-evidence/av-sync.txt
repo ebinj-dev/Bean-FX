@@ -1,0 +1,4 @@
+A/V synchronization (closeout, isolated env)
+video start 0.000s dur 10.000s | audio start 0.000s dur 10.000s
+A/V start delta: +0.000s (M27/M28 baseline approx -0.052s; tolerance +/-0.15s)
+SYNC: PASS — equal stream durations, zero start offset

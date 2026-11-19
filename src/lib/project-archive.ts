@@ -266,6 +266,18 @@ export async function buildManifest(
   for (const id of referencedIds) {
     const a = assetById.get(id);
     if (!a) continue; // recorded in `missing` — never fabricated
+    if (mode === "METADATA") {
+      // METADATA ships manifest + timeline only — the manifest still RECORDS
+      // the reference (for relink on import) but carries no media bytes.
+      manifestAssets.push({
+        assetId: a.id, role: "ORIGINAL", path: "", originalName: a.originalName, kind: a.kind,
+        mimeType: a.mimeType, sizeBytes: 0, sha256: a.sha256 ?? "", durationSec: a.durationSec,
+        width: a.width, height: a.height, fps: a.fps, isVfr: a.isVfr, rotation: a.rotation,
+        videoCodec: a.videoCodec, audioCodec: a.audioCodec, channels: a.channels, sampleRate: a.sampleRate,
+        proxyOf: null,
+      });
+      continue;
+    }
     if (!a.sha256) throw new PermanentJobError(`Asset "${a.originalName}" has no content hash yet — wait for its probe to finish, then package again.`);
     const st = await stat(a.storagePath).catch(() => null);
     if (!st || st.size !== a.sizeBytes) throw new PermanentJobError(`Asset "${a.originalName}" is missing from storage or its size changed — it cannot be packaged.`);
@@ -496,6 +508,7 @@ export async function importPackage(userId: string, plan: ImportPlan, setProgres
   let reused = 0;
   for (const a of manifest.assets) {
     if (a.role !== "ORIGINAL") continue; // proxies are regenerated on import
+    if (manifest.mode === "METADATA") continue; // no media bytes; refs stay dead (relink restores them)
     const reusedId = reuseByHash.get(a.sha256);
     if (reusedId) { idMap.set(a.assetId, reusedId); reused += 1; continue; }
     const e = entryByName.get(a.path);
@@ -555,10 +568,15 @@ export async function importPackage(userId: string, plan: ImportPlan, setProgres
   if (!reopened || reopened.timelineVersions.length !== 1 + manifest.timeline.history.length) {
     throw new PermanentJobError("Restored project verification failed — import aborted atomically.");
   }
-  const finalAssets = await db.mediaAsset.findMany({ where: { id: { in: [...idMap.values()] } } });
-  const missingRefs = (JSON.parse(latestSeq) as { clips: { sourceAssetId: string | null }[] }).clips
-    .filter((c) => c.sourceAssetId && !finalAssets.some((a) => a.id === c.sourceAssetId)).length;
-  if (missingRefs > 0) throw new PermanentJobError(`${missingRefs} restored clip reference(s) do not resolve — import aborted atomically.`);
+  if (manifest.mode !== "METADATA") {
+    // FULL/NO_PROXIES imports must have EVERY clip reference resolve — that is
+    // the atomicity contract. METADATA imports intentionally keep dead refs
+    // (the relink workflow restores them); asset status reports them honestly.
+    const finalAssets = await db.mediaAsset.findMany({ where: { id: { in: [...idMap.values()] } } });
+    const missingRefs = (JSON.parse(latestSeq) as { clips: { sourceAssetId: string | null }[] }).clips
+      .filter((c) => c.sourceAssetId && !finalAssets.some((a) => a.id === c.sourceAssetId)).length;
+    if (missingRefs > 0) throw new PermanentJobError(`${missingRefs} restored clip reference(s) do not resolve — import aborted atomically.`);
+  }
 
   await setProgress(100, "Import complete");
   return { projectId: project.id, projectName: project.name, assetsCreated: created, assetsReused: reused, versionsRestored: 1 + manifest.timeline.history.length, clipsRestored: seq.clips.length };
