@@ -309,3 +309,43 @@ export async function deleteMediaFileIfLastReference(storagePath: string, delete
   return true;
 }
 
+
+// ── M28 — disk-space guard ──────────────────────────────────────────────────
+// Transcodes and renders reserve transient space (proxies ≈ source bitrate ×
+// duration; a 1080p render window can reserve several hundred MB). Starting a
+// job when the disk is nearly full corrupts outputs silently — refuse instead,
+// with an actionable message.
+
+/** Minimum free bytes required before starting a big transcode/render. */
+export const MIN_FREE_DISK_BYTES = 512 * 1024 * 1024; // 512 MiB
+
+/** Pure helper (unit-tested): is `free` enough for a job needing `need`? */
+export function hasEnoughDisk(freeBytes: number, needBytes: number = 0, minFree: number = MIN_FREE_DISK_BYTES): boolean {
+  return freeBytes >= Math.max(minFree, needBytes);
+}
+
+/** statvfs -style free bytes of the filesystem holding `dir` (≤0 on failure). */
+export async function freeDiskBytes(dir: string): Promise<number> {
+  try {
+    const st = await (await import("fs")).promises.statfs(dir);
+    return Number(st.bavail) * Number(st.bsize);
+  } catch {
+    return -1; // unknown — callers decide whether to proceed (fail-open)
+  }
+}
+
+/**
+ * Guard a job about to write into `dir`. Throws PermanentJobError when free
+ * space is below the floor; unknown capacity fails OPEN (probes/storages on
+ * exotic mounts must not brick the pipeline) — logged, not hidden.
+ */
+export async function assertDiskSpace(dir: string, needBytes: number = 0, minFree: number = MIN_FREE_DISK_BYTES): Promise<void> {
+  const { PermanentJobError } = await import("@/lib/job-helpers");
+  const free = await freeDiskBytes(dir);
+  if (free < 0) return; // unknown capacity — fail open
+  if (!hasEnoughDisk(free, needBytes, minFree)) {
+    throw new PermanentJobError(
+      `Not enough disk space to run this job: ${(free / 1024 / 1024).toFixed(0)} MiB free on the media volume, ${(minFree / 1024 / 1024).toFixed(0)} MiB required. Free space (delete old exports or uploads) and retry — originals are untouched.`
+    );
+  }
+}

@@ -18,7 +18,7 @@ export async function GET(req: NextRequest) {
     where: { userId: user.id, ...(kind && ["IMAGE", "VIDEO", "AUDIO", "SUBTITLE"].includes(kind) ? { kind } : {}) },
     orderBy: { createdAt: "desc" },
     take: 50,
-    select: { id: true, originalName: true, kind: true, mimeType: true, sizeBytes: true, width: true, height: true, durationSec: true, createdAt: true },
+    select: { id: true, originalName: true, kind: true, mimeType: true, sizeBytes: true, width: true, height: true, durationSec: true, fps: true, rotation: true, channels: true, sampleRate: true, videoCodec: true, createdAt: true },
   });
   return NextResponse.json({ assets });
 }

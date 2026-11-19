@@ -12,7 +12,7 @@
 import { clipEndFrame, type Clip, type Sequence } from "./model";
 
 
-export type EditToolId = "select" | "track-select" | "razor" | "slip" | "slide" | "hand" | "zoom" | "text" | "transform";
+export type EditToolId = "select" | "track-select" | "razor" | "roll" | "slip" | "slide" | "hand" | "zoom" | "text" | "transform";
 
 export interface ToolSpec {
   id: EditToolId;
@@ -25,6 +25,7 @@ export const EDIT_TOOLS: ToolSpec[] = [
   { id: "select", label: "Select", shortcut: "V", hint: "Select, move and trim clips" },
   { id: "track-select", label: "Track Select", shortcut: "A", hint: "Select every clip forward on a track" },
   { id: "razor", label: "Razor", shortcut: "C", hint: "Click a clip to cut it at that frame" },
+  { id: "roll", label: "Roll", shortcut: "E", hint: "Drag a shared clip boundary to roll the cut (extends one clip, trims the other)" },
   { id: "slip", label: "Slip", shortcut: "Y", hint: "Drag clip content without moving it in time" },
   { id: "slide", label: "Slide", shortcut: "U", hint: "Move the clip; neighbors close the gap" },
   { id: "hand", label: "Hand", shortcut: "H", hint: "Pan the timeline" },

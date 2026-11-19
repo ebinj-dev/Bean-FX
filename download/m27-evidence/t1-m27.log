@@ -1,0 +1,11 @@
+bun test v1.3.14 (0d9b296a)
+
+scripts/test-m20-durable-render.test.ts:
+(pass) M20 §3 — durable long-form rendering > setup: account, fixtures, projects [3597.75ms]
+(pass) M20 §3 — durable long-form rendering > T1: 60s durable render — completes, validates, cleans up [45115.58ms]
+
+ 2 pass
+ 6 filtered out
+ 0 fail
+ 19 expect() calls
+Ran 2 tests across 1 file. [48.79s]

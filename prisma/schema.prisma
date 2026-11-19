@@ -25,6 +25,7 @@ model User {
   passwordResetTokens     PasswordResetToken[]
   projects     Project[]
   mediaAssets  MediaAsset[]
+  projectArchives ProjectArchive[] @relation("ProjectArchives")
   exportFiles  ExportFile[]
   jobs         Job[]
   wordsToRemove WordsToRemove[]
@@ -92,6 +93,7 @@ model Project {
   createdAt   DateTime     @default(now())
   updatedAt   DateTime     @updatedAt
   mediaAssets      MediaAsset[]
+  projectArchives ProjectArchive[] @relation("ProjectArchives")
   timelineVersions TimelineVersion[]
   conversations Conversation[] @relation("Conversations")
   aiPlans       AIPlan[]       @relation("AIPlans")
@@ -1152,4 +1154,35 @@ model WorkflowRun {
   updatedAt  DateTime @updatedAt
   @@index([userId, status])
   @@index([projectId])
+}
+
+/// M29 — project portability archives. One row per packaging/import attempt;
+/// the file lives in storage under project-archives/. Modes: FULL (originals +
+/// proxies), NO_PROXIES (originals only), METADATA (manifest + project JSON,
+/// external media). Status lifecycle: QUEUED → BUILDING → COMPLETED / FAILED /
+/// CANCELLED — the durable Job table drives the work (no second queue).
+model ProjectArchive {
+  id            String   @id @default(cuid())
+  userId        String
+  user          User     @relation("ProjectArchives", fields: [userId], references: [id], onDelete: Cascade)
+  projectId     String?
+  project       Project? @relation("ProjectArchives", fields: [projectId], references: [id], onDelete: SetNull)
+  mode          String   @default("FULL")
+  /// ARCHIVE (export) or IMPORT (restore from an uploaded package).
+  direction     String   @default("ARCHIVE")
+  status        String   @default("QUEUED")
+  formatVersion String
+  schemaVersion String
+  manifestJson  String?
+  storagePath   String?
+  sizeBytes     Int?
+  assetCount    Int?
+  progress      Int      @default(0)
+  stage         String?
+  error         String?
+  jobId         String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([userId, createdAt])
 }

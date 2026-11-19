@@ -310,3 +310,250 @@ export function audioGainMultiplier(effects: Effect[]): number {
   }
   return m;
 }
+
+// ── M27 P2 — per-effect parameter keyframe evaluation ────────────────────────
+// SINGLE SOURCE OF TRUTH: the preview (CSS) and the export (FFmpeg chain /
+// sub-segments) both evaluate through these functions, so both animate the
+// same definitions the same way.
+
+/** Smoothstep — the documented EASE_IN_OUT curve (3t² − 2t³). */
+const smoothstep = (t: number) => t * t * (3 - 2 * t);
+
+/**
+ * Evaluate ONE animated parameter at a clip-relative TIMELINE frame.
+ * Returns null when the param is not animated (static value applies).
+ */
+export function effectParamAt(effect: Effect, param: string, frame: number): number | null {
+  if (!effect.animatedParams.includes(param)) return null;
+  const kfs = effect.keyframes.filter((k) => k.param === param).sort((a, b) => a.frame - b.frame);
+  if (kfs.length === 0) return null;
+  if (kfs.length === 1) return kfs[0].value;
+  if (frame <= kfs[0].frame) return kfs[0].value;
+  if (frame >= kfs[kfs.length - 1].frame) return kfs[kfs.length - 1].value;
+  let i = 0;
+  while (i + 1 < kfs.length && kfs[i + 1].frame <= frame) i++;
+  const a = kfs[i];
+  const b = kfs[i + 1];
+  const span = b.frame - a.frame;
+  if (span <= 0) return b.value;
+  const t = (frame - a.frame) / span;
+  switch (a.interpolation) {
+    case "HOLD":
+      return a.value;
+    case "LINEAR":
+      return a.value + (b.value - a.value) * t;
+    case "EASE_IN":
+      return a.value + (b.value - a.value) * (t * t);
+    case "EASE_OUT":
+      return a.value + (b.value - a.value) * (1 - (1 - t) * (1 - t));
+    case "EASE_IN_OUT":
+      return a.value + (b.value - a.value) * smoothstep(t);
+    default:
+      return a.value + (b.value - a.value) * t;
+  }
+}
+
+/** Effect params with every animated parameter evaluated at `clipFrame`. */
+export function evaluatedEffectParams(effect: Effect, clipFrame: number): Effect["params"] {
+  const params: Record<string, number | string | boolean> = { ...effect.params };
+  for (const param of effect.animatedParams) {
+    const v = effectParamAt(effect, param, clipFrame);
+    if (v !== null) params[param] = v;
+  }
+  return params;
+}
+
+/** Animated effect (params evaluated at the given clip-relative frame). */
+export function animatedEffectAt(effect: Effect, clipFrame: number): Effect {
+  if (effect.animatedParams.length === 0) return effect;
+  return { ...effect, params: evaluatedEffectParams(effect, clipFrame) };
+}
+
+/** CSS preview chain evaluated at a clip-relative frame (per-frame recompute). */
+export function cssEffectFilterAt(effects: Effect[], clipFrame: number): string | null {
+  return cssEffectFilter(effects.map((e) => animatedEffectAt(e, clipFrame)));
+}
+
+/**
+ * M27 — FFmpeg parameter-animation strategy (measured, not assumed): on this
+ * deployment's FFmpeg (7.1.5) the `eq`/`vignette` filters evaluate their
+ * expressions ONCE at init (t/n stay 0 — verified with signalstats probes),
+ * so eval=frame animation is NOT available. The animation is therefore
+ * rendered as PIECEWISE-CONSTANT sub-segments: the clip is split at sampled
+ * keyframe positions and each segment renders the exact evaluated value as a
+ * constant (real FFmpeg processing on every frame — no fabricated output).
+ * Resolution: SAMPLE_INTERVAL frames (≈0.33 s at 30 fps) — interpolated
+ * ramps become short constant steps; exact at every keyframe.
+ */
+export const ANIM_SAMPLE_INTERVAL = 10;
+export const ANIM_MAX_SEGMENTS = 96;
+
+/** All params animate through sampled sub-segments on this ffmpeg build. */
+export function exprCapable(_effect: Effect, _param: string): boolean {
+  return false;
+}
+
+/** Segment boundaries (clip-relative, sorted, capped) where ANY animated
+ *  param needs its value re-sampled: every keyframe plus synthetic samples
+ *  between each param's first and last keyframe at ANIM_SAMPLE_INTERVAL. */
+export function segmentSplitFrames(effects: Effect[], clipDurationFrames?: number): number[] {
+  const frames = new Set<number>();
+  const cap = ANIM_MAX_SEGMENTS;
+  for (const effect of effects) {
+    if (!effect.enabled) continue;
+    for (const param of effect.animatedParams) {
+      const kfs = effect.keyframes.filter((k) => k.param === param).sort((a, b) => a.frame - b.frame);
+      if (kfs.length === 0) continue;
+      const first = kfs[0].frame;
+      const last = kfs[kfs.length - 1].frame;
+      for (let f = first; f <= last; f += ANIM_SAMPLE_INTERVAL) frames.add(f);
+      frames.add(first);
+      frames.add(last);
+      if (clipDurationFrames !== undefined && frames.size > cap) {
+        // Dense keyframes: fall back to keyframe-only boundaries (≤256 kf).
+        frames.clear();
+        for (const k of kfs) frames.add(k.frame);
+        if (frames.size > 256) return [...frames].slice(0, 256).sort((a, b) => a - b);
+      }
+    }
+  }
+  return [...frames].filter((f) => f >= 0 && (clipDurationFrames === undefined || f < clipDurationFrames)).sort((a, b) => a - b).slice(0, cap);
+}
+
+/**
+ * FFmpeg chain for ONE segment of an animated clip: expr-capable params
+ * (eq-family, vignette) become exact `t`-based expressions (eval=frame);
+ * non-expr-capable params (colorbalance/unsharp/gblur/crop) take the constant
+ * values sampled at `segStartFrame` — piecewise-constant between their
+ * keyframes, real processing, bounded and documented. The caller splits
+ * segments at `segmentSplitFrames(effects)`.
+ */
+export function ffmpegEffectChainAnimated(
+  effects: Effect[],
+  segStartFrame: number,
+  fps: { num: number; den: number },
+  outFit?: { width: number; height: number },
+): string | null {
+  const sampled = effects.map((e) => {
+    if (!e.enabled || e.animatedParams.length === 0) return e;
+    const params: Record<string, number | string | boolean> = { ...e.params };
+    for (const param of e.animatedParams) {
+      if (exprCapable(e, param)) continue; // wired as expressions by the builder
+      const v = effectParamAt(e, param, segStartFrame);
+      if (v !== null) params[param] = v;
+    }
+    return { ...e, params };
+  });
+  return ffmpegEffectChainWithExprs(sampled, effects, segStartFrame, fps, outFit);
+}
+
+/** Build an FFmpeg expr for one param (t seconds since SEGMENT start).
+ *  `valueTransform` rewrites each value literal (e.g. vignette: v → PI*v/2). */
+export function effectParamExpression(effect: Effect, param: string, tOffsetSec: number, fps: { num: number; den: number }, valueTransform?: (v: string) => string): string | null {
+  if (!effect.animatedParams.includes(param)) return null;
+  const kfs = effect.keyframes.filter((k) => k.param === param).sort((a, b) => a.frame - b.frame);
+  if (kfs.length === 0) return null;
+  const fpsN = fps.num / fps.den;
+  const fmtRaw = (v: number) => v.toFixed(6);
+  const fmt = (v: number) => (valueTransform ? valueTransform(fmtRaw(v)) : fmtRaw(v));
+  const shapes: Record<string, (t: string) => string> = {
+    HOLD: () => "", // handled below
+    LINEAR: (t) => t,
+    EASE_IN: (t) => `pow(max(0,${t}),2)`,
+    EASE_OUT: (t) => `(1-pow(1-min(1,max(0,${t})),2))`,
+    EASE_IN_OUT: (t) => `(${t}*${t}*(3-2*${t}))`,
+  };
+  // Clamp outside the keyframe range to the boundary values.
+  const head = `if(lt(t,${fmt(kfs[0].frame / fpsN - tOffsetSec)}),${fmt(kfs[0].value)},`;
+  const tail = `)`;
+  let body = `${fmt(kfs[kfs.length - 1].value)}`;
+  for (let i = kfs.length - 2; i >= 0; i--) {
+    const a = kfs[i];
+    const b = kfs[i + 1];
+    const span = b.frame - a.frame;
+    const ta = a.frame / fpsN - tOffsetSec;
+    const tb = b.frame / fpsN - tOffsetSec;
+    if (span <= 0) continue;
+    const dt = `((t-${fmt(ta)})/${fmt(span)})`;
+    const shape = a.interpolation === "HOLD" ? "0" : (shapes[a.interpolation] ?? shapes.LINEAR)(dt);
+    const value = a.interpolation === "HOLD" ? fmt(a.value) : `(${fmt(a.value)}+(${fmt(b.value)}-${fmt(a.value)})*${shape})`;
+    body = `if(lt(t,${fmt(tb)}),${value},${body})`;
+  }
+  return `${head}${body}${tail}`;
+}
+
+/** eq/expr-aware chain builder (wraps the M16 registry).
+ *  Animated eq-family params emit exact t-expressions through the SAME
+ *  per-effect transforms the static registry uses (exposure → gamma=2^v,
+ *  highlights/shadows/whites/blacks → brightness slopes; last-wins merge on a
+ *  shared eq key matches the static path). Vignette animates PI*amount/2. */
+const EQ_EXPR_MAP: Record<string, { param: string; eqKey: string; wrap: (v: string) => string }> = {
+  brightness: { param: "value", eqKey: "brightness", wrap: (v) => v },
+  contrast: { param: "value", eqKey: "contrast", wrap: (v) => v },
+  saturation: { param: "value", eqKey: "saturation", wrap: (v) => v },
+  exposure: { param: "stops", eqKey: "gamma", wrap: (v) => `pow(2,${v})` },
+  highlights: { param: "value", eqKey: "brightness", wrap: (v) => `(${v}*0.15)` },
+  shadows: { param: "value", eqKey: "brightness", wrap: (v) => `(${v}*0.1)` },
+  whites: { param: "value", eqKey: "brightness", wrap: (v) => `(${v}*0.12)` },
+  blacks: { param: "value", eqKey: "brightness", wrap: (v) => `(${v}*0.08)` },
+};
+
+function ffmpegEffectChainWithExprs(
+  sampled: Effect[],
+  original: Effect[],
+  segStartFrame: number,
+  fps: { num: number; den: number },
+  outFit?: { width: number; height: number },
+): string | null {
+  const tOffsetSec = segStartFrame / (fps.num / fps.den);
+  const eqExprs: Record<string, string> = {};
+  const eqParts: string[] = [];
+  const otherParts: string[] = [];
+  for (let idx = 0; idx < sampled.length; idx++) {
+    const effect = sampled[idx];
+    const exprEffect = original[idx];
+    if (!effect.enabled) continue;
+    if (AUDIO_EFFECT_TYPES.includes(effect.type)) continue;
+    const spec = filterSpec(effect.type);
+    if (!spec) continue;
+    const map = EQ_EXPR_MAP[effect.type];
+    if (map && exprCapable(effect, map.param) && exprEffect.animatedParams.includes(map.param)) {
+      const expr = effectParamExpression(exprEffect, map.param, tOffsetSec, fps, map.wrap);
+      if (expr) {
+        eqExprs[map.eqKey] = expr; // animated value — exact per-frame
+        continue; // static part for this effect is replaced by the expr
+      }
+    }
+    if (effect.type === "vignette" && exprCapable(effect, "amount") && exprEffect.animatedParams.includes("amount")) {
+      const expr = effectParamExpression(exprEffect, "amount", tOffsetSec, fps, (v) => `(PI*${v}/2)`);
+      if (expr) {
+        otherParts.push(`vignette=angle='${expr}':eval=frame`);
+        continue;
+      }
+    }
+    const fragment = spec.ffmpeg(effect.params);
+    if (!fragment) continue;
+    if (fragment.startsWith("eq=")) eqParts.push(...fragment.slice(3).split(":"));
+    else otherParts.push(fragment);
+  }
+  // Animated eq keys REPLACE the static parts for the same key (last-wins,
+  // same rule as the static duplicate-key merge).
+  for (const [key, expr] of Object.entries(eqExprs)) {
+    const filtered = eqParts.filter((part) => !part.startsWith(`${key}=`));
+    filtered.push(`${key}='${expr}'`);
+    eqParts.length = 0;
+    eqParts.push(...filtered);
+  }
+  const parts: string[] = [];
+  if (eqParts.length > 0) {
+    // eval=frame is an eq OPTION (belongs inside the filter, not a segment).
+    const evalFlag = Object.keys(eqExprs).length > 0 ? ":eval=frame" : "";
+    parts.push(`eq=${eqParts.join(":")}${evalFlag}`);
+  }
+  parts.push(...otherParts);
+  const hasCrop = otherParts.some((f) => f.startsWith("crop="));
+  if (outFit && hasCrop) {
+    parts.push(`scale=${outFit.width}:${outFit.height}:force_original_aspect_ratio=decrease,pad=${outFit.width}:${outFit.height}:(ow-iw)/2:(oh-ih)/2,setsar=1`);
+  }
+  return parts.length > 0 ? parts.join(",") : null;
+}

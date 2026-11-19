@@ -29,7 +29,7 @@ import { api } from "@/lib/client-api";
 import type { Rational } from "@/lib/editor/time";
 import { PlaybackController, publishFrame, subscribeFrame } from "@/lib/editor/playback";
 import { AudioPreviewMixer, setActiveMixer } from "@/lib/editor/audio-mixer";
-import { cssEffectFilter } from "@/lib/editor/filters";
+import { cssEffectFilter, cssEffectFilterAt } from "@/lib/editor/filters";
 import { volumeAutomationAt } from "@/lib/editor/audio";
 import { unsupportedCodecMessage } from "@/lib/editor/codec-support";
 import { CompositionCanvas } from "@/components/bean/editor/composition-canvas";
@@ -297,7 +297,13 @@ export function ProgramMonitor({
   }, [videoAssetId]);
   const decodeErrorMessage = useMemo(() => unsupportedCodecMessage(activeMime), [activeMime]);
   // Preview filter chain from the SAME module the export path uses.
-  const previewFilter = useMemo(() => (activeVideo ? cssEffectFilter(activeVideo.clip.effects) : null), [activeVideo]);
+  // M27 P2 — animated effect params are evaluated at the CURRENT playhead
+  // (clip-relative frame) with the same interpolation math the export uses.
+  const previewFilter = useMemo(() => {
+    if (!activeVideo) return null;
+    const clipRelFrame = Math.max(0, playhead - activeVideo.clip.timelineStartFrame);
+    return cssEffectFilterAt(activeVideo.clip.effects, clipRelFrame);
+  }, [activeVideo, playhead]);
   // M17 §7: before/after comparison — hold the COMPARE button to bypass the
   // preview filter (the export chain is unchanged; this is preview-only).
   const [comparing, setComparing] = useState(false);
