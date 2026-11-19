@@ -46,4 +46,5 @@
 4. METADATA-mode imports arrive with missing references by design; the relink UI is the restore path.
 
 ## 7. GitHub
-Pushed as fast-forward on `feature/ai-creative-studio`; see the final report for SHAs and independent verification.
+- M29 commit: `21aa65e` — https://github.com/ebinj-dev/Bean-FX/commit/21aa65e43c803e5c524e23c3cb0a5f5b5134e4cf
+- Fresh authenticated clone verified: remote tip `21aa65e`, M28 tip `1058dd7` and M27 tip `01286f5` are ancestors, m29-evidence (2 log files) + all three M29 docs + the ProjectArchive model are present in the remote tree; main `fb051dd` unchanged (before and after).
