@@ -8,7 +8,7 @@
  * Integrity is verified by tests with an independent unzip implementation.
  */
 
-const CRC_TABLE = (() => {
+export const CRC_TABLE = (() => {
   const table = new Uint32Array(256);
   for (let n = 0; n < 256; n++) {
     let c = n;

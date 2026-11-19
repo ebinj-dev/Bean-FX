@@ -1,0 +1,6 @@
+(pass) M29 — full portability chain (real media) > user A builds a rich project (2 tracks, image, effect, keyframe, crossfade, marker) [2057.78ms]
+(fail) M29 — full portability chain (real media) > FULL package: manifest + verified checksums + dedup + proxies [301258.10ms]
+(fail) M29 — full portability chain (real media) > user B imports the package → NEW project identity, relationships intact [49.38ms]
+(fail) M29 — full portability chain (real media) > restored project RENDERS (real FFmpeg, conformance-gated) [8.32ms]
+ 1 pass
+ 3 fail

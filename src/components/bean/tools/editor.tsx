@@ -13,8 +13,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   AlertTriangle, Bot, Check, ChevronLeft, ChevronRight, CloudUpload, Download, LayoutGrid, Loader2,
-  Pause, Play, Redo2, Settings, SlidersHorizontal, Sparkles, Undo2,
-} from "lucide-react";
+  Pause, Play, Redo2, Settings, SlidersHorizontal, Sparkles, Undo2, Package } from "lucide-react";
 import type { MediaMeta, RiisheAnalyzeResult, SavedDecisionView } from "@/lib/types";
 
 interface ProjectSummary { id: string; name: string }
@@ -24,6 +23,7 @@ import { sequenceEndFrame } from "@/lib/editor/preview";
 import { api } from "@/lib/client-api";
 import { effectiveRemovalSec, planRiisheTimelineApply } from "@/lib/riishe-timeline";
 import { useEditorSession } from "@/hooks/use-editor-session";
+import { ProjectPortability } from "@/components/bean/editor/portability-panel";
 import { ProgramMonitor } from "@/components/bean/editor/monitor";
 import { EditorTimeline } from "@/components/bean/editor/timeline";
 import { ClipInspector } from "@/components/bean/editor/inspector";
@@ -42,7 +42,7 @@ import { subscribeFrame } from "@/lib/editor/playback";
 
 const DEFAULT_IMAGE_TIMELINE_SEC = 5;
 
-type Drawer = "ai-studio" | "export" | "settings" | "mixer" | "presets" | "workflows" | null;
+type Drawer = "ai-studio" | "export" | "settings" | "mixer" | "presets" | "workflows" | "portability" | null;
 type LeftTab = "media" | "effects";
 
 export function EditorTool({ user }: { user: { id: string }; onLogout: () => void }) {
@@ -454,6 +454,7 @@ export function EditorTool({ user }: { user: { id: string }; onLogout: () => voi
             <Download className="h-3.5 w-3.5" /> EXPORT
           </button>
           <button type="button" onClick={() => setDrawer(drawer === "settings" ? null : "settings")} className={toolButton} title="Project settings & history"><Settings className="h-4 w-4" /></button>
+          <button type="button" onClick={() => setDrawer(drawer === "portability" ? null : "portability")} className={toolButton} title="Project portability: package, import, bulk relink"><Package className="h-4 w-4" /></button>
           <a href="#/studio" className="flex items-center gap-1 rounded border border-[#2a2a2a] px-2 py-1.5 text-[11px] text-[#d8d8d2] hover:border-[#d4a017] hover:text-[#d4a017]" title="Project dashboard">
             <LayoutGrid className="h-3.5 w-3.5" />
           </a>
@@ -578,6 +579,17 @@ export function EditorTool({ user }: { user: { id: string }; onLogout: () => voi
         <div className="border-t border-[#2a2a2a] bg-[#0b0b0a] px-4 py-3">
           <div className="mx-auto max-w-4xl">
             <AudioMixerPanel sequence={sequence} session={session} />
+          </div>
+        </div>
+      )}
+      {drawer === "portability" && projectId && (
+        <div className="absolute inset-0 z-40 flex justify-end bg-black/50" role="dialog" aria-label="Project portability">
+          <div className="h-full w-full max-w-[440px] overflow-y-auto border-l border-[#2a2a2a] bg-[#0b0b0a] p-3">
+            <div className="mb-2 flex items-center justify-between">
+              <span className="bean-label text-[10px] text-[#d4a017]">PROJECT PORTABILITY</span>
+              <button type="button" onClick={() => setDrawer(null)} className="text-[#8f8f8a] hover:text-[#d8d8d2]">✕</button>
+            </div>
+            <ProjectPortability session={session} projectId={projectId} onNotice={setNotice} />
           </div>
         </div>
       )}

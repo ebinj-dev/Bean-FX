@@ -123,6 +123,15 @@ export const CommandSchema = z.discriminatedUnion("type", [
     newSourceFps: z.object({ num: z.number().int().positive(), den: z.number().int().positive() }).optional(),
   }),
   z.object({
+    /** M29 P5 — bulk relink: re-point every clip referencing a dead asset id.
+     *  One atomic, reversible history entry; never alters in/out or placement. */
+    type: z.literal("RelinkAssets"),
+    mappings: z.array(z.object({
+      deadAssetId: z.string().max(64),
+      newAssetId: z.string().max(64),
+    })).min(1).max(200),
+  }),
+  z.object({
     type: z.literal("AddTransition"),
     transitionId: idSchema,
     trackId: idSchema,
@@ -476,6 +485,21 @@ function applyInsertClip(seq: Sequence, cmd: Extract<Command, { type: "InsertCli
   const shiftInverses = shiftFrom(seq, track.id, clip.timelineStartFrame, clip.timelineDurationFrames);
   inverse.unshift(...shiftInverses);
   addClipImpl(seq, clip, inverse);
+}
+
+/** M29 P5 — bulk relink (deterministic; source in/out and timeline placement
+ *  are untouched — incompatible replacements are the caller's validated choice). */
+function applyRelinkAssets(seq: Sequence, cmd: Extract<Command, { type: "RelinkAssets" }>, inverse: Command[]): void {
+  const map = new Map(cmd.mappings.map((m) => [m.deadAssetId, m.newAssetId]));
+  const reverse: Extract<Command, { type: "RelinkAssets" }>["mappings"] = [];
+  for (const clip of seq.clips) {
+    const target = clip.sourceAssetId ? map.get(clip.sourceAssetId) : undefined;
+    if (!target) continue;
+    reverse.push({ deadAssetId: target, newAssetId: clip.sourceAssetId });
+    clip.sourceAssetId = target;
+    clip.missingMedia = false;
+  }
+  if (reverse.length > 0) inverse.push({ type: "RelinkAssets", mappings: reverse });
 }
 
 function applyReplaceClip(seq: Sequence, cmd: Extract<Command, { type: "ReplaceClip" }>, inverse: Command[]): void {
@@ -999,6 +1023,9 @@ export function applyCommand(inputSeq: Sequence, input: unknown): ApplyResult {
       break;
     case "ReplaceClip":
       applyReplaceClip(seq, cmd, inverse);
+      break;
+    case "RelinkAssets":
+      applyRelinkAssets(seq, cmd, inverse);
       break;
     case "AddTransition":
       applyAddTransition(seq, cmd, inverse);

@@ -30,8 +30,12 @@ export const JOB_TYPE_VISUAL_INTELLIGENCE = "VISUAL_INTELLIGENCE";
 // ── M13 Temporal Visual Intelligence ──
 export const JOB_TYPE_TEMPORAL_INTELLIGENCE = "TEMPORAL_INTELLIGENCE";
 export const JOB_TYPE_COMPOSITION_RENDER = "COMPOSITION_RENDER";
+export const JOB_TYPE_PROJECT_ARCHIVE = "PROJECT_ARCHIVE";
+export const JOB_TYPE_PROJECT_IMPORT = "PROJECT_IMPORT";
 /** Worker-owned job types: M3 media pipeline + M5 GANGZII + M6 NIIKI + M7 engines + M8.1 studio + M9 publishing; legacy job types keep their existing behavior. */
 export const MEDIA_JOB_TYPES = [
+  JOB_TYPE_PROJECT_ARCHIVE,
+  JOB_TYPE_PROJECT_IMPORT,
   JOB_TYPE_MEDIA_PROBE,
   JOB_TYPE_MEDIA_PROXY,
   JOB_TYPE_GANGZII_ANALYZE,
@@ -76,6 +80,8 @@ export const DEFAULT_TIMEOUT_SEC: Record<string, number> = {
   [JOB_TYPE_VISUAL_INTELLIGENCE]: 45 * 60,
   [JOB_TYPE_TEMPORAL_INTELLIGENCE]: 45 * 60,
   [JOB_TYPE_COMPOSITION_RENDER]: 30 * 60,
+  [JOB_TYPE_PROJECT_ARCHIVE]: 30 * 60,
+  [JOB_TYPE_PROJECT_IMPORT]: 30 * 60,
 };
 
 export const MAX_ATTEMPTS_DEFAULT = 3;

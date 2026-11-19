@@ -26,7 +26,10 @@ import {
   JOB_TYPE_VISUAL_INTELLIGENCE,
   JOB_TYPE_TEMPORAL_INTELLIGENCE,
   JOB_TYPE_COMPOSITION_RENDER,
+  JOB_TYPE_PROJECT_ARCHIVE,
+  JOB_TYPE_PROJECT_IMPORT,
   PermanentJobError,
+  completeJob,
   handleJobError,
   requeueJob,
   failJob,
@@ -35,6 +38,7 @@ import {
 import { MEDIA_ROOT, PROXIES_DIR, removeFileQuiet } from "@/lib/media-storage";
 import { runProbeJob } from "@/lib/media-analysis";
 import { runProxyJob } from "@/lib/media-proxy";
+import { runProjectArchiveJob, importPackage, planImport } from "@/lib/project-archive";
 import { runGangziiAnalyzeJob, runGangziiProcessJob } from "@/lib/gangzii/jobs";
 import { runNikkiRenderJob } from "@/lib/nikki/jobs";
 import { runJazmiiGenerateJob, runJazmiiAnalyzeJob } from "@/lib/jazmii/jobs";
@@ -123,6 +127,8 @@ type MediaJobHandler = (job: {
 }) => Promise<void>;
 
 const HANDLERS: Record<string, MediaJobHandler> = {
+  [JOB_TYPE_PROJECT_ARCHIVE]: (job) => runProjectArchiveJob(job, (p, stage) => jobManager.setProgress(job.id, p, stage)),
+  [JOB_TYPE_PROJECT_IMPORT]: runProjectImportJob,
   [JOB_TYPE_MEDIA_PROBE]: runProbeJob,
   [JOB_TYPE_MEDIA_PROXY]: runProxyJob,
   [JOB_TYPE_GANGZII_ANALYZE]: runGangziiAnalyzeJob,
@@ -246,6 +252,8 @@ async function resetAssetMarkers(type: string, paramsJson: string | null, mode: 
       })
       .catch(() => undefined);
   }
+  // M29 — archive/import rows carry their own status (see runProject*Job).
+  void type;
 }
 
 /** Mark the asset as actively processing right after a successful claim. */
@@ -518,4 +526,38 @@ export function ensureMediaWorker(): void {
 // BEANFX_MEDIA_WORKER_AUTOSTART=0 and drive tickWorkerOnce() manually.
 if (process.env.BEANFX_MEDIA_WORKER_AUTOSTART !== "0") {
   ensureMediaWorker();
+}
+
+
+/** M29 PROJECT_IMPORT handler: staged upload → plan validation → restore. */
+async function runProjectImportJob(job: { id: string; userId: string; paramsJson: string | null }): Promise<void> {
+  const params = JSON.parse(job.paramsJson ?? "{}") as { archiveId?: string };
+  if (!params.archiveId) throw new PermanentJobError("PROJECT_IMPORT missing archiveId");
+  const archive = await db.projectArchive.findUnique({ where: { id: params.archiveId } });
+  if (!archive || archive.userId !== job.userId) throw new PermanentJobError("Import record not found or not owned by the caller.");
+  if (archive.direction !== "IMPORT") throw new PermanentJobError("Archive row is not an import.");
+  if (!archive.storagePath || !existsSync(archive.storagePath)) throw new PermanentJobError("The uploaded package file is no longer in staging storage.");
+  try {
+    await jobManager.setProgress(job.id, 5, "Validating package");
+    const plan = await planImport(job.userId, archive.storagePath);
+    const result = await importPackage(job.userId, plan, (p, stage) => jobManager.setProgress(job.id, p, stage));
+    await db.projectArchive.update({
+      where: { id: archive.id },
+      data: {
+        status: "COMPLETED", progress: 100, stage: `Imported as "${result.projectName}"`,
+        projectId: result.projectId, assetCount: result.assetsCreated + result.assetsReused,
+        manifestJson: JSON.stringify({ result: { assetsCreated: result.assetsCreated, assetsReused: result.assetsReused, versionsRestored: result.versionsRestored, clipsRestored: result.clipsRestored } }),
+      },
+    });
+    // The staged zip is disposable once the import completes atomically.
+    await removeFileQuiet(archive.storagePath);
+    await db.projectArchive.update({ where: { id: archive.id }, data: { storagePath: null } }).catch(() => undefined);
+    await completeJob(job.id, `Project imported as "${result.projectName}".`);
+  } catch (err) {
+    await db.projectArchive.update({
+      where: { id: archive.id },
+      data: { status: "FAILED", error: err instanceof Error ? err.message.slice(0, 500) : "import failed" },
+    }).catch(() => undefined);
+    throw err;
+  }
 }
