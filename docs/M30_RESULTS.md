@@ -82,4 +82,5 @@ All existing engines untouched (no provider changes, no Ollama). No AI-assist fe
 5. The carried-forward M13 OpenCV-CSRT exceptions remain INFRASTRUCTURE REQUIRED (opencv-contrib-python not present in the sandbox).
 
 ## 15. GitHub update (Phase 14)
-Pushed fast-forward on `feature/ai-creative-studio`; commit URL and verification recorded in `m30-evidence/` and the final report. `main` untouched.
+**Implementation commit:** `f8c0290` — https://github.com/ebinj-dev/Bean-FX/commit/f8c029010e4e9f56ded13a592a3289f5499ac7e2
+Independently clone-verified: M29-C tip `63b6e91f` + implementation `85c3bfdf` ancestors present; 21 evidence files + 3 M30 docs in the remote tree; diff vs M29-C tip: 64 files, +4,446/-22. `main` advanced only by its owner (`5db3140`->`60eaae4`) — untouched by this work.
