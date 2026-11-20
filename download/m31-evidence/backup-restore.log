@@ -1,0 +1,15 @@
+[10:26:52] == M31 backup/restore qualification ==
+[10:26:52] source DB: /home/z/my-project/db/m29closeout.db · store: /home/z/my-project/media-store-closeout
+[10:26:52] PASS: media store snapshot copied (complete backup = DB + media)
+[10:26:52] PASS: restored counts: users=1 projects=1 workspaceMembers=0 reviewRevisions=0 comments=0 decisions=0 assets=3 notifications=0
+[10:26:52] PASS: user/project relationships intact
+[10:26:52] PASS: no orphaned comments
+[10:26:52] PASS: no orphaned assets
+[10:26:52] PASS: media store contains 477 objects
+[10:26:52] booting isolated restored-env server on :3119 …
+[10:26:58] PASS: restored environment serves HTTP 200
+[10:26:58] PASS: restored-env registration OK (real write path)
+[10:26:58] PASS: media write on restored env OK
+[10:26:58] PASS: timeline write on restored env OK
+[10:27:00] PASS: restored-env render produced 601644 bytes through the pipeline
+[10:27:00] == RESULT: PASS=11 FAIL=0 ==

@@ -1,0 +1,141 @@
+──────────────────────────────────────────────────────────────
+SUITE: scripts/test-gangzii-analysis.test.ts (own process)
+  PASS —  9 pass  0 fail Ran 9 tests across 1 file. [480.00ms] 
+──────────────────────────────────────────────────────────────
+SUITE: scripts/test-gangzii-dsp.test.ts (own process)
+  PASS —  11 pass  0 fail Ran 11 tests across 1 file. [3.59s] 
+──────────────────────────────────────────────────────────────
+SUITE: scripts/test-gangzii-jobs.test.ts (own process)
+  PASS —  8 pass  0 fail Ran 8 tests across 1 file. [10.96s] 
+──────────────────────────────────────────────────────────────
+SUITE: scripts/test-nikki-core.test.ts (own process)
+  PASS —  31 pass  0 fail Ran 31 tests across 1 file. [200.00ms] 
+──────────────────────────────────────────────────────────────
+SUITE: scripts/test-nikki-render.test.ts (own process)
+  PASS —  6 pass  0 fail Ran 6 tests across 1 file. [6.87s] 
+──────────────────────────────────────────────────────────────
+SUITE: scripts/test-jazmii.test.ts (own process)
+  PASS —  15 pass  0 fail Ran 15 tests across 1 file. [15.45s] 
+──────────────────────────────────────────────────────────────
+SUITE: scripts/test-laxii.test.ts (own process)
+  PASS —  14 pass  0 fail Ran 14 tests across 1 file. [3.23s] 
+──────────────────────────────────────────────────────────────
+SUITE: scripts/test-ai-registry.test.ts (own process)
+  PASS —  12 pass  0 fail Ran 12 tests across 1 file. [2.19s] 
+──────────────────────────────────────────────────────────────
+SUITE: scripts/test-myai-gateway.test.ts (own process)
+  PASS —  7 pass  0 fail Ran 7 tests across 1 file. [1041.00ms] 
+──────────────────────────────────────────────────────────────
+SUITE: scripts/test-myai-planner.test.ts (own process)
+  PASS —  15 pass  0 fail Ran 15 tests across 1 file. [1.87s] 
+──────────────────────────────────────────────────────────────
+SUITE: scripts/test-automation-mcp.test.ts (own process)
+  PASS —  10 pass  0 fail Ran 10 tests across 1 file. [1320.00ms] 
+──────────────────────────────────────────────────────────────
+SUITE: scripts/test-automation-api.test.ts (own process)
+  PASS —  11 pass  0 fail Ran 11 tests across 1 file. [1.76s] 
+──────────────────────────────────────────────────────────────
+SUITE: scripts/test-studio-core.test.ts (own process)
+  PASS —  16 pass  0 fail Ran 16 tests across 1 file. [2.90s] 
+──────────────────────────────────────────────────────────────
+SUITE: scripts/test-publish-core.test.ts (own process)
+  PASS —  27 pass  0 fail Ran 27 tests across 1 file. [6.47s] 
+──────────────────────────────────────────────────────────────
+SUITE: scripts/test-creative-core.test.ts (own process)
+  PASS —  28 pass  0 fail Ran 28 tests across 1 file. [6.01s] 
+──────────────────────────────────────────────────────────────
+SUITE: scripts/test-creative-live.test.ts (own process)
+  PASS —  5 pass  0 fail Ran 5 tests across 1 file. [40.28s] 
+──────────────────────────────────────────────────────────────
+SUITE: scripts/test-multimodal-core.test.ts (own process)
+  PASS —  26 pass  0 fail Ran 26 tests across 1 file. [6.44s] 
+──────────────────────────────────────────────────────────────
+SUITE: scripts/test-multimodal-live.test.ts (own process)
+  PASS —  5 pass  0 fail Ran 5 tests across 1 file. [49.37s] 
+──────────────────────────────────────────────────────────────
+SUITE: scripts/test-visual-core.test.ts (own process)
+  PASS —  22 pass  0 fail Ran 22 tests across 1 file. [12.33s] 
+──────────────────────────────────────────────────────────────
+SUITE: scripts/test-visual-live.test.ts (own process)
+  PASS —  3 pass  0 fail Ran 3 tests across 1 file. [29.21s] 
+──────────────────────────────────────────────────────────────
+SUITE: scripts/test-temporal-core.test.ts (own process)
+  PASS —  15 pass  0 fail Ran 15 tests across 1 file. [63.09s] 
+──────────────────────────────────────────────────────────────
+SUITE: scripts/test-temporal-live.test.ts (own process)
+  PASS —  2 pass  0 fail Ran 2 tests across 1 file. [15.98s] 
+──────────────────────────────────────────────────────────────
+SUITE: scripts/test-m14-core.test.ts (own process)
+  PASS —  16 pass  0 fail Ran 16 tests across 1 file. [2.34s] 
+──────────────────────────────────────────────────────────────
+SUITE: scripts/test-m14-live.test.ts (own process)
+  PASS —  3 pass  0 fail Ran 3 tests across 1 file. [64.77s] 
+──────────────────────────────────────────────────────────────
+SUITE: scripts/test-m15-core.test.ts (own process)
+  PASS —  8 pass  0 fail Ran 8 tests across 1 file. [1399.00ms] 
+──────────────────────────────────────────────────────────────
+SUITE: scripts/test-m16-core.test.ts (own process)
+  PASS —  19 pass  0 fail Ran 19 tests across 1 file. [2.11s] 
+──────────────────────────────────────────────────────────────
+SUITE: scripts/test-m17-timeline.test.ts (own process)
+  PASS —  8 pass  0 fail Ran 8 tests across 1 file. [1.68s] 
+──────────────────────────────────────────────────────────────
+SUITE: scripts/test-m17-audio.test.ts (own process)
+  PASS —  6 pass  0 fail Ran 6 tests across 1 file. [89.00ms] 
+──────────────────────────────────────────────────────────────
+SUITE: scripts/test-m17-effects.test.ts (own process)
+  PASS —  8 pass  0 fail Ran 8 tests across 1 file. [133.00ms] 
+──────────────────────────────────────────────────────────────
+SUITE: scripts/test-riishe-timeline.test.ts (own process)
+  PASS —  14 pass  0 fail Ran 14 tests across 1 file. [146.00ms] 
+──────────────────────────────────────────────────────────────
+SUITE: scripts/test-editor-regressions.test.ts (own process)
+  PASS —  4 pass  0 fail Ran 4 tests across 1 file. [78.00ms] 
+──────────────────────────────────────────────────────────────
+SUITE: scripts/test-media-pipeline.test.ts (own process)
+  PASS —  29 pass  0 fail Ran 29 tests across 1 file. [5.82s] 
+──────────────────────────────────────────────────────────────
+SUITE: scripts/p3_union.test.ts (own process)
+  PASS —  3 pass  0 fail Ran 3 tests across 1 file. [41.00ms] 
+──────────────────────────────────────────────────────────────
+SUITE: scripts/test-words-srt.test.ts (own process)
+  PASS —  14 pass  0 fail Ran 14 tests across 1 file. [81.00ms] 
+──────────────────────────────────────────────────────────────
+SUITE: scripts/v5-inference-reliability.test.ts (own process)
+  PASS —  10 pass  0 fail Ran 10 tests across 1 file. [7.57s] 
+──────────────────────────────────────────────────────────────
+SUITE: scripts/test-m19-security.test.ts (own process)
+  FAIL —  14 pass  7 fail Ran 21 tests across 1 file. [862.00ms] 
+    
+    Expected: 200
+    Received: 429
+    
+          at register (/home/z/my-project/scripts/test-m19-security.test.ts:53:22)
+          at async <anonymous> (/home/z/my-project/scripts/test-m19-security.test.ts:285:11)
+    (fail) M19 security — session management API > sessions list flags the current one and revocation works [4.23ms]
+    (pass) M19 security — public website > all public pages render 200 with real content [76.25ms]
+    (pass) M19 security — public website > unknown routes get the branded 404 [2.80ms]
+    (pass) M19 security — public website > robots.txt excludes private surfaces [4.93ms]
+    48 |   expect(body.user).toBeNull();
+    49 | }
+    50 | 
+    51 | async function register(jar: Jar, email: string, password = "test-passw0rd") {
+    52 |   const res = await req("POST", "/api/auth/register", { body: { email, password, name: "M19 Sec" }, jar });
+    53 |   expect(res.status).toBe(200);
+                              ^
+    error: expect(received).toBe(expected)
+    
+    Expected: 200
+    Received: 429
+    
+          at register (/home/z/my-project/scripts/test-m19-security.test.ts:53:22)
+          at async <anonymous> (/home/z/my-project/scripts/test-m19-security.test.ts:334:11)
+    (fail) M19 security — rate limiting (RUNS LAST: exhausts the shared-IP login bucket) > login is rate-limited after repeated failures [3.12ms]
+    
+     14 pass
+     7 fail
+     248 expect() calls
+    Ran 21 tests across 1 file. [862.00ms]
+══════════════════════════════════════════════════════════════
+RESULT: 35 suite(s) passed, 1 failed
+FAILED: scripts/test-m19-security.test.ts

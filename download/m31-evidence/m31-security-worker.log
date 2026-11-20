@@ -1,0 +1,39 @@
+bun test v1.3.14 (0d9b296a)
+
+scripts/test-m31-worker.test.ts:
+(pass) M31 §5 — durable job reliability > duplicate export submissions create distinct jobs but never duplicate output rows for one job id [6040.13ms]
+(pass) M31 §5 — durable job reliability > invalid media is classified permanent (no infinite retry) [11.44ms]
+(pass) M31 §5 — durable job reliability > invalid package import is rejected safely (no partial project rows) [2022.78ms]
+(pass) M31 §5 — durable job reliability > cancellation: a queued/cancelled job does not produce outputs [3032.81ms]
+(pass) M31 §5 — durable job reliability > stale-job recovery: heartbeats exist and completed jobs cleaned temp artifacts [3.15ms]
+prisma:query BEGIN IMMEDIATE
+prisma:query SELECT `main`.`Notification`.`id` FROM `main`.`Notification` WHERE (`main`.`Notification`.`dedupKey` = ? AND 1=1) LIMIT ? OFFSET ?
+prisma:query INSERT INTO `main`.`Notification` (`id`, `userId`, `type`, `projectId`, `payloadJson`, `dedupKey`, `createdAt`) VALUES (?,?,?,?,?,?,?) RETURNING `id` AS `id`
+prisma:query SELECT `main`.`Notification`.`id`, `main`.`Notification`.`userId`, `main`.`Notification`.`type`, `main`.`Notification`.`projectId`, `main`.`Notification`.`payloadJson`, `main`.`Notification`.`dedupKey`, `main`.`Notification`.`readAt`, `main`.`Notification`.`createdAt` FROM `main`.`Notification` WHERE `main`.`Notification`.`id` = ? LIMIT ? OFFSET ?
+prisma:query COMMIT
+prisma:query BEGIN IMMEDIATE
+prisma:query SELECT `main`.`Notification`.`id` FROM `main`.`Notification` WHERE (`main`.`Notification`.`dedupKey` = ? AND 1=1) LIMIT ? OFFSET ?
+prisma:query SELECT `main`.`Notification`.`id`, `main`.`Notification`.`userId`, `main`.`Notification`.`type`, `main`.`Notification`.`projectId`, `main`.`Notification`.`payloadJson`, `main`.`Notification`.`dedupKey`, `main`.`Notification`.`readAt`, `main`.`Notification`.`createdAt` FROM `main`.`Notification` WHERE (`main`.`Notification`.`id` = ? AND (`main`.`Notification`.`dedupKey` = ? AND 1=1)) LIMIT ? OFFSET ?
+prisma:query SELECT `main`.`Notification`.`id`, `main`.`Notification`.`userId`, `main`.`Notification`.`type`, `main`.`Notification`.`projectId`, `main`.`Notification`.`payloadJson`, `main`.`Notification`.`dedupKey`, `main`.`Notification`.`readAt`, `main`.`Notification`.`createdAt` FROM `main`.`Notification` WHERE `main`.`Notification`.`id` = ? LIMIT ? OFFSET ?
+prisma:query COMMIT
+prisma:query BEGIN IMMEDIATE
+prisma:query SELECT `main`.`Notification`.`id` FROM `main`.`Notification` WHERE (`main`.`Notification`.`dedupKey` = ? AND 1=1) LIMIT ? OFFSET ?
+prisma:query SELECT `main`.`Notification`.`id`, `main`.`Notification`.`userId`, `main`.`Notification`.`type`, `main`.`Notification`.`projectId`, `main`.`Notification`.`payloadJson`, `main`.`Notification`.`dedupKey`, `main`.`Notification`.`readAt`, `main`.`Notification`.`createdAt` FROM `main`.`Notification` WHERE (`main`.`Notification`.`id` = ? AND (`main`.`Notification`.`dedupKey` = ? AND 1=1)) LIMIT ? OFFSET ?
+prisma:query SELECT `main`.`Notification`.`id`, `main`.`Notification`.`userId`, `main`.`Notification`.`type`, `main`.`Notification`.`projectId`, `main`.`Notification`.`payloadJson`, `main`.`Notification`.`dedupKey`, `main`.`Notification`.`readAt`, `main`.`Notification`.`createdAt` FROM `main`.`Notification` WHERE `main`.`Notification`.`id` = ? LIMIT ? OFFSET ?
+prisma:query COMMIT
+(pass) M31 §5 — durable job reliability > notification deduplication: repeated events do not multiply rows [15.62ms]
+
+scripts/test-m31-security.test.ts:
+(pass) M31 §3 — cross-user isolation > stranger cannot access project media, exports, packages, notifications, reviews [35.16ms]
+(pass) M31 §3 — cross-user isolation > another user's package download is rejected without authorization [4.63ms]
+(pass) M31 §3 — review security > reviewer comments + approves; ALL-policy determinism holds [4068.15ms]
+(pass) M31 §3 — review security > fingerprint present and stable; approval pinned to the exact revision [6.06ms]
+(pass) M31 §3 — review security > revoked member loses review access immediately (revocation effect) [35.96ms]
+(pass) M31 §3 — review security > guest link sessions expire with the link and cannot act beyond scope [37.31ms]
+(pass) M31 §3 — review security > notification payloads never carry tokens or storage paths [5.91ms]
+(pass) M31 §3 — review security > unauthorized renders: stranger cannot start a render on someone else's project [10.63ms]
+
+ 14 pass
+ 0 fail
+ 46 expect() calls
+Ran 14 tests across 2 files. [17.25s]

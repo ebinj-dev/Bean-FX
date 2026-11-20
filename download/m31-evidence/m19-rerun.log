@@ -1,0 +1,29 @@
+bun test v1.3.14 (0d9b296a)
+
+scripts/test-m19-security.test.ts:
+(pass) M19 security — authentication > anonymous access to protected APIs is rejected [60.30ms]
+(pass) M19 security — authentication > invalid session token is rejected (fail closed) [9.52ms]
+(pass) M19 security — authentication > registration issues a verification token; verifying works (no-SMTP honest surface) [67.25ms]
+(pass) M19 security — authentication > verification tokens are single-use [51.20ms]
+(pass) M19 security — authentication > password change re-authenticates and revokes other sessions [234.38ms]
+(pass) M19 security — authentication > password reset: generic response, single-use token, full session revocation [56.68ms]
+(pass) M19 security — authentication > deleted account is locked out immediately [86.42ms]
+(pass) M19 security — authentication > account deletion requires re-authentication (wrong password rejected) [78.96ms]
+(pass) M19 security — authorization (cross-user isolation) > users cannot access each other's projects, media or exports [150.95ms]
+(pass) M19 security — authorization (cross-user isolation) > admin endpoints reject ordinary users and anonymous callers [68.75ms]
+(pass) M19 security — API hardening > invalid payloads are rejected with 4xx (no crash) [57.75ms]
+(pass) M19 security — API hardening > error responses never leak stack traces or internals [6.05ms]
+(pass) M19 security — headers, cookies, bundle > security headers are present on public pages [5.80ms]
+(pass) M19 security — headers, cookies, bundle > session cookie is httpOnly, Secure, SameSite=None (partitioned preview support) [43.62ms]
+(pass) M19 security — headers, cookies, bundle > production bundle contains no secrets [63.80ms]
+(pass) M19 security — headers, cookies, bundle > no public source maps are served [3.14ms]
+(pass) M19 security — session management API > sessions list flags the current one and revocation works [89.02ms]
+(pass) M19 security — public website > all public pages render 200 with real content [56.96ms]
+(pass) M19 security — public website > unknown routes get the branded 404 [3.20ms]
+(pass) M19 security — public website > robots.txt excludes private surfaces [0.89ms]
+(pass) M19 security — rate limiting (RUNS LAST: exhausts the shared-IP login bucket) > login is rate-limited after repeated failures [17457.90ms]
+
+ 21 pass
+ 0 fail
+ 275 expect() calls
+Ran 21 tests across 1 file. [18.73s]

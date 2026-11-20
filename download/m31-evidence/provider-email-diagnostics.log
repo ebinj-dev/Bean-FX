@@ -1,0 +1,15 @@
+== M31 provider & email diagnostics ==
+host: $(ffmpeg -version | head -1)
+provider files: src/lib/ai/registry.ts, src/lib/ai/asset-lifecycle.ts, src/lib/my-ai/planner/schema.ts
+env ZAI_API_KEY: not set
+env Z_AI_API_KEY: not set
+env SMTP_URL: not set
+env SMTP_HOST: not set
+env ZAI_VLM: not set
+env OPENAI_API_KEY: not set
+env ANTHROPIC_API_KEY: not set
+GET /api/health → {"status":"ok","checks":{"database":{"ok":true,"detail":"SELECT 1 succeeded","ms":1},"storage":{"ok":true,"detail":"writable at /home/z/my-project/media-store","ms":1},"disk":{"ok":true,"detail":"6.02 GB free","ms":0}},"uptimeSec":110}
+no ZAI credentials → CONFIGURATION REQUIRED (deterministic internal contracts covered by suites)
+mailer contract: delivered=false reason=SMTP not configured on this deployment. → CONFIGURATION REQUIRED (honest — no fake send)
+invitation without SMTP: token=true delivery.emailSent=false → copyable URL fallback WORKS
+== diagnostics complete ==
