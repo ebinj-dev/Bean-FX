@@ -1,0 +1,54 @@
+bun test v1.3.14 (0d9b296a)
+
+scripts/test-m30-collab.test.ts:
+(pass) A. workspaces & invitations > owner invites editor + reviewer + viewer; role escalation is capped [45.98ms]
+(pass) A. workspaces & invitations > invitation is bound to the invited email — another account cannot accept [20.57ms]
+(pass) A. workspaces & invitations > duplicate active invitation is rejected (409) [14.86ms]
+(pass) A. workspaces & invitations > reviewer + viewer accept; members appear with their roles [31.63ms]
+153 |     const { PrismaClient } = await import("@prisma/client");
+154 |     const db = new PrismaClient({ datasources: { db: { url: process.env.M30_DB ?? "file:/home/z/my-project/db/custom.db" } } });
+155 |     await db.$queryRawUnsafe(`UPDATE Invitation SET expiresAt = datetime('now','-1 day') WHERE id = ?`, inv.json.invitation.id);
+156 |     await db.$disconnect();
+157 |     const late = await api("POST", "/api/invitations/respond", { jar: outsider, body: { token: inv.json.token, action: "accept" } });
+158 |     expect(late.status).toBe(410);
+                              ^
+error: expect(received).toBe(expected)
+
+Expected: 410
+Received: 403
+
+      at <anonymous> (/home/z/my-project/scripts/test-m30-collab.test.ts:158:25)
+(fail) A. workspaces & invitations > expired invitation is rejected ( lifecycle EXPIRED ) [60.79ms]
+(pass) A. workspaces & invitations > revoked invitation token stops working on the next request [21.01ms]
+(pass) A. workspaces & invitations > editor cannot invite an ADMIN (escalation cap); viewer cannot invite at all [11.96ms]
+(pass) A. workspaces & invitations > nobody can change their own role; the OWNER cannot be removed [27.81ms]
+(pass) B. sharing + role enforcement on existing routes > shared project appears for members with roles; outsider sees nothing [11.63ms]
+(pass) B. sharing + role enforcement on existing routes > timeline writes by a REVIEWER/VIEWER are rejected (404 no-leak) [57.73ms]
+(pass) B. sharing + role enforcement on existing routes > workspace EDITOR can edit the shared timeline (real write) [30.39ms]
+(pass) B. sharing + role enforcement on existing routes > concurrency guard: stale baseVersion is rejected with the authoritative head (M30 §8) [25.73ms]
+(pass) B. sharing + role enforcement on existing routes > project PATCH concurrency guard (expectedUpdatedAt) rejects stale writes [23.71ms]
+
+scripts/test-m30-reviews.test.ts:
+(pass) C. immutable revisions & the real render pipeline > review #1: PROCESSING → READY_FOR_REVIEW with a validated preview [6076.07ms]
+(pass) C. immutable revisions & the real render pipeline > immutability: edits AFTER submission never touch the pinned revision [18.87ms]
+(pass) C. immutable revisions & the real render pipeline > review #2 supersedes review #1; decisions close [15.69ms]
+(pass) D. frame-accurate comments > comment at frame 0 and at a clip boundary; non-owner reply; resolve; reopen [40.04ms]
+(pass) D. frame-accurate comments > negative frame / malformed fps are rejected; two comments may share a frame [28.20ms]
+(pass) D. frame-accurate comments > authorization: stranger cannot comment; author-only edit; guest cannot resolve [19.11ms]
+(pass) D. frame-accurate comments > comments stay attached to their revision (no migration to newer revisions) [11.99ms]
+(pass) E. approval workflow bound to the exact revision > unassigned stranger cannot decide; assigned reviewer approves → APPROVED [33.76ms]
+(pass) E. approval workflow bound to the exact revision > superseded revisions cannot receive decisions (approval cannot carry over) [5.26ms]
+(pass) E. approval workflow bound to the exact revision > changes-requested flow: review #3 → CHANGES_REQUESTED → resubmit #4 → approve [10173.94ms]
+(pass) F. external review links & guest sessions > editor creates VIEW and APPROVE links; tokens returned exactly once [23.78ms]
+(pass) F. external review links & guest sessions > invalid token → 410; VIEW link sees preview but cannot comment; APPROVE link can comment+decide [101.54ms]
+(pass) F. external review links & guest sessions > guest preview streams only the validated render; original media stays private [13.11ms]
+(pass) F. external review links & guest sessions > revocation takes effect on subsequent requests (guest loses access) [22.64ms]
+(pass) F. external review links & guest sessions > notifications recorded for the owner (review.requested / approved chain) [5.74ms]
+
+1 tests failed:
+(fail) A. workspaces & invitations > expired invitation is rejected ( lifecycle EXPIRED ) [60.79ms]
+
+ 27 pass
+ 1 fail
+ 130 expect() calls
+Ran 28 tests across 2 files. [19.14s]

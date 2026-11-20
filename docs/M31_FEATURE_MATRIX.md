@@ -1,23 +1,22 @@
-# M31 FEATURE MATRIX (capability × validation dimension)
+# M31 FEATURE MATRIX — BEAN AI Production Studio
 
-| Capability | Implemented | Automated | Real-host | External config | Operational |
+| Capability | Implemented | Automated | Real media | Config needed | Notes |
 |---|---|---|---|---|---|
-| Editing core (timeline/undo/markers/roll/keyframes) | VERIFIED | VERIFIED (batch 36/36) | n/a | none | yes |
-| Audio (gain/pan/xfade/GANGZII) | VERIFIED | VERIFIED (m17 suites) | n/a | none | yes |
-| Media ingest/probe/proxy/relink | VERIFIED | VERIFIED (m31-media-qual + batch) | n/a | none | yes |
-| Export conformance | VERIFIED | VERIFIED (ffprobe full validation) | n/a | none | yes |
-| Packaging/import/integrity | VERIFIED | VERIFIED (m29 8/8+4/4) | n/a | none | yes |
-| Collaboration (roles/invites/links/guests) | VERIFIED | VERIFIED (m30 28 + m31 7) | n/a | none | yes |
-| Worker durability | VERIFIED | VERIFIED (m31 fault injection 7) | n/a | none | yes |
-| Backup/restore | VERIFIED (DB+store copy drill) | VERIFIED (11/11) | n/a | object-store = INFRA REQUIRED | partial |
-| Observability | VERIFIED (admin/health extension) | tsc-verified | n/a | none | yes |
-| Bounded performance | VERIFIED (measured, bounded) | VERIFIED (5/6 + documented S1) | n/a | none | yes |
-| M13 temporal CSRT | VERIFIED | **VERIFIED 17/17** (contrib pinned) | n/a | none | yes |
-| Premiere UXP real host | VERIFIED (code) | AUTOMATED (static+protocol suites) | **OWNER ACTION** | none | checklist ready |
-| Desktop Bridge on Windows | VERIFIED (code) | AUTOMATED | **OWNER ACTION** | none | checklist ready |
-| AI providers (6 engines) | VERIFIED (contracts) | AUTOMATED | n/a | **CONFIGURATION REQUIRED** | diagnostics ready |
-| Email delivery | VERIFIED (honest contract) | AUTOMATED | n/a | **CONFIGURATION REQUIRED** | fallback VERIFIED |
-| Object-store backup | NOT IMPLEMENTED | — | — | **INFRASTRUCTURE REQUIRED** | — |
-| Payments / public launch | NOT IMPLEMENTED (deliberate) | — | — | — | — |
+| Pipeline engine + state machine | VERIFIED | VERIFIED (core 14/14) | n/a | none | 11 states, invalid transitions rejected |
+| NL intake → structured brief | VERIFIED | VERIFIED (core + live) | n/a | LLM enhance optional | deterministic extraction; honest provider note |
+| Concept options + decision record | VERIFIED | VERIFIED (core + live) | n/a | LLM enhance optional | 3 distinct directions; append-only decisions |
+| Script + duration validation + revisions | VERIFIED | VERIFIED (core + live) | n/a | LLM enhance optional | ±5% duration gate; revision 1→2 verified |
+| Storyboard + scene approvals | VERIFIED | VERIFIED (live) | placeholders marked pending | LLM enhance optional | no fabricated thumbnails |
+| Asset planning + rights provenance | VERIFIED | VERIFIED (live) | user media attached | generation = CONFIG REQUIRED | RESTRICTED unapprovable; unknown cost = unknown |
+| Production Board UI | VERIFIED | VERIFIED (live via API; UI additive) | yes | none | real state only; no fake progress |
+| Template C — Social Video Factory | VERIFIED | **E2E 15/15 with real media** | yes | none | intake→…→delivery |
+| Template E — Podcast Repurposing | VERIFIED (analysis + chain) | VERIFIED (analysis deterministic) | yes | ASR = CONFIG REQUIRED | transcript honestly NOT RUN |
+| Template D — Brand Commercial | VERIFIED | **E2E via M30 review bridge** | yes | none | review→approve→render→QA→delivery |
+| Templates A/B/F | PARTIAL (stages defined) | blocked-start VERIFIED (409 + reason) | — | CONFIGURATION REQUIRED | exact blockers shown |
+| Native timeline assembly | VERIFIED | VERIFIED (canonical commands; rough cut on editor timeline) | yes | none | undo/redo/manual edit preserved |
+| Render on durable jobs | VERIFIED | VERIFIED (job submitted + COMPLETED) | yes | none | no second queue |
+| QA layer | VERIFIED | VERIFIED (real renders checked) | yes | none | PASSED/FAILED/NEEDS_HUMAN_REVIEW |
+| Cost gates | VERIFIED | VERIFIED (core + live) | n/a | — | no paid call without approval+config |
+| Restart/resume | VERIFIED | VERIFIED (recovery test) | yes | none | no duplicated assets/clips |
 
-Every Automated claim cites a log in `download/m31-evidence/`. No dimension collapsed into a misleading green.
+Simulated: NONE. Every VERIFIED claim cites `download/m31-evidence/` logs. Provider-dependent capabilities are CONFIGURATION REQUIRED, never faked.

@@ -1,0 +1,71 @@
+bun test v1.3.14 (0d9b296a)
+
+scripts/test-m31-studio-core.test.ts:
+(pass) M31 studio — state machine > valid transitions pass; invalid are rejected [0.13ms]
+(pass) M31 studio — templates are honest about capability > exactly three active templates with complete stage graphs [0.20ms]
+(pass) M31 studio — templates are honest about capability > inactive templates state the exact blocker [0.07ms]
+(pass) M31 studio — templates are honest about capability > getTemplate resolves ids and rejects unknown [0.05ms]
+(pass) M31 studio — brief extraction (deterministic) > extracts duration, aspect, tone from natural language [0.24ms]
+(pass) M31 studio — brief extraction (deterministic) > brief schema enforces sane bounds [4.45ms]
+(pass) M31 studio — script duration consistency > valid within tolerance; invalid outside [0.11ms]
+(pass) M31 studio — honest cost gates > deterministic stages cost nothing and need no approval [0.06ms]
+(pass) M31 studio — honest cost gates > provider stage without configuration is blocked with the exact reason; cost unknown, never 0 [0.02ms]
+(pass) M31 studio — honest cost gates > provider stage without an approved budget is blocked [0.04ms]
+(pass) M31 studio — QA pre-render checks > missing media fails hard; valid sequence passes [0.48ms]
+(pass) M31 studio — QA pre-render checks > NOT_RUN checks surface NEEDS_HUMAN_REVIEW, never silent success [0.03ms]
+(pass) M31 studio — QA pre-render checks > duration mismatch fails [0.04ms]
+(pass) M31 studio — concept drafts are genuinely distinct > 3 options with distinct ids and structures [0.32ms]
+
+scripts/test-m30-collab.test.ts:
+(pass) A. workspaces & invitations > owner invites editor + reviewer + viewer; role escalation is capped [46.00ms]
+(pass) A. workspaces & invitations > invitation is bound to the invited email — another account cannot accept [21.13ms]
+(pass) A. workspaces & invitations > duplicate active invitation is rejected (409) [6.18ms]
+(pass) A. workspaces & invitations > reviewer + viewer accept; members appear with their roles [26.56ms]
+(pass) A. workspaces & invitations > expired invitation is rejected ( lifecycle EXPIRED ) [30.31ms]
+(pass) A. workspaces & invitations > revoked invitation token stops working on the next request [25.75ms]
+(pass) A. workspaces & invitations > editor cannot invite an ADMIN (escalation cap); viewer cannot invite at all [10.94ms]
+(pass) A. workspaces & invitations > nobody can change their own role; the OWNER cannot be removed [26.44ms]
+(pass) B. sharing + role enforcement on existing routes > shared project appears for members with roles; outsider sees nothing [11.28ms]
+(pass) B. sharing + role enforcement on existing routes > timeline writes by a REVIEWER/VIEWER are rejected (404 no-leak) [60.21ms]
+(pass) B. sharing + role enforcement on existing routes > workspace EDITOR can edit the shared timeline (real write) [29.63ms]
+(pass) B. sharing + role enforcement on existing routes > concurrency guard: stale baseVersion is rejected with the authoritative head (M30 §8) [18.42ms]
+(pass) B. sharing + role enforcement on existing routes > project PATCH concurrency guard (expectedUpdatedAt) rejects stale writes [18.13ms]
+
+scripts/test-m29-integrity.test.ts:
+(pass) M29 — package integrity & bulk relink > valid package imports cleanly [1538.21ms]
+(pass) M29 — package integrity & bulk relink > tampered media payload is rejected with checksum mismatch (nothing imported) [3076.11ms]
+(pass) M29 — package integrity & bulk relink > non-zip uploads are rejected by signature sniffing [5.22ms]
+(pass) M29 — package integrity & bulk relink > METADATA import restores the timeline with honest missing references [1534.82ms]
+(pass) M29 — package integrity & bulk relink > bulk relink: suggestion, compatible-metadata warning, atomic apply, undo [2268.43ms]
+(pass) M29 — package integrity & bulk relink > path traversal entry names are rejected by the zip reader [3059.89ms]
+(pass) M29 — package integrity & bulk relink > unsupported future package versions are rejected clearly [3056.88ms]
+(pass) M29 — package integrity & bulk relink > malformed manifest JSON is rejected [1553.79ms]
+
+scripts/test-m30-reviews.test.ts:
+(pass) C. immutable revisions & the real render pipeline > review #1: PROCESSING → READY_FOR_REVIEW with a validated preview [4069.06ms]
+(pass) C. immutable revisions & the real render pipeline > immutability: edits AFTER submission never touch the pinned revision [20.13ms]
+(pass) C. immutable revisions & the real render pipeline > review #2 supersedes review #1; decisions close [17.60ms]
+(pass) D. frame-accurate comments > comment at frame 0 and at a clip boundary; non-owner reply; resolve; reopen [38.57ms]
+(pass) D. frame-accurate comments > negative frame / malformed fps are rejected; two comments may share a frame [26.02ms]
+(pass) D. frame-accurate comments > authorization: stranger cannot comment; author-only edit; guest cannot resolve [18.08ms]
+(pass) D. frame-accurate comments > comments stay attached to their revision (no migration to newer revisions) [10.75ms]
+(pass) E. approval workflow bound to the exact revision > unassigned stranger cannot decide; assigned reviewer approves → APPROVED [51.25ms]
+(pass) E. approval workflow bound to the exact revision > superseded revisions cannot receive decisions (approval cannot carry over) [5.85ms]
+(pass) E. approval workflow bound to the exact revision > changes-requested flow: review #3 → CHANGES_REQUESTED → resubmit #4 → approve [10197.51ms]
+(pass) F. external review links & guest sessions > editor creates VIEW and APPROVE links; tokens returned exactly once [23.21ms]
+(pass) F. external review links & guest sessions > invalid token → 410; VIEW link sees preview but cannot comment; APPROVE link can comment+decide [61.30ms]
+(pass) F. external review links & guest sessions > guest preview streams only the validated render; original media stays private [14.55ms]
+(pass) F. external review links & guest sessions > revocation takes effect on subsequent requests (guest loses access) [20.65ms]
+(pass) F. external review links & guest sessions > notifications recorded for the owner (review.requested / approved chain) [8.56ms]
+
+scripts/test-m29-portability.test.ts:
+(pass) M29 — full portability chain (real media) > user A builds a rich project (2 tracks, image, effect, keyframe, crossfade, marker) [2076.80ms]
+(pass) M29 — full portability chain (real media) > FULL package: manifest + verified checksums + dedup + proxies [6115.31ms]
+ZIP-LEN: 1745316 cookieB: set
+(pass) M29 — full portability chain (real media) > user B imports the package → NEW project identity, relationships intact [95107.52ms]
+(pass) M29 — full portability chain (real media) > restored project RENDERS (real FFmpeg, conformance-gated) [4151.87ms]
+
+ 54 pass
+ 0 fail
+ 300 expect() calls
+Ran 54 tests across 5 files. [234.93s]

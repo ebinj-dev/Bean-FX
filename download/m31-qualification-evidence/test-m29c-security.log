@@ -1,0 +1,48 @@
+bun test v1.3.14 (0d9b296a)
+
+scripts/test-m29c-security.test.ts:
+(pass) M29-C security & data-safety supplements > setup: user A builds a minimal project and packages it [3770.70ms]
+(pass) M29-C security & data-safety supplements > cross-user archive access is denied (download + status) [54.43ms]
+86 |       if (["COMPLETED", "FAILED"].includes(r.json?.archive?.status ?? "")) {
+87 |         expect(r.json.archive.status).toBe("FAILED");
+88 |         expect(r.json.archive.error).toMatch(/STORED|compression/i);
+89 |         break;
+90 |       }
+91 |       if ((Date.now() - t0) / 1000 > 120) throw new Error("deflate rejection timeout");
+                                                         ^
+error: deflate rejection timeout
+      at <anonymous> (/home/z/my-project/scripts/test-m29c-security.test.ts:91:53)
+(fail) M29-C security & data-safety supplements > DEFLATE zip entries are rejected (STORED-only contract) [120953.56ms]
+100 |     z.writestr('manifest.json', json.dumps({'formatVersion': 'beanfx-project/1', 'assets': []}))
+101 |     for i in range(900):
+102 |         z.writestr(f'pad/{i}.txt', 'x')
+103 | "`);
+104 |     const imp = await api("POST", "/api/projects/import", undefined, cookieB, fs.readFileSync("/tmp/sec-many.zip"), { "Content-Type": "application/zip" });
+105 |     expect(imp.status).toBe(202);
+                             ^
+error: expect(received).toBe(expected)
+
+Expected: 202
+Received: 409
+
+      at <anonymous> (/home/z/my-project/scripts/test-m29c-security.test.ts:105:24)
+(fail) M29-C security & data-safety supplements > excessive archive entries are rejected (entry cap) [54.52ms]
+121 |     expect(dl.status).toBe(200);
+122 |     const before = await api("GET", "/api/projects", undefined, cookieB);
+123 |     const n0 = before.json.projects.length;
+124 |     for (const run of [1, 2]) {
+125 |       const imp = await api("POST", "/api/projects/import", undefined, cookieB, dl.buf!, { "Content-Type": "application/zip" });
+126 |       expect(imp.status).toBe(202);
+                               ^
+error: expect(received).toBe(expected)
+
+Expected: 202
+Received: 409
+
+      at <anonymous> (/home/z/my-project/scripts/test-m29c-security.test.ts:126:26)
+(fail) M29-C security & data-safety supplements > duplicate processing: importing the same package twice creates TWO distinct new projects (no overwrite) [18.12ms]
+
+ 2 pass
+ 3 fail
+ 13 expect() calls
+Ran 5 tests across 1 file. [124.92s]

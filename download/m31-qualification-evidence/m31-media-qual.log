@@ -1,0 +1,19 @@
+bun test v1.3.14 (0d9b296a)
+
+scripts/test-m31-media-qual.test.ts:
+(pass) M31 §4 — import, probes, corrupt rejection > uploads probe READY with metadata; corrupt media is rejected [4091.02ms]
+(pass) M31 §4 — import, probes, corrupt rejection > timeline: multi-track, mixed fps, rotation, keyframed brightness, audio crossfades [86.01ms]
+M31-QUAL export: 3618195 bytes path=/home/z/my-project/media-store-closeout/timeline-renders/u_cmwotsy880000nc85qxy6va40/seq_cmwotszos000bnc85cq3pfk6n_mwott4sn.mp4
+M31-QUAL probe attempt 0: bytes=4530 head={
+    "streams": [
+        {
+            "index": 0,
+            "codec_name": "h264",
+            "codec_long_name": "H
+M31-QUAL luma ramp frame0=0 frame80=0 (M27 animated brightness present: false)
+(pass) M31 §4 — import, probes, corrupt rejection > render completes and the export passes ffprobe conformance [8712.55ms]
+
+ 3 pass
+ 0 fail
+ 22 expect() calls
+Ran 3 tests across 1 file. [14.94s]

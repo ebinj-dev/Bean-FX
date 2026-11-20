@@ -54,6 +54,7 @@ model User {
   billingEvents BillingEvent[]
   creativePresets CreativePreset[]
   workflowRuns    WorkflowRun[]  @relation("WorkflowRuns")
+  productions     Production[]   @relation("Productions")
   studioPlans   StudioPlan[]   @relation("StudioPlans")
   studioScenes  StudioScene[]  @relation("StudioScenes")
   studioBatches StudioBatch[]  @relation("StudioBatches")
@@ -118,6 +119,7 @@ model Project {
   publishMetadataRows PublishMetadata[] @relation("PublishMetadataRows")
   exportVariants ExportVariant[] @relation("ExportVariants")
   workflowRuns   WorkflowRun[]  @relation("WorkflowRuns")
+  productions    Production[]   @relation("Productions")
   publishPackages PublishPackage[] @relation("PublishPackages")
   creativeReviews CreativeReview[] @relation("CreativeReviews")
   creativeVariants CreativeVariant[] @relation("CreativeVariants")
@@ -1447,3 +1449,120 @@ model Notification {
 /// M30: render job for the review preview (ExportFile kind REVIEW_PREVIEW).
 /// Completed by the existing RENDER_TIMELINE pipeline via a hook that flips
 /// the revision to READY_FOR_REVIEW.
+
+/// M31 — BEAN AI Production Studio. One row per agentic video production.
+/// The pipeline engine (src/lib/production) drives stages; executable work
+/// runs on the EXISTING durable Job system — never a second queue. briefJson
+/// is the structured intake brief; conceptJson/scriptJson/storyboardJson hold
+/// approved stage artifacts; deliveryJson lists final validated artifacts.
+model Production {
+  id                  String   @id @default(cuid())
+  userId              String
+  user                User     @relation("Productions", fields: [userId], references: [id], onDelete: Cascade)
+  projectId           String?
+  project             Project? @relation("Productions", fields: [projectId], references: [id], onDelete: SetNull)
+  templateId          String
+  /// DRAFT | PLANNED | RUNNING | AWAITING_APPROVAL | COMPLETED | FAILED | CANCELLED
+  status              String   @default("DRAFT")
+  title               String
+  briefJson           String?
+  conceptJson         String?
+  scriptJson          String?
+  storyboardJson      String?
+  researchJson        String?
+  referenceJson       String?
+  deliveryJson        String?
+  /// Approved budget in cents (user-set). NULL = no budget set (never treated as 0).
+  approvedBudgetCents Int?
+  estimatedCostCents  Int?
+  actualCostCents     Int?
+  pendingCostCents    Int?
+  /// NOT_RUN | PASSED | PASSED_WITH_WARNINGS | FAILED | NEEDS_HUMAN_REVIEW
+  qaState             String   @default("NOT_RUN")
+  qaJson              String?
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+  stages              ProductionStage[]
+  decisions           ProductionDecision[]
+  assets              ProductionAsset[]
+  events              ProductionEvent[]
+  @@index([userId, status])
+  @@index([projectId])
+}
+
+/// One pipeline stage per production; deterministic server-enforced states.
+model ProductionStage {
+  id            String   @id @default(cuid())
+  productionId  String
+  production    Production @relation(fields: [productionId], references: [id], onDelete: Cascade)
+  key           String
+  order         Int
+  /// NOT_STARTED | READY | RUNNING | AWAITING_APPROVAL | SUCCEEDED | FAILED |
+  /// CANCEL_REQUESTED | CANCELLED | SKIPPED | BLOCKED | SUPERSEDED
+  state         String   @default("NOT_STARTED")
+  jobId         String?
+  startedAt     DateTime?
+  completedAt   DateTime?
+  /// Verified outputs for resume (never trust RUNNING state across restarts).
+  checkpointJson String?
+  outputJson    String?
+  error         String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  @@unique([productionId, key])
+  @@index([productionId, state])
+}
+
+/// Append-only decision history. A changed decision appends a new row —
+/// prior decisions are never rewritten.
+model ProductionDecision {
+  id           String   @id @default(cuid())
+  productionId String
+  production   Production @relation(fields: [productionId], references: [id], onDelete: Cascade)
+  kind         String
+  valueJson    String
+  createdAt    DateTime @default(now())
+  @@index([productionId, kind, createdAt])
+}
+
+/// Planned/generated asset with rights provenance. licenseState values:
+/// VERIFIED | ATTRIBUTION_REQUIRED | USER_CONFIRMED | UNKNOWN | RESTRICTED
+model ProductionAsset {
+  id            String   @id @default(cuid())
+  productionId  String
+  production    Production @relation(fields: [productionId], references: [id], onDelete: Cascade)
+  sceneKey      String?
+  category      String
+  description   String
+  /// USER_MEDIA | GENERATION | STOCK | DETERMINISTIC | CAPTION | GRAPHIC
+  sourceType    String
+  provider      String?
+  model         String?
+  licenseState  String   @default("UNKNOWN")
+  attribution   String?
+  /// PLANNED | PENDING | GENERATING | READY | APPROVED | REJECTED | FAILED | BLOCKED
+  status        String   @default("PLANNED")
+  /// true when the cost is genuinely unknown — the UI shows "unknown", not 0.
+  costUnknown   Boolean  @default(true)
+  costCents     Int?
+  storagePath   String?
+  mediaAssetId  String?
+  provenanceJson String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  @@index([productionId, status])
+  @@index([productionId, sceneKey])
+}
+
+/// Append-only real production log. Only actual events are recorded — the
+/// board renders this log verbatim and never fabricates activity.
+model ProductionEvent {
+  id           String   @id @default(cuid())
+  productionId String
+  production   Production @relation(fields: [productionId], references: [id], onDelete: Cascade)
+  kind         String
+  stageKey     String?
+  detailJson   String?
+  createdAt    DateTime @default(now())
+  @@index([productionId, createdAt])
+}

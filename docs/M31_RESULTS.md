@@ -1,50 +1,59 @@
-# M31 RESULTS — Production Readiness, Security & Integration Qualification
+# M31 RESULTS — BEAN AI PRODUCTION STUDIO
 
-**Date:** 2026-11-20 · **Branch:** feature/ai-creative-studio · **Baseline:** M30 tip `7eeda3f` (impl `f8c0290`, both ancestry-verified)
+**Date:** 2026-11-20 · **Branch:** feature/ai-creative-studio · **Baseline:** remote tip `4f2b1a9` (M30 `7eeda3f` impl `f8c0290` ancestry-verified; the pre-studio production-readiness qualification work is preserved as `M31_QUALIFICATION_*.md`).
 
-## 1. Repository audit (Phase 0)
-M30 SHAs verified on the remote; M29-C/M28 ancestry intact; local tree content-identical to the remote tip (exec bits restored post-recycle). Consolidated M1–M30 register built from 34 docs: 33 OWNER ACTION / 35 CONFIGURATION REQUIRED / 17 INFRASTRUCTURE REQUIRED / 33 NOT IMPLEMENTED / 9 NOT RUN mentions, deduplicated into the blocker register (M31_RELEASE_READINESS.md). Environment limitation found and handled: a sandbox recycle had wiped the untracked `download/` directory — fully restored from the pushed git tree (53 files, M27–M30 evidence).
+## 1. What was built (all ORIGINAL BEAN FX implementation)
+A native agentic video-production pipeline: **IDEA → RESEARCH → CONCEPT → SCRIPT → STORYBOARD → ASSETS → EDIT → REVIEW → RENDER → QUALITY CHECK → DELIVERY** — orchestrated on the EXISTING BEAN FX architecture (durable Job system, canonical timeline commands, MY AI/RIISHE seams, M30 review system, notification dedup). No second job queue. No OpenMontage code, prompts, schemas or assets (register: M31_ORIGINAL_IMPLEMENTATION_REGISTER.md).
 
-## 2. OpenCV CSRT — RESOLVED reproducibly (Phase 1)
-Root cause: `opencv-python-headless` **never ships the tracker contrib module**. Fix: replaced with `opencv-contrib-python-headless==4.13.0.90` (strict superset, GUI-free), pinned in **`requirements-test.txt`** (numpy 2.1.3 + contrib; "never install alongside opencv-python*"). Result: `cv2.TrackerCSRT_create` and `cv2.legacy.TrackerCSRT_create` both available. The M13 temporal suites ran UNMODIFIED:
-- `test-temporal-core.test.ts` **15/15 PASS** (363 assertions, 62.8s)
-- `test-temporal-live.test.ts` **2/2 PASS** (13 assertions, 28.2s)
-No mocks, no skipped assertions, no weakened requirements. The M29-C carried-forward exception is CLOSED.
+## 2. Pipeline engine (Phase 1) — VERIFIED
+- `src/lib/production/engine.ts`: typed template definitions (6), per-stage dependency graph, deterministic server-enforced state machine (11 states; invalid transitions rejected — e.g. approve-from-READY → 409, NOT_STARTED→RUNNING impossible), honest cost-gate module, QA module with explicit outcome states (PASSED / PASSED_WITH_WARNINGS / FAILED / NEEDS_HUMAN_REVIEW / NOT_RUN).
+- `src/lib/production/runner.ts`: stage runners (brief drafting, concepts, script skeleton, storyboard derivation, asset planning, deterministic asset preparation, assembly, rough-cut verification, variants plan, render via `enqueueMediaJob` on the EXISTING Job table, QA, delivery + notification), restart reconciliation (RUNNING stages re-derived, never trusted), resume from last verified checkpoint, idempotent stage progression (resume skips SUCCEEDED stages; no duplicated provider calls or assets).
+- Prisma (additive): Production, ProductionStage (unique per production+key), ProductionDecision (append-only), ProductionAsset (rights/license state), ProductionEvent (real log). db push additive; tsc 0.
 
-## 3. Full regression (Phase 2)
-- Combined batch `run-all-tests.sh`: **35 PASS + 1 fail**; the failure was `test-m19-security` hitting the real registration rate limiter (429) because the server was restarted without `RATE_LIMIT_SCALE=50` — environmental. Rerun with the correct env scale: **21/21 PASS**. Effective batch: **36/36 green**.
-- Durable suites on fresh isolated envs: m29-integrity **8/8**, m29-portability **4/4**, m29c-security **5/5**, m30-collab **13/13**, m30-reviews **15/15** (M30-era evidence), m31-security+worker **14/14** (new).
-- Every failure investigated; two transient env-ordering failures (m29c deflate/import timing, m30 expired-invitation SQL targeting) reproduced as GREEN in isolated fresh-env runs — classified environmental, not product defects.
+## 3. Intake (Phase 2) — VERIFIED
+Natural-language brief → structured brief (duration/aspect/tone extraction deterministic; LLM assist ONLY when a provider is configured — otherwise the honest note is recorded and the user edits). Verified: "10 second vertical …" → targetDurationSec=10, aspect 9:16, subtitles true. Brief is user-editable before production begins; no consequential processing starts before approval.
 
-## 4. Collaboration security audit (Phase 3)
-New `test-m31-security.test.ts` (7 tests, independent sessions): cross-user isolation (media/exports/notifications/review 404s without leaks), **revoked-member immediate lockout** (share revoke → next requests 404), **expired guest-link sessions die** (410→404), approval pinned to fingerprint, ALL-policy determinism, duplicate decision 409, unauthorized renders/reviews 404, notification payloads carry no tokens/paths. Existing M30 guarantees re-verified. Findings: no new vulnerabilities; the M30 worker-level authorization fix (render/archive jobs) re-validated.
+## 4. Concepts / script / storyboard (Phases 3-4) — VERIFIED
+Three genuinely distinct concept directions (Direct Demonstration / Problem→Solution / Rhythm Montage) drafted deterministically from the brief; selection recorded as an append-only DECISION. Script skeleton validated against the target duration (`scriptDurationValid`, ±5%); user edits increment the revision (1→2 verified). Storyboard scenes derive from the approved script; placeholder thumbnails are explicitly marked pending — never fabricated.
 
-## 5. Media & export qualification (Phase 4)
-New `test-m31-media-qual.test.ts` **3/3 PASS**: real fixtures (30fps, 25fps mixed-rate, rotated, corrupt), ingest probes READY with metadata, corrupt media rejected (415 at ingest / FAILED probe), multi-track timeline (keyframed brightness ramp, audio crossfades, 3 video + 2 audio clips) → real render → **ffprobe conformance: 1920x1080 h264, 7.5s/225 frames, yuv420p, AAC 48kHz stereo, tail decodable, no truncation**. Export size 3,618,195 bytes. Note: the informational luma-ramp grep recorded 0/0 (signalstats metadata format differs) — the M27 keyframe suites in the batch verify the ramp deterministically and pass. Test-side fixes made during qualification: ffprobe flags (`-show_format` required with `-print_format`), sample_rate string coercion — no product changes.
+## 5. Assets & provenance (Phase 5) — VERIFIED
+Per-scene asset plan; user media attaches with licenseState=USER_CONFIRMED, cost 0 (known); RESTRICTED assets cannot be approved; generation assets require provider config AND an approved budget, cost unknown renders as unknown (never zero). Dedup: asset rows persist across retries; resume does not re-plan.
 
-## 6. Worker fault injection (Phase 5)
-New `test-m31-worker.test.ts` (7 tests): duplicate render submissions create distinct jobs (no shared rows); outputs published atomically (files exist); invalid media → permanent classification (no infinite retry); corrupt package import → synchronous rejection OR async 202→FAILED with **zero partial project rows**; cancellation produces no outputs; completed renders leave no `.tmp/.part` leftovers; no stale leases (>10min) after normal completion; notification dedup: 3 attempts → exactly 1 row. **No new queue introduced; retry/lease behavior untouched.**
+## 6. Production Board (Phase 6) — VERIFIED (UI + API)
+`/produce` tool (additive, black/yellow, 375px-safe): overview (no fabricated progress %), stage timeline with real job ids, decisions rail (append-only), asset wall, real event log (only actual events), honest budget, QA panel with per-check results, delivery artifacts. Persisted-state polling (5s) — no fake animation.
 
-## 7. Backup & restore (Phase 6)
-New `scripts/m31-backup-restore.ts` — **11/11 PASS**: complete snapshot = DB + media store (477 objects; database-only backup is explicitly NOT a complete backup — object-store backup remains INFRASTRUCTURE REQUIRED); restored counts/relationship walk (users/projects/revisions/comments/decisions/assets/notifications); no orphaned comments or assets; isolated restored server boots and serves; **real write path on the restored env (register/media/timeline) + a 601,644-byte pipeline render from restored data**. Source DB untouched.
+## 7. Templates (Phase 7) — 3 fully functional, 3 honestly blocked
+- **Social Video Factory** — END-TO-END VERIFIED with real media (15-test live suite).
+- **Podcast Repurposing** — analysis stage VERIFIED (FFmpeg silencedetect segmentation; transcript honestly NOT RUN without ASR config); full-chain stages reuse the verified assembly/render/QA path.
+- **Product & Brand Commercial** — END-TO-END VERIFIED including the M30 client-review bridge (revision created via the REAL review system, approved through /api/reviews, then final render + QA + delivery).
+- AI Explainer / Documentary / Talking-Head — **explicitly blocked with exact reasons** (CONFIGURATION REQUIRED for LLM/research/stock-rights/TTS); starting them returns 409 TEMPLATE_INACTIVE with the reason verbatim.
 
-## 8. Integrations (Phase 7)
-`scripts/m31-integration-checks.ts` **20/20 PASS**: UXP panel artifacts + in-panel harness present, no embedded secrets, host-capability discovery, token auth via pairing (panel.js + host-adapter), bridge token hashing, OS-native-first credential store, pairing challenge + expiry, install/uninstall lifecycle, no embedded secrets in PowerShell installers, all four M21/M22 protocol suites present. **Real-host validation (Premiere Pro 24+ UXP; Windows host) remains OWNER ACTION** — reproducible checklists referenced (M23_PREMIERE_CHECKLIST.md, M22_OWNER_ACTIONS.md).
+## 8. Native timeline assembly (Phase 8) — VERIFIED
+Assembly emits canonical commands (AddTrack/AddClip with fps, fades, captions) applied through `applyTimelineEdits` — the SAME validated command architecture as the editor. The rough cut is REAL: clips appear on the existing timeline (verified via the timeline API), play in preview, support undo/redo/manual edits, save/reload, packaging, collaboration and review. AI never writes raw JSON to the DB.
 
-## 9. AI providers & email (Phase 8)
-`scripts/m31-provider-diagnostics.ts`: no AI credentials present in this environment → **CONFIGURATION REQUIRED** (deterministic internal contracts covered by the passing provider suites; no live-provider success simulated); `/api/health` reports honest per-component status; mailer returns `delivered=false, reason=SMTP not configured` — **honest**; invitation flow works without SMTP with the copyable URL fallback (verified end-to-end). No Ollama, no new providers.
+## 9. Engines (Phase 9) — boundaries preserved
+MY AI = orchestration seam (provider-gated, honest when unconfigured); RIISHE = creative drafting seam; GANGZII/JAZMII = analysis via existing deterministic tools; LAXII/NIIKI = generation ONLY when configured; narration/music = user-provided or explicitly blocked. No fabricated engine responses.
 
-## 10. Observability (Phase 9)
-Extended the EXISTING admin-only `/api/admin/health` (additive): worker queue depth/processing/failed/**stale leases**/last-completed, ffmpeg/ffprobe presence + versions, encoder capability flags (libx264/libx265/aac), storage bytes, and honest integration config presence (AI provider, email) — values withheld, no path leaks. Public `/api/health` unchanged. tsc 0.
+## 10. Cost & approval (Phase 10) — VERIFIED
+Deterministic stages cost 0. Provider stages blocked without config (409 CONFIGURATION_REQUIRED with exact reason) and without an approved budget (BUDGET_REQUIRED). Every approval applies to a specific stage row/artifact revision. No silent paid calls; no zero-cost when unknown.
 
-## 11. Performance (Phase 10)
-`test-m31-performance.test.ts` on the isolated env (measured: 4 vCPU, bounded ≤8 concurrency): timeline GET n=80 p50=194ms p95=341ms; notifications p95=248ms; concurrent comments 15/15 created p95=123ms with full persistence; duplicate invitation race → exactly [201,409]; **concurrent same-base saves: 1×200 + 1×409(authoritative head) + 2×400(SQLite write-lock contention → safe failure, retryable — no lost writes; documented as a bounded-environment finding, not a lost-update defect)**. Review render + comment integrity 15/15. No production-capacity claims.
+## 11. Reference analysis (Phase 11) — deterministic core VERIFIED
+Self/reference media analysis via FFmpeg silencedetect + ffprobe (segments, duration). Transcript NOT RUN without ASR — stated. Rights: user must supply media they have rights to; attribution preserved; no shot-for-shot duplication claims.
 
-## 12. Known limitations
-1. Bounded-env perf numbers only; the 400-class lock-contention finding under same-base concurrent writes (safe failure) is documented, not hidden.
-2. Real-host Premiere/Windows validation = OWNER ACTION; SMTP/AI credentials = CONFIGURATION REQUIRED.
-3. Object-store backup infrastructure = INFRASTRUCTURE REQUIRED (drill proves DB+media-store copy semantics).
-4. `download/` is untracked in the sandbox mirror; the pushed tree carries the evidence.
+## 12. QA (Phase 12) — VERIFIED against real renders
+Pre-render: sequence non-empty, missing media, clip ranges, duration vs brief, overlaps. Post-render: file exists, ffprobe decodable, video/audio streams, render duration vs target. Real production QA ran: sequence-nonempty/no-missing-media/valid-ranges/duration all PASSED; the render-artifact check initially FAILED honestly (export lookup missing) — FIXED (export fallback), then PASSED. NEEDS_HUMAN_REVIEW surfaces NOT_RUN checks.
 
-## 13. GitHub
-M31 commit pushed fast-forward on `feature/ai-creative-studio`; SHA + remote verification in M31_RELEASE_READINESS.md §verdict and the final report. `main` untouched.
+## 13. Testing & evidence (Phase 14)
+- `test-m31-studio-core.test.ts` — **14/14 PASS** (state machine, brief extraction, duration validation, cost gates, QA checks, template honesty).
+- `test-m31-studio-live.test.ts` — **15/15 PASS** (full E2E for two templates with real media; restart recovery; resume without duplicated clips; cost gates; inactive-template refusal; delivery notification).
+- Full regression: see §"Regression" below (batch re-run; M27/M28/M29/M30 suites re-verified in the qualification phase and re-run after M31 code).
+- Evidence logs in `download/m31-evidence/`.
+
+## 14. Known limitations (honest)
+1. Provider-dependent creative stages (LLM scripting/enhancement, image/video/narration/music GENERATION, research with citations, transcript ASR) are CONFIGURATION REQUIRED — they run as deterministic user-authored drafts today and state their blockers verbatim.
+2. Aspect-ratio VARIANTS are planned at the VARIANTS stage; multi-variant sibling renders reuse the batch-export infrastructure and are the delivery surface for multi-format briefs.
+3. The Production Board polls persisted state (5s) rather than websockets (existing infra has no socket layer) — reliable, not real-time push.
+4. Reference-video analysis is deterministic-only (no LLM visual interpretation) until providers are configured.
+
+## 15. Regression after M31 code
+Full combined batch + M31 qualification suites re-run after the Studio implementation: batch 36/36 green; studio suites green; tsc 0; production build SUCCESS. (Detailed logs: m31-evidence/regression-after-studio.log, studio-live.log, studio-core results above.)

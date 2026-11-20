@@ -1,0 +1,17 @@
+bun test v1.3.14 (0d9b296a)
+
+scripts/test-temporal-live.test.ts:
+Environment variables loaded from .env
+[m13-live] vision provider health: OK (undefined ms)
+[m13-live] temporal job queued — Local tracking uploads NOTHING; consented provider labeling sends ≤6 small subject crops to glm-4.5v (usage recorded, no $ estimate)
+[m13-live] REAL tracking: 40 frames, 1 track(s), provider labels: 1
+[m13-live] provider label for cmworcd0d0003nc6zrrix09c0:w0t0: "other" (provider)
+(pass) M13 LIVE temporal intelligence (REAL providers) > REAL job WITH consent: real CSRT tracking + REAL provider subject labeling [22882.56ms]
+[m13-live] search method=provider-ranking top=cmworcd0d0003nc6zrrix09c0:w0t0 score=0.45
+[m13-live] evidence: Tracked subject moving right at 32.99px/s across 0.4–7.8s, indicating consistent lateral motion across the frame; however, no evidence confirms the object is br
+(pass) M13 LIVE temporal intelligence (REAL providers) > REAL provider-ranked temporal search over the REAL index [2833.49ms]
+
+ 2 pass
+ 0 fail
+ 13 expect() calls
+Ran 2 tests across 1 file. [28.24s]

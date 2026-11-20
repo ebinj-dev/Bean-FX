@@ -1,0 +1,16 @@
+bun test v1.3.14 (0d9b296a)
+
+scripts/test-m29-integrity.test.ts:
+(pass) M29 — package integrity & bulk relink > valid package imports cleanly [1540.34ms]
+(pass) M29 — package integrity & bulk relink > tampered media payload is rejected with checksum mismatch (nothing imported) [1600.27ms]
+(pass) M29 — package integrity & bulk relink > non-zip uploads are rejected by signature sniffing [7.50ms]
+(pass) M29 — package integrity & bulk relink > METADATA import restores the timeline with honest missing references [3056.87ms]
+(pass) M29 — package integrity & bulk relink > bulk relink: suggestion, compatible-metadata warning, atomic apply, undo [2374.00ms]
+(pass) M29 — package integrity & bulk relink > path traversal entry names are rejected by the zip reader [3065.88ms]
+(pass) M29 — package integrity & bulk relink > unsupported future package versions are rejected clearly [1558.15ms]
+(pass) M29 — package integrity & bulk relink > malformed manifest JSON is rejected [3061.46ms]
+
+ 8 pass
+ 0 fail
+ 30 expect() calls
+Ran 8 tests across 1 file. [109.36s]

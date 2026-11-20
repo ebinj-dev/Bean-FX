@@ -1,0 +1,15 @@
+[10:01:48] == M31 media/export qualification ==
+[10:01:48] host ffmpeg: ffmpeg version 7.1.5-0+deb13u1 Copyright (c) 2000-2026 the FFmpeg developers
+[10:01:48] encoders: 4 matches (libx264/aac expected)
+[10:01:48] PASS: session established
+[10:01:50] PASS: fixtures prepared (30fps, 25fps, rotated)
+[10:01:50] PASS: project cmwot7w7s000bnc1ndkdzf6wd
+[10:01:56] probe states: 
+[10:01:56] FAIL: valid media not READY: 
+[10:01:56] FAIL: corrupt media not rejected
+[10:01:56] FAIL: timeline build failed: {"error":"transaction aborted at command 3/7: invalid sequence: clip c1 has no source asset and is not flagged missingMe
+[10:01:56] PASS: render job cmwot812w000fnc1nc6xusr4v submitted
+[10:06:30] FAIL: render status=
+[10:06:30] FAIL: no export row for cmwot812w000fnc1nc6xusr4v
+[10:06:30] == durability repeats ==
+[10:06:30] == RESULT: PASS=4 FAIL=5 ==

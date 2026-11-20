@@ -5,6 +5,7 @@ import { SiteHeader } from "@/components/bean/site-header";
 import { LandingPage } from "@/components/bean/landing";
 import { AuthView } from "@/components/bean/auth-view";
 import { StudioDashboard } from "@/components/bean/studio-dashboard";
+import { ProduceTool } from "@/components/bean/produce-tool";
 import { UploadGate, readMediaRef, clearMediaRef, type ToolUploadSpec } from "@/components/bean/upload-gate";
 import { AutoCutTool } from "@/components/bean/tools/auto-cut";
 import { CaptionsTool } from "@/components/bean/tools/captions";
@@ -92,7 +93,7 @@ export function AppShell() {
     );
   }
 
-  const isWorkspaceRoute = ["/studio", "/editor", "/autocut", "/captions", "/watermark", "/audio", "/broll"].includes(route) || /^\/(autocut|captions|watermark|audio|broll)(\/editor)?$/.test(route);
+  const isWorkspaceRoute = ["/studio", "/editor", "/autocut", "/captions", "/watermark", "/audio", "/broll", "/produce"].includes(route) || /^\/(autocut|captions|watermark|audio|broll)(\/editor)?$/.test(route);
 
   // Protected workspace routes require authentication.
   if (isWorkspaceRoute && !user) {
@@ -127,6 +128,10 @@ export function AppShell() {
 
   if (route === "/editor") {
     return <EditorTool user={user!} onLogout={onLogout} />;
+  }
+
+  if (route === "/produce") {
+    return <ProduceTool user={user!} onLogout={onLogout} />;
   }
 
   const toolSpecs: Record<string, ToolUploadSpec> = {

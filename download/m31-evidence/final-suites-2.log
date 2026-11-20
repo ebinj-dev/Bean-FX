@@ -1,0 +1,69 @@
+bun test v1.3.14 (0d9b296a)
+
+scripts/test-m31-media-qual.test.ts:
+(pass) M31 §4 — import, probes, corrupt rejection > uploads probe READY with metadata; corrupt media is rejected [4097.64ms]
+(pass) M31 §4 — import, probes, corrupt rejection > timeline: multi-track, mixed fps, rotation, keyframed brightness, audio crossfades [217.61ms]
+M31-QUAL export: 3618195 bytes path=/home/z/my-project/media-store-closeout/timeline-renders/u_cmwoxuxyb0000ncmqdkpinnnl/seq_cmwoxuzlz000bncmq7hnmbiz1_mwoxv4ek.mp4
+M31-QUAL probe attempt 0: bytes=4530 head={
+    "streams": [
+        {
+            "index": 0,
+            "codec_name": "h264",
+            "codec_long_name": "H
+M31-QUAL luma ramp frame0=0 frame80=0 (M27 animated brightness present: false)
+(pass) M31 §4 — import, probes, corrupt rejection > render completes and the export passes ffprobe conformance [8737.94ms]
+
+scripts/test-m31-worker.test.ts:
+(pass) M31 §5 — durable job reliability > duplicate export submissions create distinct jobs but never duplicate output rows for one job id [6076.11ms]
+(pass) M31 §5 — durable job reliability > invalid media is classified permanent (no infinite retry) [10.59ms]
+(pass) M31 §5 — durable job reliability > invalid package import is rejected safely (no partial project rows) [2019.02ms]
+(pass) M31 §5 — durable job reliability > cancellation: a queued/cancelled job does not produce outputs [3026.83ms]
+(pass) M31 §5 — durable job reliability > stale-job recovery: heartbeats exist and completed jobs cleaned temp artifacts [2.56ms]
+prisma:query BEGIN IMMEDIATE
+prisma:query SELECT `main`.`Notification`.`id` FROM `main`.`Notification` WHERE (`main`.`Notification`.`dedupKey` = ? AND 1=1) LIMIT ? OFFSET ?
+prisma:query INSERT INTO `main`.`Notification` (`id`, `userId`, `type`, `projectId`, `payloadJson`, `dedupKey`, `createdAt`) VALUES (?,?,?,?,?,?,?) RETURNING `id` AS `id`
+prisma:query SELECT `main`.`Notification`.`id`, `main`.`Notification`.`userId`, `main`.`Notification`.`type`, `main`.`Notification`.`projectId`, `main`.`Notification`.`payloadJson`, `main`.`Notification`.`dedupKey`, `main`.`Notification`.`readAt`, `main`.`Notification`.`createdAt` FROM `main`.`Notification` WHERE `main`.`Notification`.`id` = ? LIMIT ? OFFSET ?
+prisma:query COMMIT
+prisma:query BEGIN IMMEDIATE
+prisma:query SELECT `main`.`Notification`.`id` FROM `main`.`Notification` WHERE (`main`.`Notification`.`dedupKey` = ? AND 1=1) LIMIT ? OFFSET ?
+prisma:query SELECT `main`.`Notification`.`id`, `main`.`Notification`.`userId`, `main`.`Notification`.`type`, `main`.`Notification`.`projectId`, `main`.`Notification`.`payloadJson`, `main`.`Notification`.`dedupKey`, `main`.`Notification`.`readAt`, `main`.`Notification`.`createdAt` FROM `main`.`Notification` WHERE (`main`.`Notification`.`id` = ? AND (`main`.`Notification`.`dedupKey` = ? AND 1=1)) LIMIT ? OFFSET ?
+prisma:query SELECT `main`.`Notification`.`id`, `main`.`Notification`.`userId`, `main`.`Notification`.`type`, `main`.`Notification`.`projectId`, `main`.`Notification`.`payloadJson`, `main`.`Notification`.`dedupKey`, `main`.`Notification`.`readAt`, `main`.`Notification`.`createdAt` FROM `main`.`Notification` WHERE `main`.`Notification`.`id` = ? LIMIT ? OFFSET ?
+prisma:query COMMIT
+prisma:query BEGIN IMMEDIATE
+prisma:query SELECT `main`.`Notification`.`id` FROM `main`.`Notification` WHERE (`main`.`Notification`.`dedupKey` = ? AND 1=1) LIMIT ? OFFSET ?
+prisma:query SELECT `main`.`Notification`.`id`, `main`.`Notification`.`userId`, `main`.`Notification`.`type`, `main`.`Notification`.`projectId`, `main`.`Notification`.`payloadJson`, `main`.`Notification`.`dedupKey`, `main`.`Notification`.`readAt`, `main`.`Notification`.`createdAt` FROM `main`.`Notification` WHERE (`main`.`Notification`.`id` = ? AND (`main`.`Notification`.`dedupKey` = ? AND 1=1)) LIMIT ? OFFSET ?
+prisma:query SELECT `main`.`Notification`.`id`, `main`.`Notification`.`userId`, `main`.`Notification`.`type`, `main`.`Notification`.`projectId`, `main`.`Notification`.`payloadJson`, `main`.`Notification`.`dedupKey`, `main`.`Notification`.`readAt`, `main`.`Notification`.`createdAt` FROM `main`.`Notification` WHERE `main`.`Notification`.`id` = ? LIMIT ? OFFSET ?
+prisma:query COMMIT
+(pass) M31 §5 — durable job reliability > notification deduplication: repeated events do not multiply rows [16.74ms]
+
+scripts/test-m31-studio-live.test.ts:
+(pass) M31 studio — social-video-factory END-TO-END (real media) > intake: natural language → structured brief (deterministic extraction) [34.58ms]
+(pass) M31 studio — social-video-factory END-TO-END (real media) > strangers cannot see the production (no-leak 404) [6.82ms]
+(pass) M31 studio — social-video-factory END-TO-END (real media) > dependency guard: BRIEF cannot start before INTAKE succeeds [8.53ms]
+(pass) M31 studio — social-video-factory END-TO-END (real media) > INTAKE: approve-from-READY is rejected (invalid transition), then start→approve succeeds [50.71ms]
+(pass) M31 studio — social-video-factory END-TO-END (real media) > brief stage drafts deterministically and waits for approval [36.50ms]
+(pass) M31 studio — social-video-factory END-TO-END (real media) > concept: 3 distinct options → user selects + approves (recorded as decision) [51.77ms]
+(pass) M31 studio — social-video-factory END-TO-END (real media) > script: skeleton drafted, duration valid, user approves; script is editable with revision history [40.68ms]
+(pass) M31 studio — social-video-factory END-TO-END (real media) > asset planning → attach real user media → approve [108.37ms]
+(pass) M31 studio — social-video-factory END-TO-END (real media) > timeline assembly: canonical commands applied — rough cut is REAL and on the editor timeline [77.19ms]
+(pass) M31 studio — social-video-factory END-TO-END (real media) > variants plan + real render on the durable queue + QA against the actual file [8315.73ms]
+(pass) M31 studio — social-video-factory END-TO-END (real media) > provider generation gate: no config → blocked with exact reason; budget required before paid calls [24.58ms]
+(pass) M31 studio — brand-commercial END-TO-END with M30 client review > full flow through the M30 review bridge [16709.24ms]
+(pass) M31 studio — restart recovery + resumability > production survives restart: RUNNING stages re-derive; resume skips completed stages without duplicating clips [282.06ms]
+(pass) M31 studio — restart recovery + resumability > inactive templates are refused with their exact blocker (not silently started) [24.53ms]
+(pass) M31 studio — restart recovery + resumability > notification recorded on delivery (dedup-safe) [2.39ms]
+
+scripts/test-m31-security.test.ts:
+(pass) M31 §3 — cross-user isolation > stranger cannot access project media, exports, packages, notifications, reviews [49.67ms]
+(pass) M31 §3 — cross-user isolation > another user's package download is rejected without authorization [3.90ms]
+(pass) M31 §3 — review security > reviewer comments + approves; ALL-policy determinism holds [2060.29ms]
+(pass) M31 §3 — review security > fingerprint present and stable; approval pinned to the exact revision [6.54ms]
+(pass) M31 §3 — review security > revoked member loses review access immediately (revocation effect) [38.48ms]
+(pass) M31 §3 — review security > guest link sessions expire with the link and cannot act beyond scope [44.37ms]
+(pass) M31 §3 — review security > notification payloads never carry tokens or storage paths [5.25ms]
+(pass) M31 §3 — review security > unauthorized renders: stranger cannot start a render on someone else's project [10.21ms]
+
+ 32 pass
+ 0 fail
+ 164 expect() calls
+Ran 32 tests across 4 files. [57.93s]

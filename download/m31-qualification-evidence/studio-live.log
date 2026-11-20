@@ -1,0 +1,23 @@
+bun test v1.3.14 (0d9b296a)
+
+scripts/test-m31-studio-live.test.ts:
+(pass) M31 studio — social-video-factory END-TO-END (real media) > intake: natural language → structured brief (deterministic extraction) [29.14ms]
+(pass) M31 studio — social-video-factory END-TO-END (real media) > strangers cannot see the production (no-leak 404) [5.53ms]
+(pass) M31 studio — social-video-factory END-TO-END (real media) > dependency guard: BRIEF cannot start before INTAKE succeeds [8.78ms]
+(pass) M31 studio — social-video-factory END-TO-END (real media) > INTAKE: approve-from-READY is rejected (invalid transition), then start→approve succeeds [32.04ms]
+(pass) M31 studio — social-video-factory END-TO-END (real media) > brief stage drafts deterministically and waits for approval [49.36ms]
+(pass) M31 studio — social-video-factory END-TO-END (real media) > concept: 3 distinct options → user selects + approves (recorded as decision) [42.66ms]
+(pass) M31 studio — social-video-factory END-TO-END (real media) > script: skeleton drafted, duration valid, user approves; script is editable with revision history [35.92ms]
+(pass) M31 studio — social-video-factory END-TO-END (real media) > asset planning → attach real user media → approve [102.60ms]
+(pass) M31 studio — social-video-factory END-TO-END (real media) > timeline assembly: canonical commands applied — rough cut is REAL and on the editor timeline [36.59ms]
+(pass) M31 studio — social-video-factory END-TO-END (real media) > variants plan + real render on the durable queue + QA against the actual file [8377.23ms]
+(pass) M31 studio — social-video-factory END-TO-END (real media) > provider generation gate: no config → blocked with exact reason; budget required before paid calls [23.23ms]
+(pass) M31 studio — brand-commercial END-TO-END with M30 client review > full flow through the M30 review bridge [16713.22ms]
+(pass) M31 studio — restart recovery + resumability > production survives restart: RUNNING stages re-derive; resume skips completed stages without duplicating clips [266.26ms]
+(pass) M31 studio — restart recovery + resumability > inactive templates are refused with their exact blocker (not silently started) [23.85ms]
+(pass) M31 studio — restart recovery + resumability > notification recorded on delivery (dedup-safe) [2.74ms]
+
+ 15 pass
+ 0 fail
+ 96 expect() calls
+Ran 15 tests across 1 file. [27.34s]
