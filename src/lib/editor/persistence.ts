@@ -91,8 +91,26 @@ function settingsFromProject(settingsJson: string | null): ProjectSettings {
 }
 
 async function requireOwnedProject(projectId: string, userId: string) {
-  const project = await db.project.findFirst({ where: { id: projectId, userId } });
+  // M30: shared projects are editable by workspace ADMIN/EDITOR members and
+  // per-project EDITOR shares; everything else answers the SAME "not found"
+  // error (no existence leak). The project owner keeps full rights.
+  const project = await db.project.findUnique({ where: { id: projectId } });
   if (!project) throw new ProjectNotFoundError();
+  if (project.userId === userId) return project;
+  const { getProjectAccess, canEdit } = await import("@/lib/collab");
+  const access = await getProjectAccess(userId, project);
+  if (!canEdit(access)) throw new ProjectNotFoundError();
+  return project;
+}
+
+/** M30: read-only access (REVIEWER/VIEWER included) for version listing. */
+async function requireViewableProject(projectId: string, userId: string) {
+  const project = await db.project.findUnique({ where: { id: projectId } });
+  if (!project) throw new ProjectNotFoundError();
+  if (project.userId === userId) return project;
+  const { getProjectAccess, canView } = await import("@/lib/collab");
+  const access = await getProjectAccess(userId, project);
+  if (!canView(access)) throw new ProjectNotFoundError();
   return project;
 }
 
@@ -106,7 +124,7 @@ export interface TimelineHead {
 /** The latest version for a project; creates version 1 (empty default
  *  sequence) on first access so an editor session always has a head. */
 export async function getTimelineHead(projectId: string, userId: string): Promise<TimelineHead> {
-  const project = await requireOwnedProject(projectId, userId);
+  const project = await requireViewableProject(projectId, userId);
   const head = await db.timelineVersion.findFirst({
     where: { projectId },
     orderBy: { versionNumber: "desc" },
@@ -237,7 +255,7 @@ export interface VersionSummary {
 }
 
 export async function listTimelineVersions(projectId: string, userId: string, take = 50, skip = 0): Promise<VersionSummary[]> {
-  await requireOwnedProject(projectId, userId);
+  await requireViewableProject(projectId, userId);
   const versions = await db.timelineVersion.findMany({
     where: { projectId },
     orderBy: { versionNumber: "desc" },

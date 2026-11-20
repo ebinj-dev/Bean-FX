@@ -99,6 +99,21 @@ export async function sendVerificationEmail(to: string, token: string, origin?: 
   });
 }
 
+/** M30 §2 — workspace invitation. Delivery is honest: { delivered: false }
+ * when SMTP is unconfigured (the UI shows a copyable invite URL instead). */
+export async function sendInvitationEmail(input: { to: string; workspaceName: string; role: string; inviterName: string; token: string; origin?: string }): Promise<MailResult> {
+  return sendMail({
+    to: input.to,
+    subject: `You are invited to collaborate in "${input.workspaceName}" on BEAN FX`,
+    body: `${input.inviterName} invited you to join the workspace "${input.workspaceName}" as ${input.role}.
+
+Accept within 7 days:
+${appOrigin(input.origin)}/invite/${input.token}
+
+If you were not expecting this, you can simply ignore it — the invitation expires automatically.`,
+  });
+}
+
 export async function sendPasswordResetEmail(to: string, token: string, origin?: string): Promise<MailResult> {
   return sendMail({
     to,

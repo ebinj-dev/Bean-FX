@@ -16,6 +16,8 @@ export const runtime = "nodejs";
 const PatchSchema = z.object({
   name: z.string().min(1).max(120).optional(),
   description: z.string().max(600).optional(),
+  /// M30 §8: optimistic-concurrency guard (optional; enforced when present).
+  expectedUpdatedAt: z.string().datetime().optional(),
 });
 const DuplicateSchema = z.object({ name: z.string().min(1).max(120).optional() });
 
@@ -45,9 +47,30 @@ export async function PATCH(req: NextRequest, ctx: { params: Promise<{ id: strin
   const parsed = PatchSchema.safeParse(await req.json().catch(() => null));
   if (!parsed.success) return badRequest(`Invalid request: ${parsed.error.issues.map((i) => i.message).join("; ")}`);
   try {
-    await ownedProject(user.id, id);
-    const updated = await db.project.update({ where: { id }, data: parsed.data });
-    return NextResponse.json({ project: { id: updated.id, name: updated.name, description: updated.description } });
+    const project = await db.project.findUnique({ where: { id } });
+    if (!project) return badRequest("Project not found.");
+    // M30: EDITOR-level access is enough to rename/re-describe a shared
+    // project; REVIEWER/VIEWER and strangers get the generic not-found.
+    const { getProjectAccess, canEdit } = await import("@/lib/collab");
+    const access = await getProjectAccess(user.id, project);
+    if (!canEdit(access)) return badRequest("Project not found.");
+    // M30 §8 concurrency guard: reject stale writes with the authoritative
+    // head so an older tab can never silently overwrite newer state.
+    const expected = (parsed.data as { expectedUpdatedAt?: string }).expectedUpdatedAt;
+    if (expected && !Number.isNaN(Date.parse(expected))) {
+      if (project.updatedAt.getTime() > Date.parse(expected) + 1500) {
+        return NextResponse.json(
+          { error: "This project changed since you loaded it — reload to get the latest state before saving.", conflict: true, updatedAt: project.updatedAt.toISOString() },
+          { status: 409 },
+        );
+      }
+    }
+    const { expectedUpdatedAt: _omit, ...data } = parsed.data as Record<string, unknown>;
+    const updated = await db.project.update({ where: { id }, data });
+    await db.auditEvent.create({
+      data: { userId: user.id, action: "project.updated", detail: `project=${id}` },
+    }).catch(() => undefined);
+    return NextResponse.json({ project: { id: updated.id, name: updated.name, description: updated.description, updatedAt: updated.updatedAt.toISOString() } });
   } catch (err) {
     return badRequest((err as Error).message.slice(0, 200));
   }

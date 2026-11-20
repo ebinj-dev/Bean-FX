@@ -416,10 +416,17 @@ export function buildTimelineGraph(seq: Sequence, startFrame: number, endFrame: 
 }
 
 export async function runTimelineRenderJob(job: { id: string; userId: string; paramsJson: string | null }): Promise<void> {
-  const params = (job.paramsJson ? JSON.parse(job.paramsJson) : {}) as { projectId?: string; startFrame?: number; endFrame?: number };
+  const params = (job.paramsJson ? JSON.parse(job.paramsJson) : {}) as { projectId?: string; startFrame?: number; endFrame?: number; reviewRevisionId?: string };
   const projectId = params.projectId ?? "";
   const project = await db.project.findUnique({ where: { id: projectId } });
-  if (!project || project.userId !== job.userId) throw new Error("Project not found for this user.");
+  if (!project) throw new Error("Project not found for this user.");
+  if (project.userId !== job.userId) {
+    // M30: collaborators (workspace ADMIN/EDITOR, per-project EDITOR shares)
+    // may render shared projects — the same server-side matrix as the routes.
+    const { getProjectAccess, canEdit } = await import("@/lib/collab");
+    const access = await getProjectAccess(job.userId, project);
+    if (!canEdit(access)) throw new Error("Project not found for this user.");
+  }
   const latest = await db.timelineVersion.findFirst({ where: { projectId }, orderBy: { versionNumber: "desc" } });
   if (!latest) throw new Error("The project has no sequence to render yet.");
   const seq = JSON.parse(latest.sequenceJson) as Sequence;
@@ -665,6 +672,33 @@ export async function runTimelineRenderJob(job: { id: string; userId: string; pa
           }),
         },
       });
+
+    // M30: review revisions ride the REAL render pipeline — when this job
+    // was started for a review revision, flip it to READY_FOR_REVIEW with
+    // the validated export attached (never a mock output).
+    if (params.reviewRevisionId) {
+      await db.reviewRevision.update({
+        where: { id: params.reviewRevisionId },
+        data: {
+          status: "READY_FOR_REVIEW",
+          previewExportId: exportRow.id,
+          previewDurationSec: probe.durationSec ?? totalSec,
+        },
+      }).catch(() => undefined);
+      const rev = await db.reviewRevision.findUnique({
+        where: { id: params.reviewRevisionId },
+        select: { projectId: true, sessionNo: true, title: true, createdById: true, assignments: { select: { reviewerUserId: true } } },
+      });
+      if (rev) {
+        const { notify, notifyMany } = await import("@/lib/notify");
+        await notify({ userId: rev.createdById, type: "revision.ready", projectId: rev.projectId, payload: { revisionId: params.reviewRevisionId, sessionNo: rev.sessionNo, title: rev.title }, dedupKey: `revision.ready:${params.reviewRevisionId}` }).catch(() => undefined);
+        await notifyMany(rev.assignments.map((a) => a.reviewerUserId).filter((x): x is string => Boolean(x)), {
+          type: "review.requested", projectId: rev.projectId,
+          payload: { revisionId: params.reviewRevisionId, sessionNo: rev.sessionNo, title: rev.title },
+          dedupKey: `review.requested:${params.reviewRevisionId}`,
+        }).catch(() => undefined);
+      }
+    }
       // M20 §3 idempotent completion (same rationale as the windowed path).
       await jobManager.complete(job.id, exportRow.id, "Timeline render complete.");
     },

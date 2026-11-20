@@ -1,0 +1,21 @@
+bun test v1.3.14 (0d9b296a)
+
+scripts/test-m30-collab.test.ts:
+(pass) A. workspaces & invitations > owner invites editor + reviewer + viewer; role escalation is capped [58.00ms]
+(pass) A. workspaces & invitations > invitation is bound to the invited email — another account cannot accept [29.66ms]
+(pass) A. workspaces & invitations > duplicate active invitation is rejected (409) [6.72ms]
+(pass) A. workspaces & invitations > reviewer + viewer accept; members appear with their roles [32.57ms]
+(pass) A. workspaces & invitations > expired invitation is rejected ( lifecycle EXPIRED ) [83.03ms]
+(pass) A. workspaces & invitations > revoked invitation token stops working on the next request [30.04ms]
+(pass) A. workspaces & invitations > editor cannot invite an ADMIN (escalation cap); viewer cannot invite at all [12.38ms]
+(pass) A. workspaces & invitations > nobody can change their own role; the OWNER cannot be removed [32.70ms]
+(pass) B. sharing + role enforcement on existing routes > shared project appears for members with roles; outsider sees nothing [16.48ms]
+(pass) B. sharing + role enforcement on existing routes > timeline writes by a REVIEWER/VIEWER are rejected (404 no-leak) [69.77ms]
+(pass) B. sharing + role enforcement on existing routes > workspace EDITOR can edit the shared timeline (real write) [34.36ms]
+(pass) B. sharing + role enforcement on existing routes > concurrency guard: stale baseVersion is rejected with the authoritative head (M30 §8) [21.77ms]
+(pass) B. sharing + role enforcement on existing routes > project PATCH concurrency guard (expectedUpdatedAt) rejects stale writes [13.99ms]
+
+ 13 pass
+ 0 fail
+ 57 expect() calls
+Ran 13 tests across 1 file. [1.58s]

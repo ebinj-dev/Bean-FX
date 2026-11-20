@@ -1,0 +1,12 @@
+process.env.BEANFX_MEDIA_WORKER_AUTOSTART = "0";
+const { loadRevision } = await import("../src/lib/review-access.ts");
+const revId = process.argv[2];
+const rev = await loadRevision(revId);
+console.log("revision:", rev?.id?.slice(-6), "project:", rev?.project?.id?.slice(-6), "userId:", rev?.project?.userId?.slice(-6), "workspaceId:", rev?.project?.workspaceId);
+const { PrismaClient } = await import("@prisma/client");
+const db = new PrismaClient();
+const share = await db.projectShare.findFirst({ where: { projectId: rev!.project.id, revokedAt: null }, include: { user: { select: { email: true } } } });
+console.log("share:", share ? { role: share.role, user: share.user.email.slice(0, 12), projectId: share.projectId.slice(-6) } : "NONE");
+console.log("project.id match:", share?.projectId === rev!.project.id);
+await db.$disconnect();
+process.exit(0);

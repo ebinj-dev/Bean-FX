@@ -1,0 +1,13 @@
+bun test v1.3.14 (0d9b296a)
+
+scripts/test-m29-portability.test.ts:
+(pass) M29 — full portability chain (real media) > user A builds a rich project (2 tracks, image, effect, keyframe, crossfade, marker) [2196.99ms]
+(pass) M29 — full portability chain (real media) > FULL package: manifest + verified checksums + dedup + proxies [4767.79ms]
+ZIP-LEN: 1745316 cookieB: set
+(pass) M29 — full portability chain (real media) > user B imports the package → NEW project identity, relationships intact [1742.00ms]
+(pass) M29 — full portability chain (real media) > restored project RENDERS (real FFmpeg, conformance-gated) [6166.53ms]
+
+ 4 pass
+ 0 fail
+ 42 expect() calls
+Ran 4 tests across 1 file. [14.94s]
