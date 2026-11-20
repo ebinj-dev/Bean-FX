@@ -55,6 +55,14 @@ export async function POST(req: NextRequest) {
     deliveryFormats: Array.isArray(body.deliveryFormats) && body.deliveryFormats.length > 0 ? body.deliveryFormats : template.deliveryFormats,
     ...(typeof body.tone === "string" ? { tone: body.tone } : {}),
     ...(typeof body.visualDirection === "string" ? { visualDirection: body.visualDirection } : {}),
+    // ── SHOWCASE STUDIO fields (validated by the schema; absent = defaults) ──
+    ...(typeof body.campaignType === "string" ? { campaignType: body.campaignType } : {}),
+    ...(typeof body.tonePreset === "string" ? { tonePreset: body.tonePreset } : {}),
+    ...(typeof body.narrationPreference === "string" ? { narrationPreference: body.narrationPreference } : {}),
+    ...(typeof body.musicPreference === "string" ? { musicPreference: body.musicPreference } : {}),
+    ...(typeof body.showcaseInputs === "object" && body.showcaseInputs !== null ? { showcaseInputs: body.showcaseInputs } : {}),
+    ...(Array.isArray(body.shareCopyPlatforms) ? { shareCopyPlatforms: body.shareCopyPlatforms.filter((x: unknown) => typeof x === "string").slice(0, 6) } : {}),
+    ...(typeof body.posterEnabled === "boolean" ? { posterEnabled: body.posterEnabled } : {}),
   });
   const production = await db.production.create({
     data: {

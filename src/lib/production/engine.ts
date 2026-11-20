@@ -18,6 +18,7 @@
  * - Rights states are explicit; UNKNOWN/RESTRICTED assets are flagged, not used silently.
  */
 import { z } from "zod";
+import { ShowcaseInputsSchema, DemonstrationPlanSchema } from "./showcase/types";
 
 // ── Structured brief (intake) ───────────────────────────────────────────────
 export const ProductionBriefSchema = z.object({
@@ -42,6 +43,15 @@ export const ProductionBriefSchema = z.object({
   deliveryFormats: z.array(z.enum(["mp4-1080p", "mp4-720p", "mp4-vertical", "mp4-square"])).min(1).default(["mp4-1080p"]),
   commercialUse: z.boolean().default(false),
   briefText: z.string().max(4000).default(""),
+  // ── M31 SHOWCASE STUDIO (additive — old briefs parse unchanged) ───────────
+  campaignType: z.enum(["product-launch", "app-showcase", "website-promo", "startup-intro", "brand-commercial", "feature-demonstration", "social-promo", "cinematic-trailer"]).default("product-launch"),
+  /** Structured showcase inputs for the product-understanding stage. */
+  showcaseInputs: ShowcaseInputsSchema.nullable().default(null),
+  /** Creative tone control (showcase); free `tone` above remains authoritative prose. */
+  tonePreset: z.enum(["premium", "cinematic", "minimal", "futuristic", "bold", "playful", "documentary", "luxury", "tech-commercial", "custom"]).nullable().default(null),
+  /** Poster + share copy are produced at delivery unless disabled. */
+  posterEnabled: z.boolean().default(true),
+  shareCopyPlatforms: z.array(z.enum(["youtube", "instagram", "tiktok", "linkedin", "x", "whatsapp"])).max(6).default(["youtube", "instagram", "tiktok", "linkedin", "x", "whatsapp"]),
 });
 export type ProductionBrief = z.infer<typeof ProductionBriefSchema>;
 
@@ -72,7 +82,7 @@ export interface StageDef {
   key: string;
   title: string;
   /** Execution kind drives the server-side runner. */
-  kind: "brief" | "research" | "concept" | "script" | "storyboard" | "asset_planning" | "asset_generation" | "edit_planning" | "assembly" | "rough_cut" | "review" | "render" | "qa" | "delivery" | "analysis" | "clip_selection" | "variants";
+  kind: "brief" | "research" | "product_understanding" | "concept" | "script" | "storyboard" | "asset_planning" | "asset_generation" | "edit_planning" | "assembly" | "rough_cut" | "review" | "render" | "qa" | "delivery" | "analysis" | "clip_selection" | "variants";
   requiresApproval: boolean;
   /** Provider-dependent stages need explicit user approval AND configured providers. */
   requiresProvider?: string;
@@ -105,6 +115,32 @@ const STAGE = (key: string, title: string, kind: StageDef["kind"], dependsOn: st
  * when a provider is configured (never fabricated).
  */
 export const PIPELINE_TEMPLATES: PipelineTemplate[] = [
+  {
+    id: "showcase-studio",
+    name: "SHOWCASE STUDIO — Product to Promo Film",
+    description: "Understand a product (description / feature list / authorized website / screenshots / demo recordings / a BEAN FX project), direct the campaign, storyboard it, demonstrate the REAL product, compose with cinematic primitives, and deliver film + poster + share copy on the native timeline.",
+    productionType: "showcase",
+    active: true,
+    deliveryFormats: ["mp4-1080p", "mp4-vertical", "mp4-square"],
+    version: 1,
+    stages: [
+      STAGE("INTAKE", "Select product & inputs", "brief", [], { requiresApproval: true }),
+      STAGE("PRODUCT_UNDERSTANDING", "Understand the product", "product_understanding", ["INTAKE"], { requiresApproval: true }),
+      STAGE("BRIEF", "Creative brief & campaign type", "brief", ["PRODUCT_UNDERSTANDING"], { requiresApproval: true }),
+      STAGE("CONCEPT", "Creative concepts", "concept", ["BRIEF"], { requiresApproval: true }),
+      STAGE("SCRIPT", "Script", "script", ["CONCEPT"], { requiresApproval: true }),
+      STAGE("STORYBOARD", "Storyboard & shot plan", "storyboard", ["SCRIPT"], { requiresApproval: true }),
+      STAGE("ASSET_PLANNING", "Asset & demonstration planning", "asset_planning", ["STORYBOARD"], { requiresApproval: true }),
+      STAGE("ASSET_GENERATION", "Asset preparation & generation", "asset_generation", ["ASSET_PLANNING"]),
+      STAGE("EDIT_PLANNING", "Composition planning", "edit_planning", ["ASSET_GENERATION"]),
+      STAGE("TIMELINE_ASSEMBLY", "Native timeline assembly", "assembly", ["EDIT_PLANNING"]),
+      STAGE("ROUGH_CUT", "Rough cut verification", "rough_cut", ["TIMELINE_ASSEMBLY"]),
+      STAGE("REVIEW", "Client review (M30)", "review", ["ROUGH_CUT"], { requiresApproval: true }),
+      STAGE("FINAL_RENDER", "Final render", "render", ["REVIEW"]),
+      STAGE("QUALITY_ASSURANCE", "Production QA", "qa", ["FINAL_RENDER"]),
+      STAGE("DELIVERY", "Poster, share copy & delivery", "delivery", ["QUALITY_ASSURANCE"]),
+    ],
+  },
   {
     id: "social-video-factory",
     name: "Social Video Factory",
@@ -331,6 +367,17 @@ export const StoryboardSceneSchema = z.object({
   /** Placeholder until a real asset is attached — never a fabricated thumbnail. */
   thumbnailPending: z.literal(true).default(true),
   approval: z.enum(["PENDING", "APPROVED", "REJECTED"]).default("PENDING"),
+  // ── M31 SHOWCASE STUDIO (additive — existing scenes parse unchanged) ──────
+  /** On-screen headline for this scene (showcase). */
+  textOverlay: z.string().max(120).default(""),
+  /** Which product element this scene shows (feature name, UI area, logo …). */
+  productElement: z.string().max(120).default(""),
+  /** Outgoing transition name (cut / dissolve / slide …). */
+  transition: z.string().max(60).default("cut"),
+  /** Composition primitive applied by the showcase composer (id from compositions.ts). */
+  compositionPrimitive: z.string().max(64).nullable().default(null),
+  /** Phase 4: real-product demonstration plan for this scene. */
+  demonstration: DemonstrationPlanSchema.nullable().default(null),
 });
 export const StoryboardSchema = z.object({
   scenes: z.array(StoryboardSceneSchema).min(1).max(60),
@@ -383,7 +430,7 @@ export function qaOutcome(checks: QaCheck[]): { state: QaState; failed: QaCheck[
 
 /** Pre-render deterministic checks against the canonical sequence. */
 /** Clips live FLAT on the canonical sequence (seq.clips with trackId refs). */
-export function seqClips(sequence: unknown): Array<{ id: string; trackId?: string; sourceAssetId?: string | null; missingMedia?: boolean; timelineStartFrame: number; timelineDurationFrames: number; sourceInFrame?: number; sourceOutFrame?: number }> {
+export function seqClips(sequence: unknown): Array<{ id: string; trackId?: string; sourceAssetId?: string | null; missingMedia?: boolean; graphicTemplateId?: string | null; timelineStartFrame: number; timelineDurationFrames: number; sourceInFrame?: number; sourceOutFrame?: number }> {
   const s = sequence as { clips?: unknown[]; tracks?: Array<{ id?: string; clips?: unknown[] }> };
   const flat = Array.isArray(s.clips) ? s.clips : (s.tracks ?? []).flatMap((t) => t.clips ?? []);
   return flat as never;
@@ -394,7 +441,9 @@ export function preRenderChecks(sequence: unknown, targetDurationSec?: number, t
   const checks: QaCheck[] = [];
   const clips = seqClips(sequence);
   checks.push({ id: "sequence-nonempty", severity: "ERROR", state: clips.length > 0 ? "PASSED" : "FAILED", detail: `${clips.length} clips on the timeline` });
-  const missing = clips.filter((c) => c.missingMedia || !c.sourceAssetId);
+  // NIKKI graphic clips render from their template — an empty sourceAssetId is
+  // legitimate there; only real media placeholders count as missing.
+  const missing = clips.filter((c) => c.missingMedia || (!c.sourceAssetId && !c.graphicTemplateId));
   checks.push({ id: "no-missing-media", severity: "ERROR", state: missing.length === 0 ? "PASSED" : "FAILED", detail: missing.length === 0 ? "all clips reference real assets" : `${missing.length} clip(s) missing media: ${missing.map((c) => c.id).join(", ")}` });
   const invalidRange = clips.filter((c) => (c.sourceOutFrame ?? 0) <= (c.sourceInFrame ?? 0) || c.timelineDurationFrames <= 0);
   checks.push({ id: "valid-clip-ranges", severity: "ERROR", state: invalidRange.length === 0 ? "PASSED" : "FAILED", detail: invalidRange.length === 0 ? "clip ranges valid" : `invalid ranges on ${invalidRange.map((c) => c.id).join(", ")}` });

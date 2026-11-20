@@ -8,6 +8,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { getCurrentUser } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { getTemplate, ProductionBriefSchema, ProductionScriptSchema, StoryboardSchema, scriptDurationValid, stageCost } from "@/lib/production/engine";
+import { DemonstrationPlanSchema } from "@/lib/production/showcase/types";
+import { getPrimitive } from "@/lib/production/showcase/compositions";
 import { logEvent, providerStatus, recordDecision, reconcileAfterRestart, syncJobBackedStages } from "@/lib/production/runner";
 
 export const runtime = "nodejs";
@@ -47,6 +49,7 @@ export async function GET(_req: NextRequest, ctx: { params: Promise<{ id: string
       delivery: production.deliveryJson ? JSON.parse(production.deliveryJson) : null,
       research: production.researchJson ? JSON.parse(production.researchJson) : null,
       reference: production.referenceJson ? JSON.parse(production.referenceJson) : null,
+      product: production.productJson ? JSON.parse(production.productJson) : null,
       approvedBudgetCents: production.approvedBudgetCents,
       estimatedCostCents: production.estimatedCostCents,
       actualCostCents: production.actualCostCents,
@@ -57,6 +60,7 @@ export async function GET(_req: NextRequest, ctx: { params: Promise<{ id: string
     assets: production.assets.map((a) => ({ id: a.id, sceneKey: a.sceneKey, category: a.category, description: a.description, sourceType: a.sourceType, provider: a.provider, licenseState: a.licenseState, attribution: a.attribution, status: a.status, costUnknown: a.costUnknown, costCents: a.costCents, mediaAssetId: a.mediaAssetId })),
     events: production.events.map((e) => ({ id: e.id, kind: e.kind, stageKey: e.stageKey, detail: e.detailJson ? JSON.parse(e.detailJson) : null, createdAt: e.createdAt })),
     brief, concept, script, storyboard,
+    product: production.productJson ? JSON.parse(production.productJson) : null,
     scriptDurationValid: script ? scriptDurationValid(script as never) : null,
     provider,
   });
@@ -113,6 +117,115 @@ export async function PUT(req: NextRequest, ctx: { params: Promise<{ id: string 
       scene.approval = body.decision;
       await db.production.update({ where: { id }, data: { storyboardJson: JSON.stringify(sb) } });
       await logEvent(id, "scene.approval", "STORYBOARD", { sceneKey: body.sceneKey, decision: body.decision });
+      return NextResponse.json({ ok: true });
+    }
+
+    // ── SHOWCASE Phase 3: storyboard editing (persisted; approved scenes are
+    // never silently changed — an explicit reApprove flag flips them to
+    // PENDING and the change is logged) ─────────────────────────────────────
+    case "scene-edit": {
+      const sb = production.storyboardJson ? (JSON.parse(production.storyboardJson) as { scenes: Array<Record<string, unknown>> }) : null;
+      if (!sb) return NextResponse.json({ error: "No storyboard." }, { status: 400 });
+      const idx = sb.scenes.findIndex((s) => s.sceneKey === body.sceneKey);
+      if (idx < 0) return NextResponse.json({ error: "Unknown sceneKey." }, { status: 400 });
+      const scene = sb.scenes[idx];
+      if (scene.approval === "APPROVED" && body.reApprove !== true) {
+        return NextResponse.json({ error: "Scene is APPROVED — pass reApprove:true to un-approve and edit it (the change is logged)." }, { status: 409 });
+      }
+      const editable = ["durationSec", "textOverlay", "productElement", "transition", "compositionPrimitive", "generationInstructions", "demonstration", "storyPurpose", "requiredAssetKind"] as const;
+      const patch: Record<string, unknown> = {};
+      for (const k of editable) {
+        if (body.patch && k in body.patch) patch[k] = body.patch[k];
+      }
+      if (patch.durationSec !== undefined && (!Number.isFinite(Number(patch.durationSec)) || Number(patch.durationSec) < 0.5 || Number(patch.durationSec) > 120)) {
+        return NextResponse.json({ error: "durationSec must be 0.5..120." }, { status: 400 });
+      }
+      if (patch.compositionPrimitive !== undefined && patch.compositionPrimitive !== null && typeof getPrimitive(String(patch.compositionPrimitive)) !== "object") {
+        return NextResponse.json({ error: `Unknown composition primitive "${String(patch.compositionPrimitive)}".` }, { status: 400 });
+      }
+      if (patch.demonstration !== undefined && patch.demonstration !== null) {
+        const d = DemonstrationPlanSchema.safeParse(patch.demonstration);
+        if (!d.success) return NextResponse.json({ error: `Invalid demonstration plan: ${d.error.issues.map((i) => i.message).join("; ")}` }, { status: 400 });
+        if (d.data.sourceMediaId) {
+          const owned = await db.mediaAsset.findFirst({ where: { id: d.data.sourceMediaId, userId: user.id } });
+          if (!owned) return NextResponse.json({ error: "Demonstration source media not found or not owned by the caller." }, { status: 404 });
+        }
+        patch.demonstration = d.data;
+      }
+      sb.scenes[idx] = { ...scene, ...patch, approval: body.reApprove === true ? "PENDING" : scene.approval };
+      await db.production.update({ where: { id }, data: { storyboardJson: JSON.stringify(sb) } });
+      await logEvent(id, "scene.edited", "STORYBOARD", { sceneKey: body.sceneKey, fields: Object.keys(patch), reApproved: body.reApprove === true });
+      return NextResponse.json({ ok: true, scene: sb.scenes[idx] });
+    }
+    case "scene-reorder": {
+      const sb = production.storyboardJson ? (JSON.parse(production.storyboardJson) as { scenes: Array<Record<string, unknown>> }) : null;
+      if (!sb) return NextResponse.json({ error: "No storyboard." }, { status: 400 });
+      const idx = sb.scenes.findIndex((s) => s.sceneKey === body.sceneKey);
+      if (idx < 0) return NextResponse.json({ error: "Unknown sceneKey." }, { status: 400 });
+      const to = Number(body.toIndex);
+      if (!Number.isInteger(to) || to < 0 || to >= sb.scenes.length) return NextResponse.json({ error: `toIndex must be 0..${sb.scenes.length - 1}.` }, { status: 400 });
+      const [moved] = sb.scenes.splice(idx, 1);
+      sb.scenes.splice(to, 0, moved);
+      sb.scenes.forEach((s, i) => { s.sceneNumber = i + 1; });
+      await db.production.update({ where: { id }, data: { storyboardJson: JSON.stringify(sb) } });
+      await logEvent(id, "scene.reordered", "STORYBOARD", { sceneKey: body.sceneKey, from: idx, to });
+      return NextResponse.json({ ok: true });
+    }
+    case "scene-duplicate": {
+      const sb = production.storyboardJson ? (JSON.parse(production.storyboardJson) as { scenes: Array<Record<string, unknown>> }) : null;
+      if (!sb) return NextResponse.json({ error: "No storyboard." }, { status: 400 });
+      if (sb.scenes.length >= 60) return NextResponse.json({ error: "Storyboard cap is 60 scenes." }, { status: 400 });
+      const idx = sb.scenes.findIndex((s) => s.sceneKey === body.sceneKey);
+      if (idx < 0) return NextResponse.json({ error: "Unknown sceneKey." }, { status: 400 });
+      const copy = { ...sb.scenes[idx], sceneKey: `scene-${Date.now().toString(36)}`, approval: "PENDING" };
+      sb.scenes.splice(idx + 1, 0, copy);
+      sb.scenes.forEach((s, i) => { s.sceneNumber = i + 1; });
+      await db.production.update({ where: { id }, data: { storyboardJson: JSON.stringify(sb) } });
+      await logEvent(id, "scene.duplicated", "STORYBOARD", { from: body.sceneKey, newKey: copy.sceneKey });
+      return NextResponse.json({ ok: true, sceneKey: copy.sceneKey });
+    }
+    case "scene-remove": {
+      const sb = production.storyboardJson ? (JSON.parse(production.storyboardJson) as { scenes: Array<Record<string, unknown>> }) : null;
+      if (!sb) return NextResponse.json({ error: "No storyboard." }, { status: 400 });
+      if (sb.scenes.length <= 1) return NextResponse.json({ error: "A storyboard needs at least one scene." }, { status: 400 });
+      const idx = sb.scenes.findIndex((s) => s.sceneKey === body.sceneKey);
+      if (idx < 0) return NextResponse.json({ error: "Unknown sceneKey." }, { status: 400 });
+      const [removed] = sb.scenes.splice(idx, 1);
+      sb.scenes.forEach((s, i) => { s.sceneNumber = i + 1; });
+      await db.production.update({ where: { id }, data: { storyboardJson: JSON.stringify(sb) } });
+      await logEvent(id, "scene.removed", "STORYBOARD", { sceneKey: removed.sceneKey, storyPurpose: removed.storyPurpose ?? "" });
+      return NextResponse.json({ ok: true });
+    }
+    case "scene-regenerate": {
+      // Re-derive one scene's planned fields from its script line (deterministic),
+      // un-approve it, and log the regeneration. No silent changes to approvals.
+      const sb = production.storyboardJson ? (JSON.parse(production.storyboardJson) as { scenes: Array<Record<string, unknown>> }) : null;
+      const script = production.scriptJson ? (JSON.parse(production.scriptJson) as { lines: Array<Record<string, unknown>> }) : null;
+      if (!sb || !script) return NextResponse.json({ error: "Storyboard and script required." }, { status: 400 });
+      const idx = sb.scenes.findIndex((s) => s.sceneKey === body.sceneKey);
+      if (idx < 0 || idx >= script.lines.length) return NextResponse.json({ error: "Unknown sceneKey (or no matching script line)." }, { status: 400 });
+      const line = script.lines[idx];
+      const scene = sb.scenes[idx];
+      sb.scenes[idx] = {
+        ...scene,
+        durationSec: Number(line.durationSec) > 0 ? Number(line.durationSec) : scene.durationSec,
+        storyPurpose: String(line.onScreenText ?? "") || String(line.narration ?? "") || scene.storyPurpose,
+        textOverlay: String(line.onScreenText ?? "").slice(0, 120),
+        transition: String(line.transition ?? "cut").slice(0, 60),
+        approval: "PENDING",
+      };
+      await db.production.update({ where: { id }, data: { storyboardJson: JSON.stringify(sb) } });
+      await logEvent(id, "scene.regenerated", "STORYBOARD", { sceneKey: body.sceneKey, fromScriptLine: idx + 1 });
+      return NextResponse.json({ ok: true, scene: sb.scenes[idx] });
+    }
+    case "product-approval": {
+      const product = production.productJson ? (JSON.parse(production.productJson) as { approval?: string }) : null;
+      if (!product) return NextResponse.json({ error: "No product-understanding artifact yet — run UNDERSTAND first." }, { status: 400 });
+      if (!["APPROVED", "REJECTED", "PENDING"].includes(body.decision)) return NextResponse.json({ error: "decision must be APPROVED|REJECTED|PENDING." }, { status: 400 });
+      product.approval = body.decision;
+      await db.production.update({ where: { id }, data: { productJson: JSON.stringify(product) } });
+      await recordDecision(id, "product-understanding", { decision: body.decision });
+      await logEvent(id, "product.approval", "PRODUCT_UNDERSTANDING", { decision: body.decision });
       return NextResponse.json({ ok: true });
     }
     case "budget": {

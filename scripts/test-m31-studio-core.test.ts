@@ -28,9 +28,10 @@ describe("M31 studio — state machine", () => {
 });
 
 describe("M31 studio — templates are honest about capability", () => {
-  test("exactly three active templates with complete stage graphs", () => {
+  test("exactly four active templates with complete stage graphs (M31 addendum: + showcase-studio)", () => {
     const active = PIPELINE_TEMPLATES.filter((t) => t.active);
-    expect(active.length).toBe(3);
+    expect(active.length).toBe(4);
+    expect(active.map((t) => t.id)).toContain("showcase-studio");
     for (const t of active) {
       // Every dependency refers to a stage that exists and appears earlier.
       const keys = t.stages.map((s) => s.key);

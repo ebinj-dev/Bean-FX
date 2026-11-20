@@ -8,6 +8,7 @@ import { execSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
 import { db } from "@/lib/db";
+import { ffprobe } from "@/lib/media-storage";
 import { applyTimelineEdits, getTimelineHead } from "@/lib/editor/persistence";
 import { enqueueMediaJob, JOB_TYPE_RENDER_TIMELINE } from "@/lib/job-helpers";
 import { notify } from "@/lib/notify";
@@ -16,6 +17,13 @@ import {
   getTemplate, draftConceptOptions, type ProductionScript, type StoryboardScene,
   scriptDurationValid, stageCost, preRenderChecks, qaOutcome, type QaCheck,
 } from "./engine";
+import { ShowcaseInputsSchema, type ProductUnderstanding, type StoryboardSceneLike } from "./showcase/runner-types";
+import { analyzeProductUnderstanding } from "./showcase/product-understanding";
+import { draftShowcaseConcepts, type ShowcaseConcept } from "./showcase/concepts";
+import { getPrimitive, nikkiStyleFor, validateEmission, type PrimitiveContext } from "./showcase/compositions";
+import { syncGenerationAssets } from "./showcase/generation-router";
+import { buildPoster, type SceneTiming } from "./showcase/poster";
+import { buildShareCopy } from "./showcase/share-copy";
 import { PrismaClient } from "@prisma/client";
 
 type Db = PrismaClient["production"];
@@ -115,6 +123,8 @@ export async function reconcileAfterRestart(productionId: string): Promise<void>
 }
 
 export async function syncJobBackedStages(productionId: string): Promise<void> {
+  // Finished provider jobs → their GENERATION asset rows (idempotent).
+  await syncGenerationAssets(productionId).catch(() => undefined);
   const stages = await db.productionStage.findMany({ where: { productionId, state: "RUNNING", jobId: { not: null } } });
   for (const s of stages) {
     const job = await db.job.findUnique({ where: { id: s.jobId! } });
@@ -202,8 +212,36 @@ async function runStageKind(production: { id: string; userId: string; projectId:
       await setStage(pid, stageId, "SUCCEEDED", { completedAt: new Date(), outputJson: JSON.stringify(research) });
       return { state: "SUCCEEDED", message: "Research capability not configured — recorded honestly (no fabricated citations)." };
     }
+    case "product_understanding": {
+      // SHOWCASE Phase 1: analyze the product from the recorded inputs.
+      // Deterministic core + optional LLM structuring STRICTLY from evidence;
+      // artifact is stored and user-approved before any downstream stage.
+      if (!brief) throw new ProductionError("Intake brief required before product understanding.", 400, "NO_BRIEF");
+      const rawInputs = brief.showcaseInputs ?? { productName: brief.title, description: brief.briefText };
+      const parsedInputs = ShowcaseInputsSchema.safeParse(rawInputs);
+      if (!parsedInputs.success) throw new ProductionError(`Showcase inputs invalid: ${parsedInputs.error.issues.map((i) => i.message).join("; ")}`, 400, "BAD_SHOWCASE_INPUTS");
+      const artifact = await analyzeProductUnderstanding(userId, parsedInputs.data, { llmAssist: true });
+      if (artifact.sources.length === 0) {
+        throw new ProductionError("No usable product inputs were provided (description, feature list, website, screenshots, demo recordings or a project). Add at least one input and re-run.", 400, "NO_PRODUCT_INPUTS");
+      }
+      await db.production.update({ where: { id: pid }, data: { productJson: JSON.stringify(artifact), status: "AWAITING_APPROVAL" } });
+      await setStage(pid, stageId, "AWAITING_APPROVAL", { outputJson: JSON.stringify({ sources: artifact.sources.length, unverifiedClaims: artifact.unverifiedClaims.length, basis: artifact.basis, exclusions: artifact.exclusions.length }) });
+      await logEvent(pid, "product.understood", stage.key, { basis: artifact.basis, sources: artifact.sources.length, capabilities: artifact.capabilities.length, unverified: artifact.unverifiedClaims.length, exclusions: artifact.exclusions.length });
+      return { state: "AWAITING_APPROVAL", message: `Product understood (${artifact.basis}, ${artifact.sources.length} evidence items, ${artifact.unverifiedClaims.length} unverified claim(s) demoted, ${artifact.exclusions.length} redaction(s)). Review and approve the artifact.` };
+    }
     case "concept": {
       if (!brief) throw new ProductionError("Brief required before concepts.", 400, "NO_BRIEF");
+      if (production.templateId === "showcase-studio") {
+        // SHOWCASE Phase 2: campaign-aware creative directions from the
+        // approved product-understanding artifact.
+        const row = await db.production.findUniqueOrThrow({ where: { id: pid } });
+        const product: ProductUnderstanding | null = row.productJson ? JSON.parse(row.productJson) : null;
+        if (!product || product.approval !== "APPROVED") throw new ProductionError("Approve the product-understanding artifact before concepts.", 409, "PRODUCT_NOT_APPROVED");
+        const options: ShowcaseConcept[] = draftShowcaseConcepts(brief, product);
+        await db.production.update({ where: { id: pid }, data: { conceptJson: JSON.stringify({ options, selectedId: null }), status: "AWAITING_APPROVAL" } });
+        await setStage(pid, stageId, "AWAITING_APPROVAL");
+        return { state: "AWAITING_APPROVAL", message: "3 distinct campaign concepts drafted from the approved artifact — select one to approve." };
+      }
       const options = draftConceptOptions(brief);
       await db.production.update({ where: { id: pid }, data: { conceptJson: JSON.stringify({ options, selectedId: null }), status: "AWAITING_APPROVAL" } });
       await setStage(pid, stageId, "AWAITING_APPROVAL");
@@ -211,23 +249,44 @@ async function runStageKind(production: { id: string; userId: string; projectId:
     }
     case "script": {
       const concept = production.briefJson ? (await db.production.findUniqueOrThrow({ where: { id: pid } })).conceptJson : null;
-      const selected = concept ? (JSON.parse(concept) as { selectedId: string | null }) : null;
+      const selected = concept ? (JSON.parse(concept) as { selectedId: string | null; options?: Array<{ id: string; productReveal?: string; featureHighlights?: string[]; openingHook?: string; closingCta?: string; centralIdea?: string }> }) : null;
       if (!selected?.selectedId) throw new ProductionError("Select and approve a concept before the script stage.", 409, "NO_CONCEPT_SELECTED");
       if (!brief) throw new ProductionError("Brief required.", 400, "NO_BRIEF");
+
+      const buildLine = (i: number, n: number, durSec: number, onScreen: string, visual: string, audio: string, transition: string) => ({
+        id: `sc${i}-${Date.now().toString(36)}-${i}`,
+        sceneNumber: i, narration: "", dialogue: "",
+        onScreenText: onScreen.slice(0, 300), durationSec: Math.max(0.5, durSec),
+        visual: visual.slice(0, 500), audio, transition: transition.slice(0, 60),
+        captionCue: brief.subtitles ? "captions on" : "", reference: "",
+      });
+
+      if (production.templateId === "showcase-studio") {
+        // SHOWCASE: script beats follow the APPROVED concept (hook → reveal →
+        // features → close), durations split on the concept's rhythm.
+        const opt = selected.options?.find((o) => o.id === selected.selectedId);
+        if (!opt) throw new ProductionError("Selected concept not found.", 400, "BAD_CONCEPT");
+        const feats = (opt.featureHighlights ?? []).slice(0, 3);
+        const weights = [0.18, 0.27, ...(feats.length ? feats.map(() => 0.32 / feats.length) : [0.32]), 0.13, 0.1];
+        const beatDefs = [
+          { onScreen: (brief.title || opt.id).slice(0, 60), visual: `Hook — ${opt.openingHook}` },
+          { onScreen: "reveal", visual: `Product reveal — ${opt.productReveal}` },
+          ...feats.map((f) => ({ onScreen: f.slice(0, 60), visual: `Feature demonstration — ${f}` })),
+          { onScreen: "hero", visual: `Hero moment — ${opt.centralIdea}` },
+          { onScreen: "cta", visual: `Close — ${opt.closingCta}` },
+        ];
+        const audio = brief.musicPreference === "user-provided" ? "user music bed" : brief.musicPreference === "none" ? "silent (user preference)" : "music not configured — attach a user track or approve generation when available";
+        const lines = beatDefs.map((b, i) => buildLine(i + 1, beatDefs.length, Math.max(0.5, brief.targetDurationSec * (weights[i] ?? 0.1)), b.onScreen === "reveal" ? "" : b.onScreen === "cta" ? "" : b.onScreen, b.visual, audio, i === 0 ? "cut in" : i === beatDefs.length - 1 ? "fade out" : "cut"));
+        const script: ProductionScript = { revision: 1, targetDurationSec: brief.targetDurationSec, lines };
+        const valid = scriptDurationValid(script);
+        await db.production.update({ where: { id: pid }, data: { scriptJson: JSON.stringify(script), status: "AWAITING_APPROVAL" } });
+        await setStage(pid, stageId, "AWAITING_APPROVAL", { outputJson: JSON.stringify({ durationValid: valid, beats: lines.length }) });
+        return { state: "AWAITING_APPROVAL", message: `Showcase script drafted from the approved concept (${lines.length} beats, ${valid ? "duration consistent" : "DURATION MISMATCH — edit before approving"}). Edit and approve.` };
+      }
+
       // Deterministic skeleton from the approved concept's structure; user edits finalize it.
       const parts = [0.3, 0.4, 0.3];
-      const lines = parts.map((p, i) => ({
-        id: `sc${i + 1}-${Date.now().toString(36)}`,
-        sceneNumber: i + 1,
-        narration: "", dialogue: "",
-        onScreenText: i === 0 ? (brief.title ?? "").slice(0, 60) : "",
-        durationSec: Math.max(1, Math.round(brief.targetDurationSec * p)),
-        visual: `Scene ${i + 1} — ${brief.visualDirection || "per approved concept"}`,
-        audio: brief.musicPreference === "user-provided" ? "user music bed" : "no music configured",
-        transition: i === 0 ? "cut in" : "cut",
-        captionCue: brief.subtitles ? "captions on" : "",
-        reference: "",
-      }));
+      const lines = parts.map((p, i) => buildLine(i + 1, parts.length, brief.targetDurationSec * p, i === 0 ? (brief.title ?? "").slice(0, 60) : "", `Scene ${i + 1} — ${brief.visualDirection || "per approved concept"}`, brief.musicPreference === "user-provided" ? "user music bed" : "no music configured", i === 0 ? "cut in" : "cut"));
       const script: ProductionScript = { revision: 1, targetDurationSec: brief.targetDurationSec, lines };
       const valid = scriptDurationValid(script);
       await db.production.update({ where: { id: pid }, data: { scriptJson: JSON.stringify(script), status: "AWAITING_APPROVAL" } });
@@ -238,6 +297,16 @@ async function runStageKind(production: { id: string; userId: string; projectId:
       const row = await db.production.findUniqueOrThrow({ where: { id: pid } });
       const script: ProductionScript | null = row.scriptJson ? JSON.parse(row.scriptJson) : null;
       if (!script) throw new ProductionError("Script required before storyboard.", 400, "NO_SCRIPT");
+      const isShowcase = production.templateId === "showcase-studio";
+      const primitiveFor = (visual: string, i: number, n: number): string | null => {
+        if (!isShowcase) return null;
+        if (/^Hook/.test(visual)) return "cinematic-title";
+        if (/^Product reveal/.test(visual)) return "hero-product-reveal";
+        if (/^Feature demonstration/.test(visual)) return "feature-spotlight";
+        if (/^Hero moment/.test(visual)) return "product-showcase";
+        if (/^Close/.test(visual) || i === n) return "end-card";
+        return "feature-spotlight";
+      };
       const scenes: StoryboardScene[] = script.lines.map((l, i) => ({
         sceneKey: `scene-${i + 1}`, sceneNumber: i + 1, durationSec: l.durationSec,
         storyPurpose: l.onScreenText || l.narration || `Beat ${i + 1}`,
@@ -246,10 +315,12 @@ async function runStageKind(production: { id: string; userId: string; projectId:
         composition: "Center-weighted", movement: "Cut on motion", visualStyle: brief?.visualDirection ?? "",
         narrationSegment: l.narration, audioCue: l.audio, requiredAssetKind: "user_media",
         reference: "", generationInstructions: "", thumbnailPending: true as const, approval: "PENDING",
+        textOverlay: (l.onScreenText ?? "").slice(0, 120), productElement: "", transition: (l.transition || "cut").slice(0, 60),
+        compositionPrimitive: primitiveFor(l.visual, i + 1, script.lines.length), demonstration: null,
       }));
       await db.production.update({ where: { id: pid }, data: { storyboardJson: JSON.stringify({ scenes }), status: "AWAITING_APPROVAL" } });
       await setStage(pid, stageId, "AWAITING_APPROVAL");
-      return { state: "AWAITING_APPROVAL", message: "Storyboard drafted from the approved script — approve scenes to continue." };
+      return { state: "AWAITING_APPROVAL", message: isShowcase ? "Storyboard drafted — composition primitives pre-assigned per beat (editable per scene)." : "Storyboard drafted from the approved script — approve scenes to continue." };
     }
     case "asset_planning": {
       const row = await db.production.findUniqueOrThrow({ where: { id: pid } });
@@ -268,6 +339,8 @@ async function runStageKind(production: { id: string; userId: string; projectId:
           composition: "Center-weighted", movement: "Cut on motion", visualStyle: briefNow?.visualDirection ?? "",
           narrationSegment: l.narration, audioCue: l.audio, requiredAssetKind: "user_media",
           reference: "", generationInstructions: "", thumbnailPending: true as const, approval: "PENDING",
+          textOverlay: (l.onScreenText ?? "").slice(0, 120), productElement: "", transition: (l.transition || "cut").slice(0, 60),
+          compositionPrimitive: null, demonstration: null,
         }));
         sb = { scenes: derived };
         await db.production.update({ where: { id: pid }, data: { storyboardJson: JSON.stringify(sb) } });
@@ -287,14 +360,44 @@ async function runStageKind(production: { id: string; userId: string; projectId:
         const hasMusic = existing.find((a) => a.category === "music");
         if (!hasMusic) plan.push({ sceneKey: null, category: "music", description: "User-supplied music bed", sourceType: "USER_MEDIA", licenseState: "USER_CONFIRMED", costUnknown: false, status: "PENDING" });
       }
+
+      // SHOWCASE Phase 4/5: demonstration planning + generation asset rows.
+      const isShowcase = production.templateId === "showcase-studio";
+      const demoNotes: string[] = [];
+      if (isShowcase) {
+        for (const sc of sb.scenes) {
+          const d = sc.demonstration;
+          if (d?.sourceMediaId) {
+            const owned = await db.mediaAsset.findFirst({ where: { id: d.sourceMediaId, userId } });
+            if (!owned) demoNotes.push(`${sc.sceneKey}: demonstration source not found or not owned — cleared`);
+            else demoNotes.push(`${sc.sceneKey}: demonstration from "${owned.originalName}"${d.illustrative ? " — illustrative accents LABELLED in metadata (not real captured behavior)" : " — real captured behavior"}`);
+          }
+          if (d && d.maskNotes.length > 0) demoNotes.push(`${sc.sceneKey}: ${d.maskNotes.length} mask requirement(s) recorded — private data must be masked/replaced before public release`);
+          // Generation-required scenes become GENERATION asset rows (provider
+          // routing + cost approval happen through the generation router API).
+          if ((sc.requiredAssetKind === "generated_image" || sc.requiredAssetKind === "generated_video") && !existing.find((a) => a.sceneKey === sc.sceneKey && a.sourceType === "GENERATION" && a.status !== "REJECTED")) {
+            await db.productionAsset.create({
+              data: {
+                productionId: pid, sceneKey: sc.sceneKey, category: sc.requiredAssetKind === "generated_video" ? "video" : "image",
+                description: `Generated ${sc.requiredAssetKind === "generated_video" ? "shot" : "still"} for ${sc.sceneKey}: ${sc.generationInstructions.slice(0, 160) || sc.storyPurpose.slice(0, 160)}`,
+                sourceType: "GENERATION", licenseState: "UNKNOWN", costUnknown: true, status: "PLANNED",
+                provider: null, model: null,
+                provenanceJson: JSON.stringify({ plannedAt: new Date().toISOString(), prompt: sc.generationInstructions.slice(0, 600), illustrative: sc.demonstration?.illustrative ?? false }),
+              },
+            });
+          }
+        }
+      }
       for (const p of plan) {
         await db.productionAsset.create({ data: { productionId: pid, sceneKey: p.sceneKey, category: p.category, description: p.description, sourceType: p.sourceType, licenseState: p.licenseState, costUnknown: p.costUnknown, status: p.status, provenanceJson: JSON.stringify({ plannedAt: new Date().toISOString(), deterministic: true }) } });
       }
-      await logEvent(pid, "assets.planned", stage.key, { planned: plan.length });
-      await setStage(pid, stageId, "AWAITING_APPROVAL", { outputJson: JSON.stringify({ planned: plan.length }) });
-      return { state: "AWAITING_APPROVAL", message: `Asset plan drafted (${plan.length} items). Attach/approve assets to continue.` };
+      await logEvent(pid, "assets.planned", stage.key, { planned: plan.length, demonstrationNotes: demoNotes });
+      await setStage(pid, stageId, "AWAITING_APPROVAL", { outputJson: JSON.stringify({ planned: plan.length, demonstrationNotes: demoNotes }) });
+      return { state: "AWAITING_APPROVAL", message: `Asset plan drafted (${plan.length} items${demoNotes.length ? `; ${demoNotes.length} demonstration note(s)` : ""}). Attach/approve assets to continue.` };
     }
     case "asset_generation": {
+      // Pull finished provider jobs into their asset rows first (idempotent).
+      await syncGenerationAssets(pid);
       const assets = await db.productionAsset.findMany({ where: { productionId: pid } });
       let ready = 0; let blocked = 0;
       for (const a of assets) {
@@ -308,6 +411,17 @@ async function runStageKind(production: { id: string; userId: string; projectId:
       if (generated.length > 0 && !providerStatus().configured) {
         await setStage(pid, stageId, "BLOCKED", { error: providerStatus().reason });
         return { state: "BLOCKED", message: providerStatus().reason };
+      }
+      const inFlight = generated.filter((a) => a.status === "GENERATING").length;
+      const unsubmitted = generated.filter((a) => ["PLANNED", "PENDING"].includes(a.status)).length;
+      const genFailed = generated.filter((a) => a.status === "FAILED");
+      if (genFailed.length > 0) {
+        await setStage(pid, stageId, "FAILED", { error: genFailed.map((a) => a.error ?? "generation failed").join("; ").slice(0, 500), completedAt: new Date() });
+        return { state: "FAILED", message: `${genFailed.length} generation asset(s) failed — retry from the asset wall.` };
+      }
+      if (inFlight + unsubmitted > 0) {
+        // Stage stays RUNNING; syncJobBackedStages / syncGenerationAssets flip it later.
+        return { state: "RUNNING", message: `${inFlight} generation job(s) in flight, ${unsubmitted} not yet submitted (route them on the asset wall — approval + budget required).` };
       }
       await setStage(pid, stageId, "SUCCEEDED", { completedAt: new Date(), outputJson: JSON.stringify({ ready, blocked }) });
       return { state: "SUCCEEDED", message: `Assets prepared (${ready} ready, ${blocked} blocked).` };
@@ -338,8 +452,6 @@ async function runStageKind(production: { id: string; userId: string; projectId:
     case "review": {
       // M30 client-review integration: create a review revision on the project.
       if (!production.projectId) throw new ProductionError("No project.", 400, "NO_PROJECT");
-      const res = await fetch(process.env.INTERNAL_BASE ?? "http://localhost:3117", { method: "POST" }).catch(() => null); // placeholder never used; direct call below
-      void res;
       const { createReviewForProduction } = await import("./review-bridge");
       const rev = await createReviewForProduction(production.projectId, userId, pid);
       await setStage(pid, stageId, "AWAITING_APPROVAL", { outputJson: JSON.stringify({ revisionId: rev.revisionId }) });
@@ -378,12 +490,81 @@ async function runStageKind(production: { id: string; userId: string; projectId:
       return { state: "SUCCEEDED", message: `QA outcome: ${outcome.state}` };
     }
     case "delivery": {
+      const isShowcase = production.templateId === "showcase-studio";
       const exports = await db.exportFile.findMany({ where: { userId, kind: "TIMELINE_RENDER" }, orderBy: { createdAt: "desc" }, take: 10 });
-      const delivery = { deliveredAt: new Date().toISOString(), artifacts: exports.slice(0, 3).map((e) => ({ exportFileId: e.id, sizeBytes: e.sizeBytes, durationSec: e.durationSec, storagePath: e.storagePath })) };
+      const delivery: Record<string, unknown> = { deliveredAt: new Date().toISOString(), artifacts: exports.slice(0, 3).map((e) => ({ exportFileId: e.id, sizeBytes: e.sizeBytes, durationSec: e.durationSec, storagePath: e.storagePath })) };
+
+      if (isShowcase) {
+        // SHOWCASE Phase 9: poster from the REAL rendered film + share copy.
+        const briefNow = brief!;
+        const row = await db.production.findUniqueOrThrow({ where: { id: pid } });
+        const product: ProductUnderstanding | null = row.productJson ? JSON.parse(row.productJson) : null;
+        const sb = row.storyboardJson ? (JSON.parse(row.storyboardJson) as { scenes: StoryboardScene[] }) : null;
+
+        if (briefNow.posterEnabled) {
+          const renderStage = await db.productionStage.findFirst({ where: { productionId: pid, key: "FINAL_RENDER", state: "SUCCEEDED" }, orderBy: { completedAt: "desc" } });
+          const renderOut = renderStage?.outputJson ? (JSON.parse(renderStage.outputJson) as { storagePath: string | null }) : null;
+          if (renderOut?.storagePath && fs.existsSync(renderOut.storagePath)) {
+            const probe = await ffprobe(renderOut.storagePath).catch(() => null);
+            if (probe?.durationSec && sb) {
+              const timings: SceneTiming[] = [];
+              let t = 0;
+              for (const sc of sb.scenes) { timings.push({ sceneKey: sc.sceneKey, startSec: t, endSec: t + sc.durationSec }); t += sc.durationSec; }
+              const dims = posterDims(briefNow.aspectRatio, briefNow.resolution);
+              const poster = await buildPoster({
+                userId, mp4Path: renderOut.storagePath, mp4DurationSec: probe.durationSec, timings,
+                title: product?.identity?.name || briefNow.title, width: dims.width, height: dims.height,
+                overlayTitle: true, accentColor: product?.brand?.colors?.[0],
+              });
+              if (poster.posterPath) {
+                const { registerImageArtifact } = await import("@/lib/ai/asset-lifecycle");
+                try {
+                  const registered = await registerImageArtifact(poster.posterPath, {
+                    engine: "SHOWCASE", userId, projectId: production.projectId,
+                    originalName: `showcase-poster-${pid.slice(-6)}.jpg`,
+                    provider: "ffmpeg-frame-extract+thumbnail-overlay", model: "none",
+                    prompt: `Poster frame at ${poster.plan.sourceFrameSec.toFixed(2)}s of the rendered film`,
+                    params: { sourceFrameSec: poster.plan.sourceFrameSec, sceneKey: poster.plan.sceneKey, overlayApplied: poster.plan.overlayApplied },
+                    license: "derived-from-user-media", attribution: "Frame extracted from the user's rendered BEAN FX film",
+                    width: dims.width, height: dims.height,
+                  });
+                  poster.plan.exportFileId = registered.id;
+                  delivery.poster = poster.plan;
+                  delivery.posterMediaAssetId = registered.id;
+                  await logEvent(pid, "poster.built", stage.key, { frameSec: poster.plan.sourceFrameSec, sceneKey: poster.plan.sceneKey, checks: poster.plan.checks.map((c) => `${c.id}:${c.state}`) });
+                } catch (err) {
+                  delivery.poster = { ...poster.plan, registrationError: String(err).slice(0, 300) };
+                  await logEvent(pid, "poster.registration_failed", stage.key, { error: String(err).slice(0, 200) });
+                }
+              } else {
+                delivery.poster = poster.plan; // checks carry the FAILED states honestly
+                await logEvent(pid, "poster.failed_checks", stage.key, { checks: poster.plan.checks });
+              }
+            } else {
+              delivery.poster = { checks: [{ id: "poster-source", state: "FAILED", detail: "render artifact missing or unreadable" }] };
+            }
+          } else {
+            delivery.poster = { checks: [{ id: "poster-source", state: "NOT_RUN", detail: "no completed render artifact found for this production" }] };
+          }
+        }
+
+        if (product) {
+          const endCardScene = sb?.scenes.find((sc) => sc.compositionPrimitive === "end-card" || sc.compositionPrimitive === "cta-scene");
+          const shareCopy = buildShareCopy({
+            product, ctaText: endCardScene?.textOverlay || "",
+            durationSec: briefNow.targetDurationSec, aspectRatio: briefNow.aspectRatio,
+            platforms: briefNow.shareCopyPlatforms,
+            websiteUrl: briefNow.showcaseInputs?.websiteUrl || undefined,
+          });
+          delivery.shareCopy = shareCopy;
+          await logEvent(pid, "share_copy.built", stage.key, { platforms: shareCopy.items.map((i) => `${i.platform}:${i.withinLimits ? "fits" : "TRIMMED"}`) });
+        }
+      }
+
       await db.production.update({ where: { id: pid }, data: { deliveryJson: JSON.stringify(delivery), status: "COMPLETED" } });
       await setStage(pid, stageId, "SUCCEEDED", { completedAt: new Date(), outputJson: JSON.stringify(delivery) });
       await notify({ userId, type: "production.delivered", payload: { productionId: pid, title: production.briefJson ? (JSON.parse(production.briefJson) as { title?: string }).title : pid }, dedupKey: `production-delivered:${pid}` });
-      return { state: "SUCCEEDED", message: "Production delivered — artifacts recorded and user notified." };
+      return { state: "SUCCEEDED", message: isShowcase ? "Production delivered — film, poster, share copy and artifacts recorded." : "Production delivered — artifacts recorded and user notified." };
     }
     case "analysis": {
       // Deterministic analysis of the first user media asset.
@@ -412,11 +593,13 @@ async function runStageKind(production: { id: string; userId: string; projectId:
 export async function buildAssemblyEdits(pid: string, userId: string): Promise<{ edits: unknown[] }> {
   const row = await db.production.findUniqueOrThrow({ where: { id: pid } });
   const brief = row.briefJson ? ProductionBriefSchema.parse(JSON.parse(row.briefJson)) : null;
+  const product = row.productJson ? (JSON.parse(row.productJson) as ProductUnderstanding) : null;
   const sb = row.storyboardJson ? (JSON.parse(row.storyboardJson) as { scenes: StoryboardScene[] }) : null;
   if (!sb) throw new ProductionError("Storyboard required for assembly.", 400, "NO_STORYBOARD");
   const fps = brief?.fps ?? 30;
+  const accent = product?.brand?.colors?.[0] ?? undefined;
   const edits: unknown[] = [];
-  const suffix = pid.slice(-4); const vId = `pV${suffix}`; const aId = `pA${suffix}`;
+  const suffix = pid.slice(-4); const vId = `pV${suffix}`; const aId = `pA${suffix}`; const gId = `pG${suffix}`;
   edits.push({ type: "AddTrack", track: { id: vId, name: "Production V1", kind: "VIDEO", visible: true, muted: false, solo: false, locked: false, volume: 1 } });
   const assets = await db.productionAsset.findMany({ where: { productionId: pid, status: { in: ["READY", "APPROVED"] } } });
   const videoAssets = await db.mediaAsset.findMany({ where: { id: { in: assets.map((a) => a.mediaAssetId).filter((x): x is string => Boolean(x)) } } });
@@ -424,31 +607,93 @@ export async function buildAssemblyEdits(pid: string, userId: string): Promise<{
   let cursor = 0;
   const music = assets.find((a) => a.category === "music" && a.mediaAssetId);
   if (music) edits.push({ type: "AddTrack", track: { id: aId, name: "Production A1", kind: "AUDIO", visible: true, muted: false, solo: false, locked: false, volume: 0.8 } });
+  let graphicTrackAdded = false;
+  let mediaClipCount = 0;
+
+  /** Apply the scene's composition primitive → editor-model data. Text
+   *  falls back to the brief title / artifact identity — NIKKI requires ≥1
+   *  char, and an empty title card would be a silent fabrication anyway. */
+  const applyPrimitive = (sc: StoryboardScene, durFrames: number): { keyframes: unknown[]; effects: unknown[]; graphic: { templateId: string; style: unknown } | null } => {
+    const prim = sc.compositionPrimitive ? getPrimitive(sc.compositionPrimitive) : null;
+    if (!prim) return { keyframes: [], effects: [], graphic: null };
+    const overlay = sc.textOverlay || brief?.title || product?.identity?.name || undefined;
+    if (prim.id !== "hero-product-reveal" && prim.id !== "feature-spotlight" && prim.id !== "ui-demonstration" && prim.id !== "floating-product-frame" && prim.id !== "split-screen-comparison" && prim.id !== "product-showcase" && prim.id !== "logo-reveal" && !overlay) {
+      // Graphic-bearing primitive with no text available: record and skip.
+      void logEvent(pid, "primitive.skipped", "TIMELINE_ASSEMBLY", { sceneKey: sc.sceneKey, primitive: prim.id, reason: "no approved text for the graphic — set textOverlay on the scene" });
+      return { keyframes: [], effects: [], graphic: null };
+    }
+    const ctx: PrimitiveContext = { fps, durationFrames: durFrames, overlayText: overlay, accentColor: accent };
+    const em = prim.emit(ctx);
+    const v = validateEmission(em, ctx);
+    if (!v.ok) {
+      void logEvent(pid, "primitive.skipped", "TIMELINE_ASSEMBLY", { sceneKey: sc.sceneKey, primitive: prim.id, issues: v.issues });
+      return { keyframes: [], effects: [], graphic: null };
+    }
+    const g = em.graphic ? nikkiStyleFor(em.graphic) : null;
+    return { keyframes: em.keyframes, effects: em.effects, graphic: g ? { templateId: g.templateId, style: g.style } : null };
+  };
+
   for (const sc of sb.scenes) {
     const sceneAsset = assets.find((a) => a.sceneKey === sc.sceneKey && (a.category === "video" || a.category === "image"));
     const media = sceneAsset?.mediaAssetId ? vidById.get(sceneAsset.mediaAssetId) : null;
-    if (!media) continue;
     const durFrames = Math.max(1, Math.round(sc.durationSec * fps));
-    const srcFps = media.fps && media.fps > 0 ? media.fps : fps;
-    const srcIn = 0;
-    const srcOut = Math.min(Math.round((media.durationSec ?? durFrames / fps) * srcFps) || durFrames, srcIn + durFrames);
-    edits.push({
-      type: "AddClip",
-      clip: {
-        id: `pc-${sc.sceneKey}`, trackId: vId, sourceAssetId: media.id,
-        sourceInFrame: srcIn, sourceOutFrame: Math.max(srcIn + 1, srcOut),
-        sourceFps: { num: Math.round(srcFps), den: 1 },
-        timelineStartFrame: cursor, timelineDurationFrames: durFrames,
-        playbackSpeed: 1, volume: 1, muted: false,
-        fadeInFrames: sc.sceneNumber === 1 ? 0 : 3, fadeOutFrames: 3,
-        transform: { x: 0, y: 0, scale: 1, rotation: 0, opacity: 1 },
-        captionText: brief?.subtitles ? sc.storyPurpose.slice(0, 120) : null,
-        captionStyle: null, graphicTemplateId: null, graphicStyle: null,
-        keyframes: [], missingMedia: false, pan: 0, groupId: null,
-        effects: [],
-      },
-    });
-    cursor += durFrames;
+    if (media) {
+      const prim = applyPrimitive(sc, durFrames);
+      const srcFps = media.fps && media.fps > 0 ? media.fps : fps;
+      const srcIn = 0;
+      const srcOut = Math.min(Math.round((media.durationSec ?? durFrames / fps) * srcFps) || durFrames, srcIn + durFrames);
+      edits.push({
+        type: "AddClip",
+        clip: {
+          id: `pc-${sc.sceneKey}`, trackId: vId, sourceAssetId: media.id,
+          sourceInFrame: srcIn, sourceOutFrame: Math.max(srcIn + 1, srcOut),
+          sourceFps: { num: Math.round(srcFps), den: 1 },
+          timelineStartFrame: cursor, timelineDurationFrames: durFrames,
+          playbackSpeed: 1, volume: 1, muted: false,
+          fadeInFrames: sc.sceneNumber === 1 ? 0 : 3, fadeOutFrames: 3,
+          transform: { x: 0, y: 0, scale: 1, rotation: 0, opacity: 1 },
+          captionText: brief?.subtitles ? sc.storyPurpose.slice(0, 120) : null,
+          captionStyle: null,
+          graphicTemplateId: prim.graphic?.templateId ?? null,
+          graphicStyle: prim.graphic?.style ?? null,
+          keyframes: prim.keyframes, effects: prim.effects,
+          missingMedia: false, pan: 0, groupId: null,
+        },
+      });
+      cursor += durFrames; mediaClipCount++;
+      continue;
+    }
+    // Graphic-only scene (showcase title / end card / CTA): a REAL NIKKI
+    // graphic clip on the GRAPHIC track — rendered from the template, never a
+    // fabricated placeholder. Scenes with neither media nor a graphic are
+    // recorded honestly and skipped.
+    const prim = applyPrimitive(sc, durFrames);
+    if (prim.graphic) {
+      if (!graphicTrackAdded) {
+        edits.push({ type: "AddTrack", track: { id: gId, name: "Showcase Graphics", kind: "GRAPHIC", visible: true, muted: false, solo: false, locked: false, volume: 1 } });
+        graphicTrackAdded = true;
+      }
+      edits.push({
+        type: "AddGraphic",
+        clip: {
+          id: `pg-${sc.sceneKey}`, trackId: gId, sourceAssetId: "",
+          sourceInFrame: 0, sourceOutFrame: durFrames,
+          sourceFps: { num: fps, den: 1 },
+          timelineStartFrame: cursor, timelineDurationFrames: durFrames,
+          playbackSpeed: 1, volume: 1, muted: false,
+          fadeInFrames: 0, fadeOutFrames: 0,
+          transform: { x: 0, y: 0, scale: 1, rotation: 0, opacity: 1 },
+          captionText: null, captionStyle: null,
+          graphicTemplateId: prim.graphic.templateId, graphicStyle: prim.graphic.style,
+          keyframes: prim.keyframes, effects: prim.effects,
+          missingMedia: false, pan: 0, groupId: null,
+        },
+      });
+      cursor += durFrames;
+      await logEvent(pid, "graphic.scene", "TIMELINE_ASSEMBLY", { sceneKey: sc.sceneKey, templateId: prim.graphic.templateId, frames: durFrames });
+    } else {
+      await logEvent(pid, "scene.skipped_no_media", "TIMELINE_ASSEMBLY", { sceneKey: sc.sceneKey, note: "no READY asset and no graphic primitive produced — attach media or set a graphic primitive on this scene" });
+    }
   }
   if (music?.mediaAssetId) {
     const m = vidById.get(music.mediaAssetId);
@@ -470,11 +715,46 @@ export async function buildAssemblyEdits(pid: string, userId: string): Promise<{
       });
     }
   }
+  if (mediaClipCount === 0) throw new ProductionError("Assembly produced no clips — attach/approve assets for every scene first (graphic-only scenes do not count as footage).", 400, "NO_ASSETS");
   if (edits.length <= 1) throw new ProductionError("Assembly produced no clips — attach/approve assets for every scene first.", 400, "NO_ASSETS");
   return { edits };
 }
 
 // ── QA against real artifacts ───────────────────────────────────────────────
+function posterDims(aspect: string, resolution: string): { width: number; height: number } {
+  const h1080 = resolution === "1080p" ? 1080 : 720;
+  switch (aspect) {
+    case "9:16": return { width: Math.round(h1080 * 9 / 16), height: h1080 };
+    case "1:1": return { width: h1080, height: h1080 };
+    case "4:5": return { width: Math.round(h1080 * 4 / 5), height: h1080 };
+    default: return { width: Math.round(h1080 * 16 / 9), height: h1080 };
+  }
+}
+
+/** Real FFmpeg measurements for the showcase QA layer (Phase 10). */
+function runBlackdetect(filePath: string): { blackSec: number; events: number; detail: string } {
+  try {
+    const out = execSync(`ffmpeg -i "${filePath}" -vf "blackdetect=d=0.5:pix_th=0.10" -an -f null - 2>&1 || true`, { encoding: "utf8", timeout: 120_000, maxBuffer: 32 * 1024 * 1024 });
+    const events = [...out.matchAll(/black_start:([\d.]+)\s+black_end:([\d.]+)\s+\(duration:([\d.]+)\)/g)].map((m) => ({ start: Number(m[1]), end: Number(m[2]), dur: Number(m[3]) }));
+    const blackSec = events.reduce((s, e) => s + e.dur, 0);
+    return { blackSec, events: events.length, detail: events.length ? events.slice(0, 5).map((e) => `${e.start.toFixed(1)}–${e.end.toFixed(1)}s`).join(", ") : "no black segments ≥0.5s" };
+  } catch (err) {
+    return { blackSec: 0, events: 0, detail: `blackdetect unavailable: ${String(err).slice(0, 120)}` };
+  }
+}
+
+function runLoudness(filePath: string): { meanDb: number | null; maxDb: number | null; detail: string } {
+  try {
+    const out = execSync(`ffmpeg -i "${filePath}" -af volumedetect -f null - 2>&1 || true`, { encoding: "utf8", timeout: 120_000, maxBuffer: 32 * 1024 * 1024 });
+    const mean = out.match(/mean_volume:\s*(-?[\d.]+)\s*dB/);
+    const max = out.match(/max_volume:\s*(-?[\d.]+)\s*dB/);
+    if (!mean || !max) return { meanDb: null, maxDb: null, detail: "no measurable audio (silent film)" };
+    return { meanDb: Number(mean[1]), maxDb: Number(max[1]), detail: `mean ${mean[1]} dB, max ${max[1]} dB` };
+  } catch (err) {
+    return { meanDb: null, maxDb: null, detail: `volumedetect unavailable: ${String(err).slice(0, 120)}` };
+  }
+}
+
 export async function runProductionQa(pid: string, targetDurationSec?: number): Promise<QaCheck[]> {
   const row = await db.production.findUniqueOrThrow({ where: { id: pid } });
   if (!row.projectId) throw new ProductionError("No project.", 400, "NO_PROJECT");
@@ -499,6 +779,29 @@ export async function runProductionQa(pid: string, targetDurationSec?: number): 
         const ok = Math.abs(dur - targetDurationSec) <= Math.max(1.5, targetDurationSec * 0.08);
         checks.push({ id: "render-duration", severity: "ERROR", state: ok ? "PASSED" : "FAILED", detail: `rendered ${dur.toFixed(2)}s vs target ${targetDurationSec}s` });
       }
+      // ── SHOWCASE Phase 10: real measurements, never render-exit optimism ──
+      const black = runBlackdetect(out.storagePath);
+      checks.push({ id: "black-frames", severity: "WARNING", state: black.blackSec > Math.max(1, dur * 0.1) ? "FAILED" : "PASSED", detail: `blackdetect: ${black.detail}` });
+      const audioStreams = probe.streams?.filter((s: { codec_type: string }) => s.codec_type === "audio") ?? [];
+      if (audioStreams.length > 0) {
+        const loud = runLoudness(out.storagePath);
+        // No measurable audio on an audio-bearing production, or a peak above
+        // -0.5 dBFS (clipping risk) both fail this check for human review.
+        const hot = loud.maxDb !== null && loud.maxDb > -0.5;
+        checks.push({ id: "audio-loudness", severity: "WARNING", state: loud.maxDb === null || hot ? "FAILED" : "PASSED", detail: loud.detail + (hot ? " — peak too hot (clipping risk)" : "") });
+        const aDur = Number(audioStreams[0]?.duration ?? 0);
+        if (aDur > 0) {
+          const syncOk = Math.abs(aDur - dur) <= Math.max(1.5, dur * 0.1);
+          checks.push({ id: "av-sync-duration", severity: "WARNING", state: syncOk ? "PASSED" : "FAILED", detail: `audio ${aDur.toFixed(2)}s vs container ${dur.toFixed(2)}s` });
+        }
+      }
+      // Caption timing: captioned clips must sit inside the runtime.
+      const headNow = await getTimelineHead(row.projectId, row.userId);
+      const captionClips = seqClips(headNow.sequence).filter((c) => (c as { captionText?: string | null }).captionText);
+      const fpsNow = (headNow.sequence as { fps?: { num: number; den: number } }).fps;
+      const fpsVal = fpsNow && fpsNow.den ? fpsNow.num / fpsNow.den : 30;
+      const outOfRange = captionClips.filter((c) => c.timelineStartFrame + c.timelineDurationFrames > Math.ceil(dur * fpsVal) + fpsVal);
+      checks.push({ id: "caption-timing", severity: "WARNING", state: outOfRange.length === 0 ? "PASSED" : "FAILED", detail: outOfRange.length === 0 ? `${captionClips.length} captioned clip(s) inside the runtime` : `${outOfRange.length} captioned clip(s) extend beyond the rendered duration` });
     } catch (e) {
       checks.push({ id: "file-decodable", severity: "ERROR", state: "FAILED", detail: `ffprobe failed: ${String(e).slice(0, 120)}` });
     }

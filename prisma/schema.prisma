@@ -1471,6 +1471,8 @@ model Production {
   storyboardJson      String?
   researchJson        String?
   referenceJson       String?
+  /// M31 SHOWCASE STUDIO: validated product-understanding artifact (Phase 1).
+  productJson         String?
   deliveryJson        String?
   /// Approved budget in cents (user-set). NULL = no budget set (never treated as 0).
   approvedBudgetCents Int?
@@ -1542,6 +1544,10 @@ model ProductionAsset {
   attribution   String?
   /// PLANNED | PENDING | GENERATING | READY | APPROVED | REJECTED | FAILED | BLOCKED
   status        String   @default("PLANNED")
+  /// Durable Job id while GENERATING (provider work rides the existing queue).
+  jobId         String?
+  /// Last failure detail (honest, never fabricated).
+  error         String?
   /// true when the cost is genuinely unknown — the UI shows "unknown", not 0.
   costUnknown   Boolean  @default(true)
   costCents     Int?

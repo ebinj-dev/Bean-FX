@@ -17,6 +17,8 @@ interface Project {
 }
 
 const TOOL_LINKS = [
+  { label: "SHOWCASE STUDIO", href: "#/showcase", desc: "Turn a product, website or project into a promotional film" },
+  { label: "PRODUCE", href: "#/produce", desc: "Agentic video productions on the native timeline" },
   { label: "AUTO CUT", href: "#/autocut", desc: "Silence removal with review-first cut planning" },
   { label: "CAPTIONS", href: "#/captions", desc: "Transcribe, edit and export subtitles" },
   { label: "WATERMARK", href: "#/watermark", desc: "Blur, delogo or crop watermark regions" },

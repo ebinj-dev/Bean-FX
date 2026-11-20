@@ -69,5 +69,62 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
     return NextResponse.json({ ok: true, asset: { id: row.id } }, { status: 201 });
   }
 
-  return NextResponse.json({ error: "action must be attach|decide|plan-generation." }, { status: 400 });
+  if (action === "route-generation") {
+    // SHOWCASE Phase 5: route a GENERATION asset to the REAL configured
+    // provider via the 10-step protocol (probe → capabilities → cost UNKNOWN →
+    // explicit approval → real job → validated output).
+    const { ShowcaseGenerationRequestSchema, routeGeneration, providerAvailability } = await import("@/lib/production/showcase/generation-router");
+    const parsed = ShowcaseGenerationRequestSchema.safeParse({
+      assetId: body.assetRowId,
+      kind: body.kind,
+      prompt: body.prompt,
+      referenceMediaId: body.referenceMediaId ?? null,
+      size: body.size ?? "1920x1080",
+      durationSec: body.durationSec ?? "5",
+      quality: body.quality ?? "speed",
+      approved: body.approved === true,
+    });
+    if (!parsed.success) return NextResponse.json({ error: `Invalid generation request: ${parsed.error.issues.map((i) => i.message).join("; ")}` }, { status: 400 });
+    const row = await db.productionAsset.findUnique({ where: { id: parsed.data.assetId } });
+    if (!row || row.productionId !== id) return NextResponse.json({ error: "Asset row not found." }, { status: 404 });
+    if (row.sourceType !== "GENERATION") return NextResponse.json({ error: "Only GENERATION assets route to providers." }, { status: 400 });
+    // Capability preview when approval is absent (honest gate, no paid call).
+    if (!parsed.data.approved) {
+      const availability = await providerAvailability();
+      return NextResponse.json({
+        ok: true, previewOnly: true, availability,
+        note: "This generation calls a metered provider with UNKNOWN cost. Re-POST with approved:true (and an approved budget) to submit the real job.",
+      }, { status: 200 });
+    }
+    try {
+      const routed = await routeGeneration(user.id, parsed.data);
+      await recordDecision(id, "generation.approved", { assetRowId: routed.assetId, jobId: routed.jobId, provider: routed.provider, costUnknown: true, protocolPath: routed.path });
+      return NextResponse.json({ ok: true, ...routed }, { status: 202 });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      const code = (err as { code?: string }).code ?? "ROUTE_FAILED";
+      return NextResponse.json({ error: message, code }, { status: (err as { status?: number }).status ?? 500 });
+    }
+  }
+
+  if (action === "sync-generation") {
+    const { syncGenerationAssets } = await import("@/lib/production/showcase/generation-router");
+    const result = await syncGenerationAssets(id);
+    return NextResponse.json({ ok: true, ...result });
+  }
+
+  if (action === "generate-narration") {
+    // SHOWCASE Phase 7: optional narration via the verified TTS seam.
+    const { generateShowcaseNarration } = await import("@/lib/production/showcase/narration");
+    const sceneKey = typeof body.sceneKey === "string" ? body.sceneKey : "";
+    if (!sceneKey) return NextResponse.json({ error: "sceneKey is required." }, { status: 400 });
+    try {
+      const result = await generateShowcaseNarration(user.id, id, sceneKey, typeof body.voice === "string" ? body.voice : "tongtong");
+      return NextResponse.json({ ok: true, ...result });
+    } catch (err) {
+      return NextResponse.json({ error: err instanceof Error ? err.message : String(err) }, { status: 409 });
+    }
+  }
+
+  return NextResponse.json({ error: "action must be attach|decide|plan-generation|route-generation|sync-generation|generate-narration." }, { status: 400 });
 }
