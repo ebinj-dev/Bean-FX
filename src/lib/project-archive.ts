@@ -55,6 +55,29 @@ export interface ManifestAsset {
   proxyOf: string | null;
 }
 
+/** M33 Track B: a mask carried in a project package (metadata + bytes). */
+export interface ManifestMask {
+  /** The mask's original row id (import remaps every reference, never reuses it). */
+  maskId: string;
+  /** The manifest assetId of the footage the mask belongs to. */
+  sourceAssetId: string;
+  path: string; // safe relative package path — "" when bytes are unavailable
+  width: number;
+  height: number;
+  method: string;
+  version: number;
+  /** Original parentId (manifest maskId) for version chains — remapped on import. */
+  parentId: string | null;
+  validationStatus: string;
+  validationJson: string | null;
+  coordSpace: string;
+  fps: number | null;
+  frameIndex: number | null;
+  notes: string | null;
+  sizeBytes: number;
+  sha256: string;
+}
+
 export interface PackageManifest {
   formatVersion: string;
   schemaVersion: string;
@@ -63,6 +86,8 @@ export interface PackageManifest {
   project: { id: string; name: string; description: string | null; settingsJson: string | null };
   timeline: { latestVersionNumber: number; latestSequenceJson: string; history: { versionNumber: number; sequenceJson: string; isAutosave: boolean }[] };
   assets: ManifestAsset[];
+  /** M33 Track B: subject masks for referenced footage (version chains included). */
+  masks: ManifestMask[];
   /** Content that was deliberately NOT packaged (regenerable/derived). */
   omitted: { kind: string; reason: string; count: number }[];
 }
@@ -74,6 +99,14 @@ export function packagePathForAsset(assetId: string, originalName: string, stora
   const ext = path.extname(storagePath || originalName).toLowerCase().replace(/[^a-z0-9.]/g, "").slice(0, 12);
   const name = `media/${assetId.replace(/[^a-zA-Z0-9_-]/g, "")}${ext || ".bin"}`;
   if (name.startsWith("/") || name.includes("..") || name.includes("\\")) throw new PermanentJobError("Unsafe package path derived for an asset.");
+  return name;
+}
+
+/** Masks live under masks/<maskId>.png — same safe-path discipline as media. */
+export function packagePathForMask(maskId: string, storagePath: string): string {
+  const ext = path.extname(storagePath || ".png").toLowerCase().replace(/[^a-z0-9.]/g, "").slice(0, 12) || ".png";
+  const name = `masks/${maskId.replace(/[^a-zA-Z0-9_-]/g, "")}${ext}`;
+  if (name.startsWith("/") || name.includes("..") || name.includes("\\")) throw new PermanentJobError("Unsafe package path derived for a mask.");
   return name;
 }
 
@@ -333,6 +366,72 @@ export async function buildManifest(
     }
   }
 
+  // ── M33 Track B: subject masks for the packaged footage ──────────────────
+  // Every version in the chain is carried (parentId links are remapped on
+  // import). Masks whose FILE is missing on disk still ship as metadata-only
+  // entries (path "" / sha256 "") so the import can restore an honestly-FAILED
+  // row instead of silently dropping the association (spec §B4).
+  // M33 closeout fix: masks are attached to their SOURCE footage, but a
+  // campaign timeline usually references the composited OUTPUT (alphamerge),
+  // not the raw subject. Walk the provenance chain: any clip-referenced asset
+  // produced by mask compositing names its mask in paramsJson — include that
+  // mask (and its source asset's other masks) so mask-bearing projects package
+  // every mask actually used to build them. Previously such masks were
+  // silently dropped from packages (found by the closeout acceptance rerun).
+  const clipAssets = await db.mediaAsset.findMany({
+    where: { id: { in: referencedIds }, userId },
+    select: { id: true, provider: true, paramsJson: true },
+  });
+  const provenanceMaskIds = new Set<string>();
+  const provenanceSourceIds = new Set<string>();
+  for (const a of clipAssets) {
+    if (!a.paramsJson) continue;
+    if (a.provider !== "ffmpeg-alphamerge" && a.provider !== "pil-composite") continue;
+    try {
+      const params = JSON.parse(a.paramsJson) as { maskId?: string; sourceAssetId?: string };
+      if (typeof params.maskId === "string") provenanceMaskIds.add(params.maskId);
+      if (typeof params.sourceAssetId === "string") provenanceSourceIds.add(params.sourceAssetId);
+    } catch { /* unparseable provenance — the id-based queries below still cover direct references */ }
+  }
+  const maskSeedIds = [...referencedIds, ...provenanceSourceIds];
+  const maskRows = await db.mediaMask.findMany({
+    where: { OR: [{ sourceAssetId: { in: maskSeedIds } }, { id: { in: [...provenanceMaskIds] } }] },
+    orderBy: { createdAt: "asc" },
+  });
+  const manifestMasks: ManifestMask[] = [];
+  let masksWithoutBytes = 0;
+  for (const m of maskRows) {
+    let pkgMaskPath = "";
+    let sizeBytes = 0;
+    let sha = "";
+    if (mode !== "METADATA") {
+      const st = await stat(m.storagePath).catch(() => null);
+      if (st) {
+        pkgMaskPath = packagePathForMask(m.id, m.storagePath);
+        if (seenPaths.has(pkgMaskPath)) throw new PermanentJobError(`Conflicting package paths for ${pkgMaskPath}.`);
+        seenPaths.set(pkgMaskPath, `mask:${m.id}`);
+        const realHash = await sha256File(m.storagePath);
+        sha = m.validationStatus === "FAILED" ? realHash : realHash; // hash what is on disk — the manifest states what shipped
+        const { crc } = await crcOfStream(m.storagePath);
+        entries.push({ name: pkgMaskPath, sourcePath: m.storagePath, size: st.size, crc32: crc });
+        totalBytes += st.size;
+        sizeBytes = st.size;
+      } else {
+        masksWithoutBytes += 1; // honest metadata-only entry (import marks it FAILED)
+      }
+    } else {
+      masksWithoutBytes += 1;
+    }
+    manifestMasks.push({
+      maskId: m.id, sourceAssetId: m.sourceAssetId, path: pkgMaskPath,
+      width: m.width, height: m.height, method: m.method, version: m.version,
+      parentId: m.parentId, validationStatus: m.validationStatus,
+      validationJson: m.validationJson, coordSpace: m.coordSpace,
+      fps: m.fps, frameIndex: m.frameIndex, notes: m.notes,
+      sizeBytes, sha256: sha,
+    });
+  }
+
   if (totalBytes > PROJECT_PACKAGE_BYTES_CAP) {
     throw new PermanentJobError(`Project media totals ${(totalBytes / 1024 / 1024).toFixed(0)} MB — over the ${(PROJECT_PACKAGE_BYTES_CAP / 1024 / 1024).toFixed(0)} MB package cap (memory-bounded honest limit).`);
   }
@@ -341,6 +440,7 @@ export async function buildManifest(
   if (mode !== "FULL") omitted.push({ kind: "PROXY", reason: mode === "NO_PROXIES" ? "NO_PROXIES mode excludes editing proxies (regenerable from originals)" : "METADATA mode excludes all media", count: omittedProxies || 0 });
   if (mode === "METADATA") omitted.push({ kind: "ORIGINAL", reason: "METADATA mode ships manifest + timeline only; media must be relinked on import", count: referencedIds.length - missing.length });
   omitted.push({ kind: "DERIVED", reason: "thumbnails, publish drafts, AI conversations/plans, export outputs, job records are regenerable or user-scoped and are never packaged", count: 0 });
+  if (masksWithoutBytes > 0) omitted.push({ kind: "MASK_BYTES", reason: "mask files missing on disk (or METADATA mode) — mask metadata still ships so import can restore an honest FAILED row", count: masksWithoutBytes });
 
   const manifest: PackageManifest = {
     formatVersion: PACKAGE_FORMAT_VERSION,
@@ -350,6 +450,7 @@ export async function buildManifest(
     project: { id: project.id, name: project.name, description: project.description, settingsJson: project.settingsJson },
     timeline: { latestVersionNumber: latest.versionNumber, latestSequenceJson: latest.sequenceJson, history },
     assets: manifestAssets,
+    masks: manifestMasks,
     omitted,
   };
   return { manifest, entries, totalBytes, missing };
@@ -411,8 +512,11 @@ export async function runProjectArchiveJob(job: { id: string; userId: string; pa
         const reparsed = JSON.parse(await readFile(out, "utf8")) as PackageManifest;
         if (reparsed.formatVersion !== PACKAGE_FORMAT_VERSION) throw new PermanentJobError("Packaged manifest has the wrong format version.");
         if (reparsed.assets.length !== manifest.assets.length) throw new PermanentJobError("Packaged manifest asset count mismatch.");
+        if ((reparsed.masks?.length ?? 0) !== manifest.masks.length) throw new PermanentJobError("Packaged manifest mask count mismatch.");
       } else {
-        const src = manifest.assets.find((a) => a.path === e.name);
+        // M33 Track B: masks/ entries verify against manifest.masks exactly
+        // like media/ entries verify against manifest.assets.
+        const src = manifest.assets.find((a) => a.path === e.name) ?? manifest.masks.find((m) => m.path === e.name);
         if (!src) throw new PermanentJobError(`Package contains an unmanifested entry: ${e.name}`);
         if (h !== src.sha256) throw new PermanentJobError(`Packaged asset "${e.name}" failed checksum verification — nothing was published.`);
       }
@@ -448,6 +552,8 @@ export interface ImportPlan {
   listing: ZipListing;
   /** Assets whose files are absent or fail checksum — import refuses while nonempty. */
   invalidAssets: { assetId: string; path: string; reason: string }[];
+  /** Masks that failed pre-check — import RESTORES them as honest FAILED rows (§B4). */
+  invalidMasks: { maskId: string; reason: string }[];
 }
 
 /** Validate an uploaded package WITHOUT touching the library (staging only). */
@@ -479,7 +585,22 @@ export async function planImport(userId: string, zipPath: string): Promise<Impor
     if (invalidAssets.length > 0) {
       throw new PermanentJobError(`Package is incomplete — ${invalidAssets.length} asset(s) failed validation: ${invalidAssets.slice(0, 3).map((x) => `${x.path} (${x.reason})`).join("; ")}${invalidAssets.length > 3 ? "…" : ""} Nothing was imported.`);
     }
-    return { manifest, zipPath, listing, invalidAssets: [] };
+    // M33 Track B — MASK pre-check is NON-fatal (spec §B4): a bad mask must not
+    // make the project unimportable. Issues are recorded so importPackage can
+    // restore honest FAILED rows instead of silently dropping associations.
+    const invalidMasks: NonNullable<ImportPlan["invalidMasks"]> = [];
+    for (const m of manifest.masks ?? []) {
+      if (!m.path) { invalidMasks.push({ maskId: m.maskId, reason: m.sizeBytes === 0 ? "packaged without bytes (missing on disk at packaging time)" : "no file entry" }); continue; }
+      const e = entryByName.get(m.path);
+      if (!e) { invalidMasks.push({ maskId: m.maskId, reason: "missing from the package" }); continue; }
+      if (e.size !== m.sizeBytes) { invalidMasks.push({ maskId: m.maskId, reason: `size mismatch (${e.size} ≠ ${m.sizeBytes})` }); continue; }
+      const out = pathInsideMediaRoot("tmp", `import_${userId}_${Date.now().toString(36)}_maskchk.bin`);
+      await extractStoredEntry(zipPath, e, out);
+      const h = await sha256File(out);
+      await rm(out, { force: true });
+      if (h !== m.sha256) { invalidMasks.push({ maskId: m.maskId, reason: "checksum mismatch (corrupted or modified)" }); }
+    }
+    return { manifest, zipPath, listing, invalidAssets: [], invalidMasks };
   } finally {
     await rm(manifestPath, { force: true }).catch(() => undefined);
   }
@@ -492,6 +613,10 @@ export interface ImportResult {
   assetsReused: number;
   versionsRestored: number;
   clipsRestored: number;
+  /** M33 Track B: mask restoration outcome (honest, non-fatal per §B4). */
+  masksRestored: number;
+  masksFailed: number;
+  maskIssues: string[];
 }
 
 /** Import: stage media → create NEW project identity → rewrite asset refs →
@@ -568,6 +693,87 @@ export async function importPackage(userId: string, plan: ImportPlan, setProgres
     await db.timelineVersion.create({ data: { projectId: project.id, versionNumber: nextVersion++, sequenceJson: rewrite(h.sequenceJson), isAutosave: false, createdById: userId } });
   }
   const seq = JSON.parse(latestSeq) as { clips: unknown[] };
+
+  // ── M33 Track B: restore subject masks (non-fatal per §B4) ────────────────
+  // Masks restore with REMAPPED identities: sourceAssetId via the asset idMap,
+  // parentId via the maskIdMap — an imported mask never points at a foreign
+  // row, and duplicate mask ids create NEW rows (never overwrite). Healthy
+  // masks are checksum-verified during extraction and re-validated (real PIL
+  // decode) before being marked VALIDATED. A mask that cannot be restored is
+  // created as an honest FAILED row (when its source asset exists) and the
+  // issue is recorded — the project itself stays usable and the original
+  // footage is untouched.
+  const maskIdMap = new Map<string, string>();
+  const maskIssues: string[] = [];
+  let masksRestoredOk = 0;
+  let masksRestoredFailed = 0;
+  const manifestMasks = manifest.masks ?? [];
+  if (manifestMasks.length > 0) {
+    const { validateMaskFile } = await import("@/lib/production/masks");
+    const invalidReason = new Map((plan.invalidMasks ?? []).map((x) => [x.maskId, x.reason]));
+    await mkdir(pathInsideMediaRoot("media-store", "masks", `u_${userId}`), { recursive: true }).catch(() => undefined);
+    for (const m of manifestMasks) {
+      try {
+        // Masks have no sha256 column: each import creates NEW rows with NEW
+        // ids (duplicate mask identifiers never overwrite existing masks) —
+        // associations are preserved by the remapped sourceAssetId/parentId.
+        const dest = pathInsideMediaRoot("media-store", "masks", `u_${userId}`, `import_${Date.now().toString(36)}_${maskIdMap.size}${path.extname(m.path || ".png") || ".png"}`);
+        let validationOk = false;
+        let validationJson: string | null = m.validationJson ?? null;
+        let width = m.width, height = m.height;
+        if (m.path && !invalidReason.has(m.maskId)) {
+          const e = entryByName.get(m.path);
+          if (!e) throw new Error("mask file vanished from the package mid-import");
+          await mkdir(path.dirname(dest), { recursive: true });
+          await extractStoredEntry(zipPath, e, dest);
+          const staged = await stat(dest);
+          if (staged.size !== m.sizeBytes) throw new Error(`staged mask has the wrong size (${staged.size} ≠ ${m.sizeBytes})`);
+          if ((await sha256File(dest)) !== m.sha256) throw new Error("staged mask failed checksum");
+          const v = await validateMaskFile(dest);
+          validationOk = v.ok;
+          validationJson = JSON.stringify(v);
+          width = v.width; height = v.height;
+        } else {
+          // Metadata-only restore: no bytes available — record WHY honestly.
+          const reason = invalidReason.get(m.maskId) ?? "packaged without bytes";
+          maskIssues.push(`mask ${m.maskId}: ${reason} — restored as FAILED (no silent substitution)`);
+          masksRestoredFailed += 1;
+          const sourceRemapped = idMap.get(m.sourceAssetId) ?? m.sourceAssetId;
+          const row = await db.mediaMask.create({
+            data: {
+              userId, sourceAssetId: sourceRemapped, storagePath: dest,
+              width, height, method: m.method, version: m.version,
+              parentId: m.parentId ? maskIdMap.get(m.parentId) ?? null : null,
+              validationStatus: "FAILED",
+              validationJson: JSON.stringify({ ok: false, issues: [`not restored from package: ${reason}`] }),
+              coordSpace: m.coordSpace, fps: m.fps, frameIndex: m.frameIndex,
+              notes: `imported without bytes — ${reason}`,
+            },
+          });
+          maskIdMap.set(m.maskId, row.id);
+          continue;
+        }
+        const sourceRemapped = idMap.get(m.sourceAssetId) ?? m.sourceAssetId;
+        const row = await db.mediaMask.create({
+          data: {
+            userId, sourceAssetId: sourceRemapped, storagePath: dest,
+            width, height, method: m.method, version: m.version,
+            parentId: m.parentId ? maskIdMap.get(m.parentId) ?? null : null,
+            validationStatus: validationOk ? "VALIDATED" : "FAILED",
+            validationJson, coordSpace: m.coordSpace, fps: m.fps, frameIndex: m.frameIndex,
+            notes: m.notes ? `${m.notes} (imported)` : "imported",
+          },
+        });
+        maskIdMap.set(m.maskId, row.id);
+        if (validationOk) masksRestoredOk += 1; else masksRestoredFailed += 1;
+      } catch (err) {
+        // §B4: never make the project unusable because a mask failed — record precisely.
+        maskIssues.push(`mask ${m.maskId}: ${err instanceof Error ? err.message : String(err)} — NOT restored (no silent substitution)`);
+        masksRestoredFailed += 1;
+      }
+    }
+  }
+
   await setProgress(85, "Verifying restored project");
 
   // 6) Verify: reopen, counts, references resolve.
@@ -586,7 +792,12 @@ export async function importPackage(userId: string, plan: ImportPlan, setProgres
   }
 
   await setProgress(100, "Import complete");
-  return { projectId: project.id, projectName: project.name, assetsCreated: created, assetsReused: reused, versionsRestored: 1 + manifest.timeline.history.length, clipsRestored: seq.clips.length };
+  return {
+    projectId: project.id, projectName: project.name,
+    assetsCreated: created, assetsReused: reused,
+    versionsRestored: 1 + manifest.timeline.history.length, clipsRestored: seq.clips.length,
+    masksRestored: masksRestoredOk, masksFailed: masksRestoredFailed, maskIssues,
+  };
 }
 
 // ── bulk relink matching (P5) ───────────────────────────────────────────────
