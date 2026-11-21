@@ -13,12 +13,13 @@ import { execSync, spawn } from "child_process";
 import fs from "fs";
 import path from "path";
 import { PrismaClient } from "@prisma/client";
+import { scratchLegacyDb } from "./legacy-fixture";
 
 // M20 recovery: bun:sqlite direct handles raised SQLITE_MISUSE intermittently
 // against the live server's WAL (bad parameter / API misuse). Route the test's
 // raw reads/writes through the app's own Prisma engine instead — same SQL,
 // no second SQLite binding fighting the server for the WAL index.
-const prisma = new PrismaClient({ datasources: { db: { url: "file:/home/z/my-project/db/custom.db" } } });
+const prisma = new PrismaClient({ datasources: { db: { url: scratchLegacyDb("m20-durable-render") } } });
 async function q(sql: string): Promise<Record<string, unknown>[]> {
   return (await prisma.$queryRawUnsafe(sql)) as Record<string, unknown>[];
 }
@@ -274,7 +275,7 @@ describe("M20 §3 — operational resilience", () => {
     execSync("pkill -9 ffmpeg || true");
     (results.ops as Record<string, unknown>)["interrupt"] = { killedServerPid: serverPid, jobId };
     // Restart the server.
-    const env = { ...process.env, DATABASE_URL: "file:/home/z/my-project/db/custom.db", PORT: "3117", RATE_LIMIT_SCALE: "50" };
+    const env = { ...process.env, DATABASE_URL: scratchLegacyDb("m20-durable-render"), PORT: "3117", RATE_LIMIT_SCALE: "50" };
     // Capture the respawned server's output — a silent respawn hides worker
     // crashes (run 6's post-T7 tick wedge had no trail because of stdio ignore).
     const srvLog = fs.openSync("/home/z/my-project/m20-respawn-server.log", "a");

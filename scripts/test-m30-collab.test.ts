@@ -14,6 +14,7 @@
 import { describe, test, expect, beforeAll } from "bun:test";
 import { execSync } from "node:child_process";
 import fs from "node:fs";
+import { scratchLegacyDb } from "./legacy-fixture";
 
 const BASE = process.env.M30_BASE ?? "http://localhost:3117";
 const STAMP = Date.now().toString(36);
@@ -151,7 +152,7 @@ describe("A. workspaces & invitations", () => {
     expect(inv.status).toBe(201);
     // Simulate expiry directly at the storage layer (deterministic, no sleeps).
     const { PrismaClient } = await import("@prisma/client");
-    const db = new PrismaClient({ datasources: { db: { url: process.env.M30_DB ?? "file:/home/z/my-project/db/custom.db" } } });
+    const db = new PrismaClient({ datasources: { db: { url: process.env.M30_DB ?? scratchLegacyDb("m30-collab") } } });
     await db.$queryRawUnsafe(`UPDATE Invitation SET expiresAt = datetime('now','-1 day') WHERE id = ?`, inv.json.invitation.id);
     await db.$disconnect();
     const late = await api("POST", "/api/invitations/respond", { jar: outsider, body: { token: inv.json.token, action: "accept" } });

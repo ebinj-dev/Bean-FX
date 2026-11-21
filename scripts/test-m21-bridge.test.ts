@@ -14,7 +14,7 @@ const STATE_DIR = mkdtempSync(path.join(os.tmpdir(), "beanfx-m21-bridge-"));
 const LIVE = process.env.BRIDGE_TEST_BASE ?? "http://localhost:3117";
 
 process.env.NODE_ENV = "production";
-process.env.DATABASE_URL = "file:/home/z/my-project/db/custom.db"; // live server DB
+process.env.DATABASE_URL = scratchLegacyDb("m21-bridge"); // M34 Track B: isolated fixture — same DB the live server on :3117 uses
 
 let bridgeProc: ReturnType<typeof spawn> | null = null;
 let bridgeUrl = "";
@@ -23,6 +23,7 @@ let deviceToken = "";
 
 // protocol units (no server needed)
 import { assertLoopbackBind, answerChallenge, verifyChallenge, newNonce, reapCache, fileChecksum } from "../src/lib/core/bridge-protocol";
+import { scratchLegacyDb } from "./legacy-fixture";
 
 beforeAll(async () => {
   // The live server must be up.
