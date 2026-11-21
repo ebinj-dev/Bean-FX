@@ -68,6 +68,42 @@ export function ShowcaseStudio({ user, onLogout }: { user: SessionUser; onLogout
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [note, setNote] = useState<string | null>(null);
+
+  // ── M32: provider readiness / variants / masks ──
+  interface ProviderReadiness { providerId: string; status: string; detail: string; cost: { state: string } }
+  interface CapReport { operations: string[]; durationsSec?: string[]; sizes?: string[]; unsupported: string[]; pricing: { state: string }; cancellation?: string }
+  interface ProviderBundle { video: { readiness: ProviderReadiness; capabilities: CapReport }; image: { readiness: ProviderReadiness; capabilities: CapReport } }
+  interface VariantRow { id: string; format: string; status: string; resolution: string; fps: number; durationSec: number; projectId: string | null; framing: { default?: { strategy: string; cropLossPct: number }; manual?: Record<string, unknown> } | null; safeArea: { marginPct: number; note: string; issues: { sceneKey: string; kind: string; detail: string }[] } | null; renderJobId: string | null; exportId: string | null; error: string | null }
+  interface MaskRow { id: string; sourceAssetId: string; width: number; height: number; method: string; version: number; validationStatus: string; notes: string | null }
+  const [providers, setProviders] = useState<ProviderBundle | null>(null);
+  const [variants, setVariants] = useState<VariantRow[] | null>(null);
+  const [masterAspect, setMasterAspect] = useState<string>("16:9");
+  const [masks, setMasks] = useState<MaskRow[] | null>(null);
+  const [autoSeg, setAutoSeg] = useState<{ status: string; detail: string } | null>(null);
+
+  const loadProviders = useCallback(async () => { const r = await fetch("/api/providers/readiness"); if (r.ok) setProviders(await r.json()); }, []);
+  const loadVariants = useCallback(async () => {
+    if (!activeId) return;
+    const r = await fetch(`/api/productions/${activeId}/variants`);
+    if (r.ok) { const j = await r.json(); setVariants(j.variants ?? []); setMasterAspect(j.master?.aspectRatio ?? "16:9"); }
+  }, [activeId]);
+  const loadMasks = useCallback(async () => {
+    const r = await fetch("/api/masks");
+    if (r.ok) { const j = await r.json(); setMasks(j.masks ?? []); setAutoSeg(j.autoSegmentation ?? null); }
+  }, []);
+  useEffect(() => { void loadProviders(); }, [loadProviders]);
+  useEffect(() => { if (view === "board" && activeId) { void loadVariants(); void loadMasks(); } }, [view, activeId, loadVariants, loadMasks]);
+
+  const variantAction = async (body: Record<string, unknown>) => {
+    setBusy(true);
+    try { const r = await fetch(`/api/productions/${activeId}/variants`, { method: body.__patch ? "PATCH" : "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) }); await flash(r); await loadVariants(); }
+    finally { setBusy(false); }
+  };
+  const maskAction = async (body: Record<string, unknown>) => {
+    setBusy(true);
+    try { const r = await fetch("/api/masks", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) }); await flash(r); await loadMasks(); }
+    finally { setBusy(false); }
+  };
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   // intake inputs
@@ -436,6 +472,76 @@ export function ShowcaseStudio({ user, onLogout }: { user: SessionUser; onLogout
             ))}</div>
             <div className="mt-2"><StageButton label="finalize delivery" state={stageState("DELIVERY")} onClick={() => stageAction("DELIVERY", "start")} /></div>
           </div>
+        </div>
+      </Panel>
+
+      {/* M32: provider readiness */}
+      <Panel title="AI providers (honest readiness)" state={providers?.video.readiness.status === "READY" ? "SUCCEEDED" : "BLOCKED"}>
+        {providers ? (
+          <div className="grid gap-2 md:grid-cols-2">
+            {(["video", "image"] as const).map((k) => {
+              const b = providers[k];
+              return (
+                <div key={k} className="rounded-lg border border-[#2a2a2a] bg-black/20 p-2 text-xs">
+                  <div className="flex items-center justify-between">
+                    <span className="font-semibold text-neutral-200">{b.readiness.providerId} ({k})</span>
+                    <span className={cn("rounded border px-1.5 py-0.5 text-[10px]", b.readiness.status === "READY" ? STATE_STYLES.SUCCEEDED : b.readiness.status === "CONFIGURATION_REQUIRED" ? "text-orange-400 border-orange-500/40" : STATE_STYLES.FAILED)}>{b.readiness.status}</span>
+                  </div>
+                  <p className="mt-1 text-[11px] text-neutral-400">{b.readiness.detail}</p>
+                  <p className="mt-1 text-[11px] text-neutral-500">ops: {b.capabilities.operations.join(", ")}{b.capabilities.durationsSec ? ` · durations ${b.capabilities.durationsSec.join("/")}` : ""}{b.capabilities.sizes ? ` · ${b.capabilities.sizes.length} sizes` : ""} · cost {b.capabilities.pricing.state}</p>
+                  {b.capabilities.unsupported.length > 0 && <p className="mt-1 text-[10px] text-orange-400">unsupported: {b.capabilities.unsupported[0]}…</p>}
+                </div>
+              );
+            })}
+          </div>
+        ) : <Empty text="Probing providers…" />}
+      </Panel>
+
+      {/* M32: campaign variants */}
+      <Panel title={`Campaign variants (master ${masterAspect} — immutable)`} state={variants && variants.length > 0 ? (variants.every((v) => v.status === "COMPLETED") ? "SUCCEEDED" : "RUNNING") : "NOT_STARTED"}>
+        <div className="flex flex-wrap gap-2 text-xs">
+          {["1:1", "9:16", "16:9"].filter((f) => f !== masterAspect).map((f) => (
+            <button key={f} disabled={busy} onClick={() => variantAction({ formats: [f] })} className="rounded bg-[#d4a017] px-3 py-1.5 font-semibold text-black disabled:opacity-40">derive {f}</button>
+          ))}
+          <button disabled={busy || !variants?.length} onClick={() => variantAction({ action: "render" })} className="rounded border border-[#d4a017]/60 px-3 py-1.5 text-[#d4a017] disabled:opacity-40">render all variants</button>
+        </div>
+        <div className="mt-2 space-y-2">
+          {(variants ?? []).map((v) => (
+            <div key={v.id} className="rounded-lg border border-[#2a2a2a] bg-black/20 p-2 text-xs">
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="font-semibold text-neutral-100">{v.format}</span>
+                <span className={cn("rounded border px-1.5 py-0.5 text-[10px]", v.status === "COMPLETED" ? STATE_STYLES.SUCCEEDED : v.status === "FAILED" ? STATE_STYLES.FAILED : STATE_STYLES.AWAITING_APPROVAL)}>{v.status}</span>
+                <span className="text-neutral-500">{v.resolution} · {v.durationSec?.toFixed?.(1)}s · framing {v.framing?.default?.strategy ?? "?"} (crop {((v.framing?.default?.cropLossPct ?? 0) * 100).toFixed(0)}%)</span>
+                {v.projectId && <a href={`#/editor?project=${v.projectId}`} className="text-[#d4a017]">open in editor</a>}
+                {v.status === "READY" && <button onClick={() => variantAction({ action: "render", formats: [v.format] })} className="rounded border border-neutral-600 px-2 py-1 text-neutral-300">render</button>}
+              </div>
+              {(v.safeArea?.issues ?? []).length > 0 && (
+                <div className="mt-1 rounded border border-orange-500/40 bg-orange-500/10 p-1.5 text-[10px] text-orange-300">
+                  safe area: {v.safeArea!.issues.slice(0, 2).map((i) => `${i.kind} @${i.sceneKey}: ${i.detail}`).join(" · ")}
+                  <span className="block text-orange-400/70">{v.safeArea!.note}</span>
+                </div>
+              )}
+              {v.error && <div className="mt-1 text-[10px] text-red-400">{v.error}</div>}
+            </div>
+          ))}
+          {variants && variants.length === 0 && <Empty text={`No variants yet — derive ${["1:1", "9:16"].filter((f) => f !== masterAspect).join(" and ")} from the completed campaign.`} />}
+        </div>
+      </Panel>
+
+      {/* M32: masks */}
+      <Panel title="Masks (subject isolation — real compositing)" state={masks && masks.length > 0 ? "SUCCEEDED" : "NOT_STARTED"}>
+        {autoSeg && <div className="mb-2 rounded border border-orange-500/40 bg-orange-500/10 p-2 text-[11px] text-orange-300">auto segmentation: {autoSeg.status} — {autoSeg.detail}</div>}
+        <div className="space-y-2">
+          {(masks ?? []).map((m) => (
+            <div key={m.id} className="flex flex-wrap items-center gap-2 rounded-lg border border-[#2a2a2a] bg-black/20 p-2 text-xs">
+              <span className={cn("rounded border px-1.5 py-0.5 text-[10px]", m.validationStatus === "VALIDATED" ? STATE_STYLES.SUCCEEDED : m.validationStatus === "FAILED" ? STATE_STYLES.FAILED : STATE_STYLES.AWAITING_APPROVAL)}>{m.validationStatus}</span>
+              <span className="text-neutral-300">{m.width}x{m.height}</span>
+              <span className="text-neutral-500">{m.method} · v{m.version} · src {m.sourceAssetId.slice(0, 10)}…</span>
+              <button onClick={() => maskAction({ action: "process", maskId: m.id, op: "invert" })} className="rounded border border-neutral-600 px-2 py-1 text-neutral-300">invert</button>
+              <button onClick={() => maskAction({ action: "process", maskId: m.id, op: "feather", radiusPx: 4 })} className="rounded border border-neutral-600 px-2 py-1 text-neutral-300">feather</button>
+            </div>
+          ))}
+          {masks && masks.length === 0 && <Empty text="Import a mask (IMAGE upload in STUDIO, then attach) to composite a subject over a background. Automatic segmentation is CONFIGURATION REQUIRED and is never faked." />}
         </div>
       </Panel>
 

@@ -18,7 +18,7 @@ import { jobManager } from "@/lib/job-runner";
 import { PermanentJobError } from "@/lib/job-helpers";
 import { pathInsideMediaRoot } from "@/lib/media-storage";
 import { jazmiiProvider } from "./providers";
-import { JazmiiGenerateParamsSchema, ProviderError } from "./types";
+import { JazmiiGenerateParamsSchema, ProviderError, type VideoTaskHandle } from "./types";
 import { analyzeVideoFile, writeAnalysisArtifact } from "./analysis";
 import { downloadProviderOutput, registerGeneratedAsset, registerImageArtifact } from "@/lib/ai/asset-lifecycle";
 
@@ -68,8 +68,26 @@ export async function runJazmiiGenerateJob(job: HandlerJob): Promise<void> {
   }
 
   const provider = jazmiiProvider(null);
-  await jobManager.setProgress(job.id, 2, `Creating ${provider.id} task`);
-  const handle = await provider.createTask(params, imageUrl);
+  // M32 Track A — RESUMABLE SUBMISSION (never a second paid task): the
+  // provider task id is persisted on the Job row IMMEDIATELY after creation;
+  // a retry attempt (transient poll/timeout failure) RESUMES polling the same
+  // task instead of calling createTask again. Creating twice would risk a
+  // second charge — this makes the submission idempotent at the task level.
+  const rawParams = (() => { try { return JSON.parse(job.paramsJson ?? "{}") as Record<string, unknown>; } catch { return {}; } })();
+  const storedTaskId = typeof rawParams.providerTaskId === "string" && rawParams.providerTaskId.length > 0 ? rawParams.providerTaskId : null;
+  const storedModel = typeof rawParams.providerModel === "string" ? rawParams.providerModel : null;
+  let handle: VideoTaskHandle;
+  if (storedTaskId) {
+    handle = { taskId: storedTaskId, model: storedModel ?? "cogvideox-3", requestId: null };
+    await jobManager.setProgress(job.id, 2, `Resuming ${provider.id} task ${storedTaskId} (existing provider task — no new submission)`);
+  } else {
+    await jobManager.setProgress(job.id, 2, `Creating ${provider.id} task`);
+    handle = await provider.createTask(params, imageUrl);
+    await db.job.update({
+      where: { id: job.id },
+      data: { paramsJson: JSON.stringify({ ...params, providerTaskId: handle.taskId, providerModel: handle.model }) },
+    }).catch(() => undefined); // persistence best-effort; probe below covers loss
+  }
   const deadline = Date.now() + GENERATE_TIMEOUT_MS;
 
   let videoUrl: string | null = null;
@@ -173,10 +191,19 @@ export async function runJazmiiAnalyzeJob(job: HandlerJob): Promise<void> {
 
 /** Probe the real video provider once (used by routes/tests). */
 export function probeVideoProvider(): Promise<{ ok: boolean; detail: string }> {
+  // M32 Track A — REAL readiness probe: the registry entry existing is NOT
+  // proof the provider is operational. Check the actual CLI binary presence
+  // (cheap, no paid call); everything else surfaces through typed errors.
   return new Promise((resolve) => {
-    execFile("ffmpeg", ["-version"], { timeout: 10_000 }, () => void undefined);
-    jazmiiProvider(null); // throws ProviderError when unconfigured
-    resolve({ ok: true, detail: "provider adapter configured" });
+    const bin = process.env.BEANFX_ZAI_BIN ?? "z-ai";
+    execFile("which", [bin], { timeout: 10_000 }, (err) => {
+      if (err) {
+        resolve({ ok: false, detail: `Video provider CLI "${bin}" is not installed on the server — JAZMII generation is unavailable (CONFIGURATION REQUIRED).` });
+        return;
+      }
+      void jazmiiProvider(null); // registry lookup (typed throw on unknown id)
+      resolve({ ok: true, detail: `Video provider CLI "${bin}" present (capabilities are registry data; cost UNKNOWN until verified)` });
+    });
   });
 }
 

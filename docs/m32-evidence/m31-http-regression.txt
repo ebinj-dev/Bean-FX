@@ -1,0 +1,67 @@
+bun test v1.3.14 (0d9b296a)
+
+scripts/test-m31-performance.test.ts:
+host: 2 vCPU · 4 GB RAM · node v24.3.0 · bounded load (max 8 concurrent)
+(pass) M31 §10 — bounded performance > concurrent project reads (4 users × 20) stay sub-100ms p95 [476.81ms]
+93 |       { type: "AddMarker", marker: { id: `m31p-${STAMP}-${Math.random().toString(36).slice(2, 8)}`, frame: 5, label: "perf" } },
+94 |     ] } }))));
+95 |     const ok200 = results.filter((r) => r.status === 200).length;
+96 |     const conflicts = results.filter((r) => r.status === 409);
+97 |     // All same-base writes: only the serialized winner(s) succeed; every loser 409s.
+98 |     expect(ok200 + conflicts.length).toBe(4);
+                                          ^
+error: expect(received).toBe(expected)
+
+Expected: 4
+Received: 2
+
+      at <anonymous> (/home/z/my-project/scripts/test-m31-performance.test.ts:98:38)
+(fail) M31 §10 — bounded performance > concurrent saves hold optimistic-concurrency guarantees (no lost writes) [5039.46ms]
+(pass) M31 §10 — bounded performance > notification flood stays bounded + deduped (50 writes, unique keys) [232.15ms]
+(pass) M31 §10 — bounded performance > concurrent review comments serialize safely (no duplicate-order corruption) [4230.37ms]
+(pass) M31 §10 — bounded performance > duplicate invitation requests race → exactly one succeeds (idempotency under load) [26.85ms]
+M31-PERF timeline GET: n=80 p50=311ms p95=469ms max=476ms
+M31-PERF notifications GET: n=48 p95=214ms
+M31-PERF notifications unread baseline=0 (dedup verified in worker suite)
+M31-PERF concurrent comments: n=15 created=15 p95=88ms
+M31-PERF review render + comment integrity: 15/15 persisted
+M31-PERF duplicate invitation race: [201,409] as designed
+(pass) M31 §10 — report > emit measured results [0.14ms]
+
+scripts/test-m31-worker.test.ts:
+(pass) M31 §5 — durable job reliability > duplicate export submissions create distinct jobs but never duplicate output rows for one job id [6037.90ms]
+(pass) M31 §5 — durable job reliability > invalid media is classified permanent (no infinite retry) [12.91ms]
+(pass) M31 §5 — durable job reliability > invalid package import is rejected safely (no partial project rows) [2019.54ms]
+(pass) M31 §5 — durable job reliability > cancellation: a queued/cancelled job does not produce outputs [3025.69ms]
+(pass) M31 §5 — durable job reliability > stale-job recovery: heartbeats exist and completed jobs cleaned temp artifacts [2.98ms]
+prisma:query BEGIN IMMEDIATE
+prisma:query SELECT `main`.`Notification`.`id` FROM `main`.`Notification` WHERE (`main`.`Notification`.`dedupKey` = ? AND 1=1) LIMIT ? OFFSET ?
+prisma:query INSERT INTO `main`.`Notification` (`id`, `userId`, `type`, `projectId`, `payloadJson`, `dedupKey`, `createdAt`) VALUES (?,?,?,?,?,?,?) RETURNING `id` AS `id`
+prisma:query SELECT `main`.`Notification`.`id`, `main`.`Notification`.`userId`, `main`.`Notification`.`type`, `main`.`Notification`.`projectId`, `main`.`Notification`.`payloadJson`, `main`.`Notification`.`dedupKey`, `main`.`Notification`.`readAt`, `main`.`Notification`.`createdAt` FROM `main`.`Notification` WHERE `main`.`Notification`.`id` = ? LIMIT ? OFFSET ?
+prisma:query COMMIT
+prisma:query BEGIN IMMEDIATE
+prisma:query SELECT `main`.`Notification`.`id` FROM `main`.`Notification` WHERE (`main`.`Notification`.`dedupKey` = ? AND 1=1) LIMIT ? OFFSET ?
+prisma:query SELECT `main`.`Notification`.`id`, `main`.`Notification`.`userId`, `main`.`Notification`.`type`, `main`.`Notification`.`projectId`, `main`.`Notification`.`payloadJson`, `main`.`Notification`.`dedupKey`, `main`.`Notification`.`readAt`, `main`.`Notification`.`createdAt` FROM `main`.`Notification` WHERE (`main`.`Notification`.`id` = ? AND (`main`.`Notification`.`dedupKey` = ? AND 1=1)) LIMIT ? OFFSET ?
+prisma:query SELECT `main`.`Notification`.`id`, `main`.`Notification`.`userId`, `main`.`Notification`.`type`, `main`.`Notification`.`projectId`, `main`.`Notification`.`payloadJson`, `main`.`Notification`.`dedupKey`, `main`.`Notification`.`readAt`, `main`.`Notification`.`createdAt` FROM `main`.`Notification` WHERE `main`.`Notification`.`id` = ? LIMIT ? OFFSET ?
+prisma:query COMMIT
+prisma:query BEGIN IMMEDIATE
+prisma:query SELECT `main`.`Notification`.`id` FROM `main`.`Notification` WHERE (`main`.`Notification`.`dedupKey` = ? AND 1=1) LIMIT ? OFFSET ?
+prisma:query SELECT `main`.`Notification`.`id`, `main`.`Notification`.`userId`, `main`.`Notification`.`type`, `main`.`Notification`.`projectId`, `main`.`Notification`.`payloadJson`, `main`.`Notification`.`dedupKey`, `main`.`Notification`.`readAt`, `main`.`Notification`.`createdAt` FROM `main`.`Notification` WHERE (`main`.`Notification`.`id` = ? AND (`main`.`Notification`.`dedupKey` = ? AND 1=1)) LIMIT ? OFFSET ?
+prisma:query SELECT `main`.`Notification`.`id`, `main`.`Notification`.`userId`, `main`.`Notification`.`type`, `main`.`Notification`.`projectId`, `main`.`Notification`.`payloadJson`, `main`.`Notification`.`dedupKey`, `main`.`Notification`.`readAt`, `main`.`Notification`.`createdAt` FROM `main`.`Notification` WHERE `main`.`Notification`.`id` = ? LIMIT ? OFFSET ?
+prisma:query COMMIT
+(pass) M31 §5 — durable job reliability > notification deduplication: repeated events do not multiply rows [16.98ms]
+
+scripts/test-m31-security.test.ts:
+(pass) M31 §3 — cross-user isolation > stranger cannot access project media, exports, packages, notifications, reviews [38.78ms]
+(pass) M31 §3 — cross-user isolation > another user's package download is rejected without authorization [4.29ms]
+(pass) M31 §3 — review security > reviewer comments + approves; ALL-policy determinism holds [4069.90ms]
+(pass) M31 §3 — review security > fingerprint present and stable; approval pinned to the exact revision [7.01ms]
+(pass) M31 §3 — review security > revoked member loses review access immediately (revocation effect) [27.44ms]
+(pass) M31 §3 — review security > guest link sessions expire with the link and cannot act beyond scope [39.82ms]
+(pass) M31 §3 — review security > notification payloads never carry tokens or storage paths [4.64ms]
+(pass) M31 §3 — review security > unauthorized renders: stranger cannot start a render on someone else's project [10.15ms]
+
+ 19 pass
+ 1 fail
+ 54 expect() calls
+Ran 20 tests across 3 files. [27.68s]

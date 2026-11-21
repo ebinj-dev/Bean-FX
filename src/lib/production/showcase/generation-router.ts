@@ -61,13 +61,33 @@ export const ShowcaseGenerationRequestSchema = z.object({
   quality: z.enum(["speed", "quality"]).default("speed"),
   /** Explicit user approval for a KNOWN-UNKNOWN-cost call. */
   approved: z.boolean(),
+  /** M32 Track A: duplicate-submission protection — the same key on the same
+   *  production returns the EXISTING job (never a second paid call). */
+  idempotencyKey: z.string().min(8).max(64).nullable().default(null),
 });
 export type ShowcaseGenerationRequest = z.infer<typeof ShowcaseGenerationRequestSchema>;
 
 // ── The router ──────────────────────────────────────────────────────────────
-export async function routeGeneration(userId: string, req: ShowcaseGenerationRequest): Promise<{ jobId: string; assetId: string; path: string[]; costUnknown: true; provider: string; model: string | null }> {
+export async function routeGeneration(userId: string, req: ShowcaseGenerationRequest): Promise<{ jobId: string; assetId: string; path: string[]; costUnknown: true; provider: string; model: string | null; deduped?: boolean }> {
   if (!req.approved) {
     throw new ProductionError("This generation calls a metered provider with UNKNOWN cost. Explicit user approval (and an approved budget) is required before any paid call.", 409, "APPROVAL_REQUIRED");
+  }
+  // M32 Track A — DUPLICATE-SUBMISSION PROTECTION: the same idempotency key
+  // on the same production returns the EXISTING job (in flight or complete).
+  // Never a second paid call.
+  if (req.idempotencyKey) {
+    const existing = await db.productionAsset.findFirst({
+      where: { idempotencyKey: req.idempotencyKey, jobId: { not: null }, status: { in: ["GENERATING", "READY", "APPROVED"] } },
+    });
+    if (existing) {
+      const prod = await db.production.findUnique({ where: { id: existing.productionId } });
+      if (prod && prod.userId === userId) {
+        const job = await db.job.findUnique({ where: { id: existing.jobId! } });
+        if (job && !["FAILED", "CANCELLED"].includes(job.status)) {
+          return { jobId: job.id, assetId: existing.id, path: ["idempotency-key hit — existing job returned, no new submission"], costUnknown: true, provider: existing.provider ?? "", model: existing.model, deduped: true };
+        }
+      }
+    }
   }
   const asset = await db.productionAsset.findUnique({ where: { id: req.assetId } });
   if (!asset) throw new ProductionError("Asset row not found.", 404, "NOT_FOUND");
@@ -107,7 +127,7 @@ export async function routeGeneration(userId: string, req: ShowcaseGenerationReq
     const jobId = await jobManager.createJob(userId, JOB_TYPE_JAZMII_GENERATE, parsed.data);
     await db.productionAsset.update({
       where: { id: asset.id },
-      data: { status: "GENERATING", provider: "zai-video", model: "cogvideox-3", jobId, costUnknown: true, costCents: null, provenanceJson: JSON.stringify({ routedAt: new Date().toISOString(), protocolPath: path, providerAvailability: availability.video.detail }) },
+      data: { status: "GENERATING", provider: "zai-video", model: "cogvideox-3", jobId, costUnknown: true, costCents: null, idempotencyKey: req.idempotencyKey, provenanceJson: JSON.stringify({ routedAt: new Date().toISOString(), protocolPath: path, providerAvailability: availability.video.detail }) },
     });
     await db.productionEvent.create({ data: { productionId: production.id, kind: "generation.submitted", stageKey: "ASSET_GENERATION", detailJson: JSON.stringify({ assetId: asset.id, jobId, kind: "video", costUnknown: true }) } });
     return { jobId, assetId: asset.id, path, costUnknown: true, provider: "zai-video", model: "cogvideox-3" };
@@ -134,7 +154,7 @@ export async function routeGeneration(userId: string, req: ShowcaseGenerationReq
   const jobId = await jobManager.createJob(userId, JOB_TYPE_LAXII_GENERATE, parsed.data);
   await db.productionAsset.update({
     where: { id: asset.id },
-    data: { status: "GENERATING", provider: "zai-image", model: null, jobId, costUnknown: true, costCents: null, provenanceJson: JSON.stringify({ routedAt: new Date().toISOString(), protocolPath: path, providerAvailability: availability.image.detail }) },
+    data: { status: "GENERATING", provider: "zai-image", model: null, jobId, costUnknown: true, costCents: null, idempotencyKey: req.idempotencyKey, provenanceJson: JSON.stringify({ routedAt: new Date().toISOString(), protocolPath: path, providerAvailability: availability.image.detail }) },
   });
   await db.productionEvent.create({ data: { productionId: production.id, kind: "generation.submitted", stageKey: "ASSET_GENERATION", detailJson: JSON.stringify({ assetId: asset.id, jobId, kind: "image", costUnknown: true }) } });
   return { jobId, assetId: asset.id, path, costUnknown: true, provider: "zai-image", model: null };
