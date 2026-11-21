@@ -1,0 +1,18 @@
+bun test v1.3.14 (0d9b296a)
+
+scripts/test-showcase-live.test.ts:
+(pass) SHOWCASE STUDIO — end-to-end (real media, native timeline) > intake: showcase inputs → production created on the showcase template [30.23ms]
+(pass) SHOWCASE STUDIO — end-to-end (real media, native timeline) > UNDERSTAND: validated artifact with evidence; unverified claims demoted; redactions recorded [4464.23ms]
+(pass) SHOWCASE STUDIO — end-to-end (real media, native timeline) > BRIEF → CONCEPT: campaign-aware concepts; selection recorded; brief approval gates [109.36ms]
+(pass) SHOWCASE STUDIO — end-to-end (real media, native timeline) > SCRIPT → STORYBOARD: beats from the approved concept; scene editing invariants [267.94ms]
+(pass) SHOWCASE STUDIO — end-to-end (real media, native timeline) > ASSET PLANNING + demonstration notes; generation gates are honest [194.45ms]
+(pass) SHOWCASE STUDIO — end-to-end (real media, native timeline) > COMPOSE: canonical assembly lands REAL media + primitives + NIKKI graphic end card [78.34ms]
+(pass) SHOWCASE STUDIO — end-to-end (real media, native timeline) > REVIEW → RENDER → QA → DELIVER: poster from the real render + 6-platform share copy [36959.83ms]
+(pass) SHOWCASE STUDIO — isolation, resumability, honest gates > no-leak: a stranger cannot see the production; assets route only for owners [9.62ms]
+(pass) SHOWCASE STUDIO — isolation, resumability, honest gates > resume: completed stages never re-run; no duplicate timeline clips [33.84ms]
+(pass) SHOWCASE STUDIO — isolation, resumability, honest gates > inactive showcase work is honest: UNDERSTANDING without inputs refuses with a clear error [932.95ms]
+
+ 10 pass
+ 0 fail
+ 121 expect() calls
+Ran 10 tests across 1 file. [45.89s]

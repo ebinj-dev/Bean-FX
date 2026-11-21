@@ -1,0 +1,28 @@
+bun test v1.3.14 (0d9b296a)
+
+scripts/test-showcase-core.test.ts:
+(pass) SSRF guard > rejects non-http schemes, credentials and internal hosts [5.41ms]
+(pass) HTML → text extraction (untrusted data) > strips scripts/styles and extracts title/meta/headings [0.37ms]
+(pass) Secret redaction > redacts emails, tokens, private URLs and paths — kinds only, values never stored [0.29ms]
+(pass) Palette quantization > returns stable hex colors from raw pixels [0.91ms]
+(pass) Claims lint — invented claims never survive > demotes unbacked numbers and superlatives to unverifiedClaims [0.30ms]
+(pass) Claims lint — invented claims never survive > clean evidence-backed claims pass untouched [0.05ms]
+(pass) Feature list parsing > lines become evidence-backed capabilities [0.38ms]
+(pass) Poster frame choice (deterministic) > prefers the midpoint of the closing scene (transition-clear) [0.11ms]
+(pass) Poster frame choice (deterministic) > falls back to 80% of runtime when no closing scene is marked [0.07ms]
+(pass) Composition primitives — editor-valid motion emission > all 11 primitives are registered and emit valid data [1.72ms]
+(pass) Composition primitives — editor-valid motion emission > stat-reveal REFUSES unverified stats (evidence required) [0.08ms]
+(pass) Composition primitives — editor-valid motion emission > graphics map onto REAL NIKKI registry templates [0.11ms]
+(pass) Composition primitives — editor-valid motion emission > short clips are rejected honestly (min duration guard) [0.07ms]
+(pass) Share copy — platform limits + honesty > all 6 platforms produced, limits verified honestly [1.20ms]
+(pass) Campaign types — honest capability requirements > 8 types exist; cinematic-trailer honestly requires video generation [0.07ms]
+(pass) Showcase template + additive schemas > showcase-studio template is active with the 9-step stage chain [0.11ms]
+(pass) Showcase template + additive schemas > legacy briefs parse unchanged (additive defaults) [0.09ms]
+(pass) Showcase template + additive schemas > legacy storyboards parse unchanged; showcase fields default [1.51ms]
+(pass) Showcase template + additive schemas > showcase inputs schema validates; demonstration plan requires owned media at API layer [1.53ms]
+(pass) Showcase concepts — genuinely distinct + honest costs > 3 distinct directions with all required fields [0.42ms]
+
+ 20 pass
+ 0 fail
+ 202 expect() calls
+Ran 20 tests across 1 file. [1.66s]

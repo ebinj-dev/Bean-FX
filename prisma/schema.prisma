@@ -54,6 +54,8 @@ model User {
   billingEvents BillingEvent[]
   creativePresets CreativePreset[]
   workflowRuns    WorkflowRun[]  @relation("WorkflowRuns")
+  productions     Production[]   @relation("Productions")
+  mediaMasks    MediaMask[]    @relation("MediaMasks")
   studioPlans   StudioPlan[]   @relation("StudioPlans")
   studioScenes  StudioScene[]  @relation("StudioScenes")
   studioBatches StudioBatch[]  @relation("StudioBatches")
@@ -118,6 +120,7 @@ model Project {
   publishMetadataRows PublishMetadata[] @relation("PublishMetadataRows")
   exportVariants ExportVariant[] @relation("ExportVariants")
   workflowRuns   WorkflowRun[]  @relation("WorkflowRuns")
+  productions    Production[]   @relation("Productions")
   publishPackages PublishPackage[] @relation("PublishPackages")
   creativeReviews CreativeReview[] @relation("CreativeReviews")
   creativeVariants CreativeVariant[] @relation("CreativeVariants")
@@ -1447,3 +1450,202 @@ model Notification {
 /// M30: render job for the review preview (ExportFile kind REVIEW_PREVIEW).
 /// Completed by the existing RENDER_TIMELINE pipeline via a hook that flips
 /// the revision to READY_FOR_REVIEW.
+
+/// M31 — BEAN AI Production Studio. One row per agentic video production.
+/// The pipeline engine (src/lib/production) drives stages; executable work
+/// runs on the EXISTING durable Job system — never a second queue. briefJson
+/// is the structured intake brief; conceptJson/scriptJson/storyboardJson hold
+/// approved stage artifacts; deliveryJson lists final validated artifacts.
+model Production {
+  id                  String   @id @default(cuid())
+  userId              String
+  user                User     @relation("Productions", fields: [userId], references: [id], onDelete: Cascade)
+  projectId           String?
+  project             Project? @relation("Productions", fields: [projectId], references: [id], onDelete: SetNull)
+  templateId          String
+  /// DRAFT | PLANNED | RUNNING | AWAITING_APPROVAL | COMPLETED | FAILED | CANCELLED
+  status              String   @default("DRAFT")
+  title               String
+  briefJson           String?
+  conceptJson         String?
+  scriptJson          String?
+  storyboardJson      String?
+  researchJson        String?
+  referenceJson       String?
+  /// M31 SHOWCASE STUDIO: validated product-understanding artifact (Phase 1).
+  productJson         String?
+  deliveryJson        String?
+  /// Approved budget in cents (user-set). NULL = no budget set (never treated as 0).
+  approvedBudgetCents Int?
+  estimatedCostCents  Int?
+  actualCostCents     Int?
+  pendingCostCents    Int?
+  /// NOT_RUN | PASSED | PASSED_WITH_WARNINGS | FAILED | NEEDS_HUMAN_REVIEW
+  qaState             String   @default("NOT_RUN")
+  qaJson              String?
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+  stages              ProductionStage[]
+  decisions           ProductionDecision[]
+  assets              ProductionAsset[]
+  events              ProductionEvent[]
+  variants            ProductionVariant[] @relation("Variants")
+  @@index([userId, status])
+  @@index([projectId])
+}
+
+/// One pipeline stage per production; deterministic server-enforced states.
+model ProductionStage {
+  id            String   @id @default(cuid())
+  productionId  String
+  production    Production @relation(fields: [productionId], references: [id], onDelete: Cascade)
+  key           String
+  order         Int
+  /// NOT_STARTED | READY | RUNNING | AWAITING_APPROVAL | SUCCEEDED | FAILED |
+  /// CANCEL_REQUESTED | CANCELLED | SKIPPED | BLOCKED | SUPERSEDED
+  state         String   @default("NOT_STARTED")
+  jobId         String?
+  startedAt     DateTime?
+  completedAt   DateTime?
+  /// Verified outputs for resume (never trust RUNNING state across restarts).
+  checkpointJson String?
+  outputJson    String?
+  error         String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  @@unique([productionId, key])
+  @@index([productionId, state])
+}
+
+/// Append-only decision history. A changed decision appends a new row —
+/// prior decisions are never rewritten.
+model ProductionDecision {
+  id           String   @id @default(cuid())
+  productionId String
+  production   Production @relation(fields: [productionId], references: [id], onDelete: Cascade)
+  kind         String
+  valueJson    String
+  createdAt    DateTime @default(now())
+  @@index([productionId, kind, createdAt])
+}
+
+/// Planned/generated asset with rights provenance. licenseState values:
+/// VERIFIED | ATTRIBUTION_REQUIRED | USER_CONFIRMED | UNKNOWN | RESTRICTED
+model ProductionAsset {
+  id            String   @id @default(cuid())
+  productionId  String
+  production    Production @relation(fields: [productionId], references: [id], onDelete: Cascade)
+  sceneKey      String?
+  category      String
+  description   String
+  /// USER_MEDIA | GENERATION | STOCK | DETERMINISTIC | CAPTION | GRAPHIC
+  sourceType    String
+  provider      String?
+  model         String?
+  licenseState  String   @default("UNKNOWN")
+  attribution   String?
+  /// PLANNED | PENDING | GENERATING | READY | APPROVED | REJECTED | FAILED | BLOCKED
+  status        String   @default("PLANNED")
+  /// Durable Job id while GENERATING (provider work rides the existing queue).
+  jobId         String?
+  /// M32: client-supplied idempotency key — duplicate-submission protection
+  /// (same key on the same production returns the EXISTING job, never a
+  /// second paid provider call).
+  idempotencyKey String?
+  /// Last failure detail (honest, never fabricated).
+  error         String?
+  /// true when the cost is genuinely unknown — the UI shows "unknown", not 0.
+  costUnknown   Boolean  @default(true)
+  costCents     Int?
+  storagePath   String?
+  mediaAssetId  String?
+  provenanceJson String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  @@index([productionId, status])
+  @@index([productionId, sceneKey])
+}
+
+/// M32 Track C: a subject mask for real mask-based compositing. Masks are
+/// versioned (parentId chain), stored as PNGs inside the media store, and
+/// survive project packaging/import because they are ordinary MediaAsset-
+/// adjacent rows keyed to source assets (relink = same storage layout).
+model MediaMask {
+  id            String   @id @default(cuid())
+  userId        String
+  user          User     @relation("MediaMasks", fields: [userId], references: [id], onDelete: Cascade)
+  /// The footage the mask belongs to (per-source association).
+  sourceAssetId String
+  /// PNG inside MEDIA_ROOT/media-store/masks (8-bit alpha or binary).
+  storagePath   String
+  width         Int
+  height        Int
+  /// "manual-import" | "editor-refine" | "<provider id>" (auto path)
+  method        String
+  version       Int      @default(1)
+  /// The mask this one was refined from (version chain).
+  parentId      String?
+  /// UNCHECKED | VALIDATED | FAILED — validation is real (PIL decode + stats).
+  validationStatus String @default("UNCHECKED")
+  validationJson String?
+  /// Coordinate space label, e.g. "pixel:source-resolution".
+  coordSpace    String   @default("pixel:source-resolution")
+  /// Temporal metadata for frame-mapped masks.
+  fps           Float?
+  frameIndex    Int?
+  notes         String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  @@index([userId, sourceAssetId])
+}
+
+/// M32 Track B: a derived platform format of an approved master campaign.
+/// The master (Production) stays immutable unless explicitly re-approved;
+/// variants are NEW native sequences linked to it, each recording its source
+/// revision, framing overrides, safe-area report and render identity.
+model ProductionVariant {
+  id            String   @id @default(cuid())
+  productionId  String
+  production    Production @relation("Variants", fields: [productionId], references: [id], onDelete: Cascade)
+  /// "16:9" | "1:1" | "9:16" (master's own aspect is not derived as a variant)
+  format        String
+  /// "720p" | "1080p"
+  resolution    String   @default("1080p")
+  fps           Int
+  /// Exact duration of the master (timing preservation; overrides are explicit).
+  durationSec   Float
+  /// Master storyboard revision this variant derives from (immutability anchor).
+  sourceStoryboardRev Int
+  /// PLANNED | READY | RENDERING | COMPLETED | FAILED | CANCELLED
+  status        String   @default("PLANNED")
+  /// The variant's own native project (editable in the existing editor).
+  projectId     String?
+  /// Per-scene framing: { sceneKey: { focalPct:{x,y}, scale, offsetX, offsetY,
+  /// strategy: "focal"|"center", warnings[] } } — manual edits win over auto.
+  framingJson   String?
+  /// Explicit timing/text overrides (each validated against the master).
+  overridesJson String?
+  /// Safe-area validation report (generic BEAN FX margins, not platform specs).
+  safeAreaJson  String?
+  renderJobId   String?
+  exportId      String?
+  /// Last honest failure detail.
+  error         String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  @@unique([productionId, format])
+  @@index([productionId, status])
+}
+
+/// Append-only real production log. Only actual events are recorded — the
+/// board renders this log verbatim and never fabricates activity.
+model ProductionEvent {
+  id           String   @id @default(cuid())
+  productionId String
+  production   Production @relation(fields: [productionId], references: [id], onDelete: Cascade)
+  kind         String
+  stageKey     String?
+  detailJson   String?
+  createdAt    DateTime @default(now())
+  @@index([productionId, createdAt])
+}

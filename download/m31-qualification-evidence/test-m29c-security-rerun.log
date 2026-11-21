@@ -1,0 +1,13 @@
+bun test v1.3.14 (0d9b296a)
+
+scripts/test-m29c-security.test.ts:
+(pass) M29-C security & data-safety supplements > setup: user A builds a minimal project and packages it [2667.87ms]
+(pass) M29-C security & data-safety supplements > cross-user archive access is denied (download + status) [73.97ms]
+(pass) M29-C security & data-safety supplements > DEFLATE zip entries are rejected (STORED-only contract) [2471.92ms]
+(pass) M29-C security & data-safety supplements > excessive archive entries are rejected (entry cap) [1276.70ms]
+(pass) M29-C security & data-safety supplements > duplicate processing: importing the same package twice creates TWO distinct new projects (no overwrite) [3678.72ms]
+
+ 5 pass
+ 0 fail
+ 22 expect() calls
+Ran 5 tests across 1 file. [10.23s]

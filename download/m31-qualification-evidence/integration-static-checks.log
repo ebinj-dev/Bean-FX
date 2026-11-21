@@ -1,0 +1,20 @@
+PASS: panel artifacts present: panel.ts, manifest.xml, uxp-test-harness.ts, panel.js, index.html
+PASS: in-panel harness present (M22 8-check design)
+PASS: panel.ts: no embedded secrets
+PASS: index.html: no embedded secrets
+PASS: panel references host/version discovery
+PASS: panel/bridge authenticate via issued tokens + pairing (panel.js + host-adapter)
+PASS: bridge uses token hashing
+PASS: bridge credential store is OS-native-first
+PASS: pairing challenge lifecycle present
+PASS: pairing/session expiry present
+PASS: scripts/bridge-install.ps1: OS-native credential write
+PASS: scripts/bridge-install.ps1: lifecycle management present
+PASS: scripts/bridge-install.ps1: no embedded secrets
+PASS: scripts/bridge-uninstall.ps1: OS-native credential write
+PASS: scripts/bridge-uninstall.ps1: lifecycle management present
+PASS: scripts/bridge-uninstall.ps1: no embedded secrets
+PASS: suite present: test-m21-bridge.test.ts
+PASS: suite present: test-m21-premiere.test.ts
+PASS: suite present: test-m22-bridge-deep.test.ts
+PASS: suite present: test-m22-e2e.test.ts

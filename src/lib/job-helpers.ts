@@ -182,7 +182,15 @@ export async function handleJobError(
   // name-based check works across module instances (bun/bundlers can load the
   // same module under two specifiers, breaking instanceof for subclasses).
   const permanent = err instanceof PermanentJobError || (err instanceof Error && err.name === PermanentJobError.name);
-  if (!permanent && attempts < maxAttempts) {
+  // M32 Track A: typed provider errors that can NEVER succeed on retry are
+  // permanent too — no pointless backoff loops and no re-firing of paid
+  // provider calls known to fail again for the same reason.
+  // (RATE_LIMITED / TIMEOUT / PROVIDER_FAILURE stay transient: bounded
+  // retries with backoff — generation handlers persist their provider task
+  // id so a retry RESUMES instead of creating a second paid task.)
+  const providerCode = (err as { code?: unknown }).code;
+  const permanentProviderCode = typeof providerCode === "string" && ["NOT_CONFIGURED", "UNSUPPORTED", "AUTH_FAILED", "INVALID_RESPONSE"].includes(providerCode);
+  if (!permanent && !permanentProviderCode && attempts < maxAttempts) {
     await requeueJob(jobId, attempts, `${context}: ${message} (attempt ${attempts}/${maxAttempts} failed, retrying)`);
     return "requeued";
   }

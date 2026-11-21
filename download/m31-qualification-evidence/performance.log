@@ -1,0 +1,36 @@
+bun test v1.3.14 (0d9b296a)
+
+scripts/test-m31-performance.test.ts:
+host: 2 vCPU · 4 GB RAM · node v24.3.0 · bounded load (max 8 concurrent)
+M31-PERF upload status: 200 {"media":{"id":"cmwouechf000vnch4swkl2g0s","originalName":"p.mp4","kind":"VIDEO","mimeType":"video/mp4","sizeBytes":4754
+(pass) M31 §10 — bounded performance > concurrent project reads (4 users × 20) stay sub-100ms p95 [416.69ms]
+M31-PERF save race statuses: 409,400,200,400
+ 95 |     ] } }))));
+ 96 |     const ok200 = results.filter((r) => r.status === 200).length;
+ 97 |     console.log("M31-PERF save race statuses:", results.map((r) => r.status).join(","));
+ 98 |     const conflicts = results.filter((r) => r.status === 409);
+ 99 |     // All same-base writes: only the serialized winner(s) succeed; every loser 409s.
+100 |     expect(ok200 + conflicts.length).toBe(4);
+                                           ^
+error: expect(received).toBe(expected)
+
+Expected: 4
+Received: 2
+
+      at <anonymous> (/home/z/my-project/scripts/test-m31-performance.test.ts:100:38)
+(fail) M31 §10 — bounded performance > concurrent saves hold optimistic-concurrency guarantees (no lost writes) [5037.90ms]
+(pass) M31 §10 — bounded performance > notification flood stays bounded + deduped (50 writes, unique keys) [261.38ms]
+(pass) M31 §10 — bounded performance > concurrent review comments serialize safely (no duplicate-order corruption) [4162.77ms]
+(pass) M31 §10 — bounded performance > duplicate invitation requests race → exactly one succeeds (idempotency under load) [24.42ms]
+M31-PERF timeline GET: n=80 p50=239ms p95=413ms max=415ms
+M31-PERF notifications GET: n=48 p95=245ms
+M31-PERF notifications unread baseline=0 (dedup verified in worker suite)
+M31-PERF concurrent comments: n=15 created=15 p95=84ms
+M31-PERF review render + comment integrity: 15/15 persisted
+M31-PERF duplicate invitation race: [201,409] as designed
+(pass) M31 §10 — report > emit measured results [0.16ms]
+
+ 5 pass
+ 1 fail
+ 8 expect() calls
+Ran 6 tests across 1 file. [10.40s]
