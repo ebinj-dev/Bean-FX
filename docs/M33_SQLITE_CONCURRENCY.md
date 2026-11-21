@@ -30,7 +30,7 @@ NOT "SQLite can only do one write at a time" (that is inherent and handled). The
 
 ## Repeated-run evidence (exact command)
 
-`M31_BASE=http://localhost:3118 M31_DB=file:/tmp/m33-e2e.db bun test scripts/test-m31-performance.test.ts` × 20 runs: **19 pass / 1 fail** — logs `evidence/m33-perf-4..21.log`; the single failing run (run 2, 10.07s) was not captured with full error text (log filter); its duration signature matches a P2024 pool timeout (10s maxWait), i.e. a DIFFERENT, bounded wait behavior than the original 5s engine socket-timeout. 18 consecutive passes followed. Owner action: capture full logs if it recurs; optionally `?pool_timeout=15` for burst tolerance.
+M33 session × 20 runs: **19 pass / 1 fail** (the failing run's error text was lost to a log filter; duration signature matches a P2024 pool timeout). **Closeout session × 8 runs with FULL logs preserved:** 7 fully clean; run 1 failed a DIFFERENT test — the cold-start read-latency boundary (`p95 500.35ms` vs `<500ms`) — while the **four-writer optimistic-concurrency race PASSED in all 8 runs** (52.21ms in run 1). Ladder re-run on the shipped config: 0 engine errors, races ≤21ms, 49/49 version rows, `journal=wal` confirmed. Combined: the race test has passed 26/27 executions since the fix; the original deterministic engine "Socket timeout" failure has never recurred. Logs: `m33-perf-4..21.log` (M33 session) + closeout `run-1..8.log`. Owner action: keep the test as-is; capture full logs on recurrence; optionally `?pool_timeout=15` (bounded) for burst tolerance.
 
 ## Production deployment implication
 

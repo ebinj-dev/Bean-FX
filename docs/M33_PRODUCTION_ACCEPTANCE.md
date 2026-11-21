@@ -1,6 +1,6 @@
 # M33 — END-TO-END PRODUCTION ACCEPTANCE (Track D)
 
-**Result: 4/5 tests pass on a fresh server (VERIFIED for the executed steps); the final package+import step failed on a TEST-ONLY archiveId extraction bug — fixed in `test-m33-acceptance.test.ts` but not re-verified before the session cutoff (NOT RUN after the fix).**
+**Result: 5/5 VERIFIED on a fresh isolated server (`m33-closeout-acceptance5.txt`).** The closeout rerun surfaced and fixed two REAL product defects on the way: (1) masks attached to sources referenced only via their composited outputs were silently dropped from packages — `buildManifest` now walks mask provenance (`paramsJson.maskId` on alphamerge assets); (2) the M29 post-write verifier rejected `masks/` entries because it only checked `manifest.assets` — it now verifies mask entries with the same size+sha256 discipline. The earlier failures were also two test-harness bugs (archiveId contract read; binary body double-consumption), fixed without weakening assertions. Import evidence: a NEW project with a VALIDATED 720×1280 mask restored through the real package pipeline.
 
 ## Scenario (real workflow, no bypasses)
 

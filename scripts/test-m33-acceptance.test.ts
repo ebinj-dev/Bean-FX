@@ -17,8 +17,8 @@ const EVIDENCE = process.env.M33_EVIDENCE_DIR ?? "/tmp/m33-evidence";
 
 type Jar = { cookie: string };
 const jar = (): Jar => ({ cookie: "" });
-async function api(method: string, path: string, opts: { jar?: Jar; body?: unknown; raw?: Buffer; headers?: Record<string, string> } = {}) {
-  const { jar: j, body, raw, headers = {} } = opts;
+async function api(method: string, path: string, opts: { jar?: Jar; body?: unknown; raw?: Buffer; headers?: Record<string, string>; binary?: boolean } = {}) {
+  const { jar: j, body, raw, headers = {}, binary } = opts;
   const res = await fetch(`${BASE}${path}`, {
     method,
     headers: { ...(body !== undefined && !raw ? { "Content-Type": "application/json" } : {}), ...(raw ? headers : {}), ...(j?.cookie ? { Cookie: j.cookie } : {}) },
@@ -26,7 +26,7 @@ async function api(method: string, path: string, opts: { jar?: Jar; body?: unkno
   });
   const setCookie = res.headers.getSetCookie?.() ?? [];
   if (j) for (const c of setCookie) { const [k, v] = c.split(";")[0].split("="); if (k === "beanfx_session") j.cookie = `${k}=${v}`; }
-  return { status: res.status, json: await res.json().catch(() => null), res };
+  return { status: res.status, json: binary ? null : await res.json().catch(() => null), res };
 }
 function ep(dir: string, name: string): string { fs.mkdirSync(dir, { recursive: true }); return path.join(dir, name); }
 
@@ -236,7 +236,7 @@ describe("M33 Track D — production acceptance (real workflow, no bypasses)", (
     }
     expect(status).toBe("COMPLETED");
     // Download the package through the real download endpoint.
-    const dl = await api("GET", `/api/project-archives/${archiveId}/download`, { jar: u });
+    const dl = await api("GET", `/api/project-archives/${archiveId}/download`, { jar: u, binary: true });
     expect(dl.status).toBe(200);
     const zipBuf = Buffer.from(await dl.res!.arrayBuffer());
     fs.writeFileSync(ep(EVIDENCE, "acceptance-package.zip"), zipBuf);

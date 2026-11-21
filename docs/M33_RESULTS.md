@@ -10,7 +10,7 @@ M33 closed two of the three M32 integration gaps with real end-to-end evidence a
 2. **Track B (CLOSED):** MediaMasks now survive the FULL project lifecycle — package manifest + checksummed mask files, import with identity remapping (source + version chains), honest FAILED-row restoration for missing bytes, a relink action, and a pixel-verified compositing render from an IMPORTED mask in a clean library (9/9 tests).
 3. **Track C (RESOLVED):** the SQLite four-writer failure was reproduced, root-caused with measurements (default Prisma pool's many connections crossfire on SQLite's single-writer lock → 5s engine "Socket timeout"), and fixed (`connection_limit=2` + WAL — the documented SQLite configuration). Ladder: 0 engine errors at 8 writers (was 72+11); HTTP suite: 19/20 passes over 20 repeated runs (the one residual run's error text was lost to a log filter; failure mode signature changed from 5s socket-timeout to a 10s pool-timeout).
 
-**Track D (partial):** the acceptance scenario passes end-to-end on a fresh server (campaign → REAL mask compositing onto the native timeline via canonical commands → render → QA → delivery → three variants rendered) — 4/5 tests; the final package+import step failed on a test-only archiveId extraction bug (fixed in code but not re-verified before the session cutoff). The compositing render is memory-sensitive in this 4 GB sandbox (one honest SIGKILL OOM recorded by the worker during parallel suite load).
+**Track D (CLOSED by the closeout session):** the acceptance scenario passes **5/5 on a fresh isolated server** (`M33_CLOSEOUT.md` §1) — including package/import of a mask-bearing campaign with a VALIDATED mask restored in a clean library. Reaching 5/5 surfaced and fixed two REAL product defects: provenance-mask packaging (masks used only via their composited outputs were silently dropped from packages) and the M29 post-write verifier rejecting `masks/` entries (it only knew `manifest.assets`). Two test-harness bugs were also fixed without weakening assertions.
 
 ## Implemented integration fixes
 
@@ -31,7 +31,7 @@ M33 closed two of the three M32 integration gaps with real end-to-end evidence a
 
 ## Qualification verdict
 
-**QUALIFIED WITH DOCUMENTED RESTRICTIONS** — see `M33_RELEASE_READINESS.md`.
+**QUALIFIED WITH DOCUMENTED RESTRICTIONS** — see `M33_RELEASE_READINESS.md` and `M33_CLOSEOUT.md` (closeout evidence: acceptance 5/5, browser walkthrough at 1440×900 + 375px, SQLite residual measured).
 
 ## Known limitations / owner actions
 

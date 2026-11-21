@@ -29,9 +29,10 @@ Auth boundaries, approval gates, safe package paths (traversal-checked), checksu
 
 | # | Issue | Severity | Evidence | Owner action |
 |---|---|---|---|---|
-| 1 | Track D package+import step: test-bug fixed, re-verification pending | LOW | `m33-evidence-acceptance4.txt` | Re-run the acceptance suite once on a fresh server |
-| 2 | SQLite residual pool timeout ~1/20 fan-in runs | LOW | `evidence/m33-perf-*.log` | Capture full logs on recurrence; optional `pool_timeout=15` |
+| 1 | SQLite residual: cold-run p95 latency-boundary miss (1/8 closeout runs; race test itself 26/27 across sessions) | LOW | closeout `run-1..8.log`, `M33_CLOSEOUT.md` §3 | Keep the test as-is; capture full logs on recurrence; optional bounded `pool_timeout=15` |
+| 2 | Legacy M19/M22/M23 security suites target the dev DB (`db/custom.db`), which is absent in the recycled sandbox | INFRA | `M33_CLOSEOUT.md` §5 | Restore the dev DB from its 2026-11-11 backups to re-run |
 | 3 | 4 GB sandbox OOM under parallel render suites | INFRA | worker SIGKILL record | Run render suites serially / larger host |
-| 4 | Paid generation + auto-segmentation configuration | CONFIG | M32 provider readiness | Owner credentials/authorization |
+| 4 | Paid generation + auto-segmentation configuration | CONFIG | M32 provider readiness; honest UI banner | Owner credentials/authorization |
+| 5 | High-concurrency production deployment | DECISION | `M33_SQLITE_CONCURRENCY.md` | PostgreSQL datasource decision |
 
-**No deployment, public release, or release announcement was performed by M33.**
+**No deployment, public release, or release announcement was performed by M33 or the closeout.** Closeout evidence: acceptance 5/5 on a fresh isolated server, browser walkthrough at both viewports, SQLite residual measured — verdict remains QUALIFIED WITH DOCUMENTED RESTRICTIONS (`M33_CLOSEOUT.md`).

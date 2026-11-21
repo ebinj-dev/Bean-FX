@@ -25,8 +25,9 @@ All scratch/fixture tests ran on isolated DBs (`/tmp/*.db`) and temp dirs; HTTP 
 - M32 provider/variants/masks suites: green — M32 functionality unchanged by M33 (the archive extension is additive; `buildManifest`/`importPackage` changes are backward-compatible: `masks` defaults to `[]` on old manifests).
 - M29 packaging atomicity: unchanged for assets; mask additions are non-fatal by design.
 - M30 collaboration: collab access checks still gate packaging (`getProjectAccess/canEdit` preserved in buildManifest).
-- M31 HTTP security/worker suites: NOT RUN in this session after the db.ts change (the perf suite was the priority for Track C); the security suite's assertions (auth boundaries, SSRF, approvals) are unaffected by the changed files (verified by inspection: db.ts, project-archive masks section, productions intake aspect, masks relink action).
-- UI: M32 panels unchanged; browser walkthrough NOT RUN this session (cutoff) — M32's desktop/375px evidence stands; no UI files were modified in M33.
+- Closeout session: M31 security **8/8** against the isolated server; three-format workflow re-verified **6/6**; unit suites re-run **per-file — 138 tests, 0 fail**; TypeScript 0; ESLint clean; build OK.
+- Legacy M19/M22/M23 security suites: **INFRASTRUCTURE REQUIRED** — they target the real dev DB `db/custom.db` by design, and that file is absent in the recycled sandbox (2026-11-11 backups remain). Environment state loss, not a code regression; outside the M31/M33 regression protocol.
+- UI: browser walkthrough **COMPLETED** in the closeout session (13 inspected screenshots, both viewports) — see `M33_CLOSEOUT.md` §2.
 
 ## Infrastructure exceptions
 

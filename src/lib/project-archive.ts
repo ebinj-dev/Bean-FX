@@ -371,8 +371,31 @@ export async function buildManifest(
   // import). Masks whose FILE is missing on disk still ship as metadata-only
   // entries (path "" / sha256 "") so the import can restore an honestly-FAILED
   // row instead of silently dropping the association (spec §B4).
+  // M33 closeout fix: masks are attached to their SOURCE footage, but a
+  // campaign timeline usually references the composited OUTPUT (alphamerge),
+  // not the raw subject. Walk the provenance chain: any clip-referenced asset
+  // produced by mask compositing names its mask in paramsJson — include that
+  // mask (and its source asset's other masks) so mask-bearing projects package
+  // every mask actually used to build them. Previously such masks were
+  // silently dropped from packages (found by the closeout acceptance rerun).
+  const clipAssets = await db.mediaAsset.findMany({
+    where: { id: { in: referencedIds }, userId },
+    select: { id: true, provider: true, paramsJson: true },
+  });
+  const provenanceMaskIds = new Set<string>();
+  const provenanceSourceIds = new Set<string>();
+  for (const a of clipAssets) {
+    if (!a.paramsJson) continue;
+    if (a.provider !== "ffmpeg-alphamerge" && a.provider !== "pil-composite") continue;
+    try {
+      const params = JSON.parse(a.paramsJson) as { maskId?: string; sourceAssetId?: string };
+      if (typeof params.maskId === "string") provenanceMaskIds.add(params.maskId);
+      if (typeof params.sourceAssetId === "string") provenanceSourceIds.add(params.sourceAssetId);
+    } catch { /* unparseable provenance — the id-based queries below still cover direct references */ }
+  }
+  const maskSeedIds = [...referencedIds, ...provenanceSourceIds];
   const maskRows = await db.mediaMask.findMany({
-    where: { sourceAssetId: { in: referencedIds } },
+    where: { OR: [{ sourceAssetId: { in: maskSeedIds } }, { id: { in: [...provenanceMaskIds] } }] },
     orderBy: { createdAt: "asc" },
   });
   const manifestMasks: ManifestMask[] = [];
@@ -489,8 +512,11 @@ export async function runProjectArchiveJob(job: { id: string; userId: string; pa
         const reparsed = JSON.parse(await readFile(out, "utf8")) as PackageManifest;
         if (reparsed.formatVersion !== PACKAGE_FORMAT_VERSION) throw new PermanentJobError("Packaged manifest has the wrong format version.");
         if (reparsed.assets.length !== manifest.assets.length) throw new PermanentJobError("Packaged manifest asset count mismatch.");
+        if ((reparsed.masks?.length ?? 0) !== manifest.masks.length) throw new PermanentJobError("Packaged manifest mask count mismatch.");
       } else {
-        const src = manifest.assets.find((a) => a.path === e.name);
+        // M33 Track B: masks/ entries verify against manifest.masks exactly
+        // like media/ entries verify against manifest.assets.
+        const src = manifest.assets.find((a) => a.path === e.name) ?? manifest.masks.find((m) => m.path === e.name);
         if (!src) throw new PermanentJobError(`Package contains an unmanifested entry: ${e.name}`);
         if (h !== src.sha256) throw new PermanentJobError(`Packaged asset "${e.name}" failed checksum verification — nothing was published.`);
       }
