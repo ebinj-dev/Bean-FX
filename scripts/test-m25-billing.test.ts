@@ -7,6 +7,7 @@
  * Runs against the dev server on :3117 (custom.db).
  */
 import { describe, test, expect } from "bun:test";
+import { scratchLegacyDb } from "./legacy-fixture";
 
 const BASE = "http://localhost:3117";
 const STAMP = Date.now().toString(36);
@@ -34,7 +35,7 @@ const adminApi = makeApi();
 /** Direct DB helpers for bulk usage rows + period manipulation. */
 async function withDb(fn: (db: any) => Promise<void>): Promise<void> {
   process.env.NODE_ENV = "production";
-  process.env.DATABASE_URL = "file:/home/z/my-project/db/custom.db";
+  process.env.DATABASE_URL = scratchLegacyDb("m25-billing"); // M34 Track B: isolated fixture, never db/custom.db
   const mod = await import("../src/lib/db");
   await fn(mod.db);
   await mod.db.$disconnect();

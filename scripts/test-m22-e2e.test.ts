@@ -16,10 +16,11 @@ import { connectHttp } from "./mcp-client-harness";
 import { answerChallenge } from "../src/lib/core/bridge-protocol";
 import { makeOp, inverseOf, MockHost } from "../src/lib/core/host-adapter";
 import { sequenceToCanonical, canonicalToSequence, stableStringify } from "../src/lib/core/converters";
+import { scratchLegacyDb } from "./legacy-fixture";
 
 const LIVE = "http://localhost:3117";
 process.env.NODE_ENV = "production";
-process.env.DATABASE_URL = "file:/home/z/my-project/db/custom.db";
+process.env.DATABASE_URL = scratchLegacyDb("m22-e2e"); // M34 Track B: isolated fixture, never db/custom.db
 
 const STATE_DIR = mkdtempSync(path.join(os.tmpdir(), "beanfx-m22-e2e-"));
 let bridgeProc: ReturnType<typeof spawn> | null = null;

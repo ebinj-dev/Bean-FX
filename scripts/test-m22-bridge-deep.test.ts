@@ -14,10 +14,11 @@ import {
   FileCredentialStore, createCredentialStore,
 } from "../src/lib/core/credential-store";
 import { answerChallenge, reapCache } from "../src/lib/core/bridge-protocol";
+import { scratchLegacyDb } from "./legacy-fixture";
 
 const LIVE = "http://localhost:3117";
 process.env.NODE_ENV = "production";
-process.env.DATABASE_URL = "file:/home/z/my-project/db/custom.db";
+process.env.DATABASE_URL = scratchLegacyDb("m22-bridge-deep"); // M34 Track B: isolated fixture, never db/custom.db
 
 const STATE_DIR = mkdtempSync(path.join(os.tmpdir(), "beanfx-m22-bridge-"));
 let bridgeProc: ReturnType<typeof spawn> | null = null;

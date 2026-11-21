@@ -11,10 +11,11 @@ import { mkdtempSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { JsonRpcHttpTransport, connectHttp, connectStdio } from "./mcp-client-harness";
+import { scratchLegacyDb } from "./legacy-fixture";
 
 const LIVE = "http://localhost:3117";
 process.env.NODE_ENV = "production";
-process.env.DATABASE_URL = "file:/home/z/my-project/db/custom.db";
+process.env.DATABASE_URL = scratchLegacyDb("m22-mcp-client"); // M34 Track B: isolated fixture, never db/custom.db
 
 let db: typeof import("../src/lib/db").db;
 let user: { id: string };
