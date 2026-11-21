@@ -38,7 +38,7 @@ The application is operationally reproducible (clean checkout → install → pr
 
 ## Remaining owner actions
 
-1. Re-run `test-m20-durable-render.test.ts` (on an idle ≥8 GB host) — the only interrupted qualification.
+1. ~~Re-run `test-m20-durable-render.test.ts`~~ **CLOSED in the M34 closeout (2026-11-21): T1–T7 executed on an isolated scratch DB/media root — 8/8 PASS, 60 assertions, 1376 s; evidence `download/m34/evidence/m20-closeout/suite-results.log`; see `M34_CLOSEOUT.md`.**
 2. Provider credentials + pricing verification; segmentation provider decision (see onboarding guide).
 3. PostgreSQL decision for production-scale concurrency.
 4. Optional: add a CI workflow (none exists) and/or a configured `bun pm scan` scanner.
