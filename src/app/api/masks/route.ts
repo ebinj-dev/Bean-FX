@@ -79,6 +79,21 @@ export async function POST(req: NextRequest) {
       const result = await compositeVideo(user.id, String(body.maskId ?? ""), String(body.sourceAssetId ?? ""), String(body.backgroundAssetId ?? ""));
       return NextResponse.json({ ok: true, ...result });
     }
+    if (action === "relink") {
+      // M33 Track B §B4: a meaningful relink action — point a mask (whose
+      // source media was deleted/moved) at a NEW owned source asset. The old
+      // association is recorded in notes; nothing is silently substituted.
+      const mask = await db.mediaMask.findUnique({ where: { id: String(body.maskId ?? "") } });
+      if (!mask || mask.userId !== user.id) return NextResponse.json({ error: "Mask not found." }, { status: 404 });
+      const newSource = await db.mediaAsset.findUnique({ where: { id: String(body.newSourceAssetId ?? "") } });
+      if (!newSource || newSource.userId !== user.id) return NextResponse.json({ error: "New source media not found or not owned by the caller." }, { status: 404 });
+      if (newSource.kind !== "VIDEO" && newSource.kind !== "IMAGE") return NextResponse.json({ error: "Relink target must be video or image media." }, { status: 400 });
+      const updated = await db.mediaMask.update({
+        where: { id: mask.id },
+        data: { sourceAssetId: newSource.id, notes: `${mask.notes ?? ""} · relinked from ${mask.sourceAssetId} → ${newSource.id}`.slice(0, 300) },
+      });
+      return NextResponse.json({ ok: true, maskId: updated.id, sourceAssetId: updated.sourceAssetId });
+    }
     if (action === "preview") {
       const mask = await db.mediaMask.findUnique({ where: { id: String(body.maskId ?? "") } });
       if (!mask || mask.userId !== user.id) return NextResponse.json({ error: "Mask not found." }, { status: 404 });

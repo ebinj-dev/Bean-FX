@@ -64,6 +64,33 @@ export async function POST(req: NextRequest) {
     ...(Array.isArray(body.shareCopyPlatforms) ? { shareCopyPlatforms: body.shareCopyPlatforms.filter((x: unknown) => typeof x === "string").slice(0, 6) } : {}),
     ...(typeof body.posterEnabled === "boolean" ? { posterEnabled: body.posterEnabled } : {}),
   });
+  // M33 Track A — INTEGRATION FIX: the campaign's aspect ratio now propagates
+  // to the native project sequence. Previously a 9:16 campaign assembled a
+  // 1920x1080 sequence (the default settings) and rendered LANDSCAPE exports
+  // — found by the M33 three-format live test. Applied at intake BEFORE any
+  // timeline head exists; a project the user already started editing keeps
+  // its sequence dimensions (never silently resized under the user).
+  if (projectId) {
+    const headExists = await db.timelineVersion.findFirst({ where: { projectId }, select: { id: true } });
+    if (!headExists) {
+      const project = await db.project.findUnique({ where: { id: projectId } });
+      if (project) {
+        const settings = (JSON.parse(project.settingsJson ?? "{}") || {}) as Record<string, unknown>;
+        const dimsByAspect: Record<string, { width: number; height: number }> = {
+          "16:9": { width: 1920, height: 1080 },
+          "9:16": { width: 1080, height: 1920 },
+          "1:1": { width: 1080, height: 1080 },
+          "4:5": { width: 1080, height: 1350 },
+        };
+        const dims = dimsByAspect[brief.aspectRatio];
+        if (dims) {
+          settings.width = dims.width;
+          settings.height = dims.height;
+          await db.project.update({ where: { id: projectId }, data: { settingsJson: JSON.stringify(settings) } });
+        }
+      }
+    }
+  }
   const production = await db.production.create({
     data: {
       userId: user.id,
