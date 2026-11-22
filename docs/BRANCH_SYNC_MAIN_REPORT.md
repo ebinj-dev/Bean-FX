@@ -144,8 +144,13 @@ exit code was aligned with the documented table (2, not 1) the same way.
 
 ## 10. Push and remote verification
 
-Recorded after publication in section 12 (appended post-push, second
-commit — see `git log` order).
+- Push command: `git push origin feature/ai-creative-studio` — **accepted as
+  a normal fast-forward**: `1888161..a601e3f feature/ai-creative-studio`.
+- Publication commit 1: `722ea523b44a07b47135a0d937f27707f536d49d`
+  (synchronization merge).
+- Publication commit 2: `a601e3f4d6db5e0c1faf0308486ba4331f6ad9fa`
+  (policy + guard + this report).
+- Only `feature/ai-creative-studio` was pushed. No other ref was pushed.
 
 ## 11. Main and ASR branch safety
 
@@ -155,6 +160,33 @@ commit — see `git log` order).
   cherry-picked, never pushed. SHA before = SHA after (`2b2d622…`).
 - No tags or branches deleted; no force operations of any kind.
 
-## 12. Post-publication verification
+## 12. Post-publication verification (performed via `git ls-remote` + fresh clone)
 
-*(appended after push — see commit history for the two-step publication)*
+`git ls-remote origin refs/heads/main refs/heads/feature/ai-creative-studio refs/heads/feature/asr-semantic-sidecars`:
+
+```
+a601e3f4d6db5e0c1faf0308486ba4331f6ad9fa  refs/heads/feature/ai-creative-studio   <- matches local push HEAD
+2b2d622e3feee3aa05b13c36a3bef240841efea3  refs/heads/feature/asr-semantic-sidecars <- unchanged
+3e9b23ccf32aeef6647d49f73cced0992f2174a7  refs/heads/main                          <- unchanged
+```
+
+Independent fresh clone (`git clone --branch feature/ai-creative-studio` into
+a separate directory):
+
+- Fresh-clone HEAD = `a601e3f4d6db5e0c1faf0308486ba4331f6ad9fa` — matches the
+  pushed SHA exactly.
+- `git merge-base --is-ancestor origin/main HEAD` → **PASS** (complete main
+  history contained; zero commits behind).
+- `git merge-base --is-ancestor 2bb0219…` (M35) → **PASS**.
+- `git merge-base --is-ancestor 1888161…` (M36) → **PASS**.
+- All four policy files present in the fresh clone
+  (`scripts/branch-sync-preflight.sh`,
+  `scripts/test-branch-sync-preflight.sh`,
+  `docs/GIT_BRANCH_SYNC_POLICY.md`,
+  `docs/BRANCH_SYNC_MAIN_REPORT.md`).
+- The preflight guard itself was executed inside the fresh clone: **exit 0**
+  — synchronized, zero commits behind `origin/main`.
+
+**Final state: `feature/ai-creative-studio` contains the complete latest
+remote `main` history AND all BEAN FX milestone history (M1–M36 + policy).
+`main` and `feature/asr-semantic-sidecars` are byte-for-byte unchanged.**
