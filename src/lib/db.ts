@@ -48,7 +48,22 @@ export const db =
 // Fire-and-forget: journal_mode is persistent, so ordering vs first query is
 // not correctness-critical, and module load must never block on it.
 if (!globalForPrisma.prisma) {
-  db.$queryRawUnsafe("PRAGMA journal_mode=WAL").catch(() => { /* in-memory/readonly DBs — mode unchanged */ })
+  db.$queryRawUnsafe("PRAGMA journal_mode=WAL").catch((err) => {
+    // M36 Phase C — honesty split: some PRAGMA failures are OPTIONAL
+    // compatibility (in-memory/readonly test databases, non-SQLite URLs)
+    // and stay quiet; a REAL initialization failure (missing directory,
+    // permissions, corrupt file) must not be concealed — surface it loudly
+    // while keeping module load non-blocking (preflight and /api/health
+    // still gate readiness independently).
+    const url = process.env.DATABASE_URL ?? "";
+    const msg = err instanceof Error ? err.message : String(err);
+    if (!url.startsWith("file:") || /memory|readonly/i.test(msg)) return;
+    console.error(
+      `[beanfx:db] WAL setup failed for ${url.split("?")[0]}: ${msg.slice(0, 160)} — ` +
+      "this usually means the database path is missing or not writable; " +
+      "run `bunx prisma db push` (never with --accept-data-loss) after fixing the path/permissions."
+    );
+  });
 }
 
 if (process.env.NODE_ENV !== 'production') globalForPrisma.prisma = db

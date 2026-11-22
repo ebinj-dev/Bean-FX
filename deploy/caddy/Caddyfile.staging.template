@@ -1,0 +1,36 @@
+# BEAN FX — Caddy reverse-proxy TEMPLATE (M36 Phase B-D). Caddy issues TLS
+# certificates automatically for the site address — the owner supplies the
+# real staging DNS name (no domain is created or claimed by this repo).
+# Owner: copy to /etc/caddy/Caddyfile, replace <STAGING-HOST>, reload Caddy.
+# NOTE: Caddy automatically redirects HTTP→HTTPS for site addresses.
+#
+<STAGING-HOST> {
+	# App upstream: the standalone server binds 127.0.0.1 (BIND_HOST in env).
+	reverse_proxy 127.0.0.1:3000
+
+	# Upload-size headroom — media uploads are POSTed to /api/media and go
+	# through the app's own validation; proxy limit must exceed the app limit.
+	request_body {
+		max_size 2GB
+	}
+
+	# Long-running render/job requests: the UI polls /api/jobs/:id rather than
+	# holding a long request open, but render submissions themselves may take
+	# time — no aggressive timeouts.
+	reverse_proxy 127.0.0.1:3000 {
+		flush_interval -1
+	}
+
+	# Security headers (compatible with the app; no CSP that would break the
+	# hash-routed editor — owner may tighten after visual verification).
+	header {
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		X-Content-Type-Options "nosniff"
+		Referrer-Policy "strict-origin-when-cross-origin"
+		-Server
+	}
+
+	# Forwarded-header handling: Caddy sets X-Forwarded-For from the socket
+	# peer by default (trusted_proxy_ranges govern who may override it).
+	# No arbitrary client-supplied identity is trusted.
+}
