@@ -1,0 +1,45 @@
+# BEAN FX — Nginx reverse-proxy TEMPLATE (M36 Phase B-D), alternative to Caddy.
+# Owner: copy to /etc/nginx/sites-available/beanfx-staging, replace
+# <STAGING-HOST> and the certificate paths, enable + `nginx -t && reload`.
+# Certificates are owner-obtained (certbot) — none are created by this repo.
+#
+server {
+	listen 80;
+	server_name <STAGING-HOST>;
+	# HTTP→HTTPS redirect
+	return 301 https://$host$request_uri;
+}
+
+server {
+	listen 443 ssl http2;
+	server_name <STAGING-HOST>;
+
+	ssl_certificate     /etc/letsencrypt/live/<STAGING-HOST>/fullchain.pem;
+	ssl_certificate_key /etc/letsencrypt/live/<STAGING-HOST>/privkey.pem;
+	ssl_protocols TLSv1.2 TLSv1.3;
+
+	# Upload-size headroom (must exceed the app's own upload validation).
+	client_max_body_size 2g;
+
+	# Long-running requests: renders are polled via /api/jobs/:id; keep
+	# submission timeouts generous.
+	proxy_read_timeout 600s;
+	proxy_send_timeout 600s;
+
+	location / {
+		proxy_pass http://127.0.0.1:3000;
+		proxy_http_version 1.1;
+
+		# Forwarded headers — set from the socket peer; do NOT trust
+		# client-supplied X-Forwarded-* (never pass them through blindly).
+		proxy_set_header Host $host;
+		proxy_set_header X-Forwarded-For $remote_addr;
+		proxy_set_header X-Forwarded-Proto https;
+	}
+
+	# Security headers.
+	add_header Strict-Transport-Security "max-age=31536000; includeSubDomains" always;
+	add_header X-Content-Type-Options "nosniff" always;
+	add_header Referrer-Policy "strict-origin-when-cross-origin" always;
+	server_tokens off;
+}

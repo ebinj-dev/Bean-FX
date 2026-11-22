@@ -1,0 +1,48 @@
+# BEAN FX — systemd unit TEMPLATE (M36 Phase B-C). Owner copies to
+# /etc/systemd/system/beanfx.service, adjusts paths, then:
+#   systemctl daemon-reload && systemctl enable --now beanfx
+# This file contains NO secrets and NO hardcoded domain. Real-host validation
+# is OWNER ACTION (this sandbox has no init system — lifecycle was simulated
+# in foreground, see docs/M36_SERVICE_AND_REVERSE_PROXY.md).
+#
+# [UNIT]
+[Unit]
+Description=BEAN FX video editor & AI production suite
+After=network-online.target
+Wants=network-online.target
+
+# [SERVICE]
+[Service]
+Type=simple
+User=beanfx
+Group=beanfx
+# Environment file holds DATABASE_URL / BEANFX_DATA_DIR / PORT / provider vars.
+# Owner creates it on the host (mode 600): see deploy/env.staging.example.
+EnvironmentFile=/home/beanfx/.env.staging
+WorkingDirectory=/home/beanfx/Bean-FX
+# Startup gate: refuse to boot with an invalid environment (fail clearly,
+# never silently substitute defaults).
+ExecStartPre=/usr/local/bin/bun /home/beanfx/Bean-FX/scripts/m36-validate-env.ts --env /home/beanfx/.env.staging --strict
+ExecStart=/bin/bash scripts/dev-server.sh
+# Graceful shutdown: SIGTERM is forwarded to the standalone server; ffmpeg
+# children are owned by the job runner and an orphan after SIGKILL is harmless
+# (the startup sweep re-queues stale jobs — M20-verified).
+KillSignal=SIGTERM
+TimeoutStopSec=30
+Restart=on-failure
+RestartSec=5
+# Never restart-loop over a config error: invalid env exits non-zero in
+# ExecStartPre and systemd stops (start-limit) instead of looping.
+StartLimitBurst=3
+StartLimitIntervalSec=60
+# Resource discipline for the render host (M35 sizing).
+MemoryMax=16G
+Nice=-5
+# Logging: journald by default (journalctl -u beanfx); app stderr has no secrets.
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=beanfx
+
+# [INSTALL]
+[Install]
+WantedBy=multi-user.target
