@@ -16,6 +16,7 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } fr
 import type { Sequence, Clip, Transform } from "@/lib/editor/model";
 import { clipEndFrame } from "@/lib/editor/model";
 import { activeGraphicsAt } from "@/lib/nikki/state";
+import { transformAt } from "@/lib/editor/transform";
 import { ensureNikkiFonts } from "@/lib/nikki/canvas";
 import type { EditorSession } from "@/hooks/use-editor-session";
 import type { EditToolId } from "@/lib/editor/tools";
@@ -113,7 +114,9 @@ export function CompositionCanvas({
       for (const clip of sequence.clips) {
         if (clip.trackId !== track.id) continue;
         if (playhead < clip.timelineStartFrame || playhead >= clipEndFrame(sequence, clip)) continue;
-        const t = clip.transform;
+        // M37: boxes evaluate the SAME transform the preview/export uses —
+        // keyframed properties resolve at the playhead (parity by construction).
+        const t = transformAt(clip, playhead);
         if (track.kind === "VIDEO" || track.kind === "OVERLAY") {
           if (!clip.graphicStyle) {
             out.push({ clipId: clip.id, label: clip.label || clip.id, kind: "video", cx: sequence.width / 2 + t.x, cy: sequence.height / 2 + t.y, w: sequence.width, h: sequence.height, rotation: t.rotation, scale: t.scale, opacity: t.opacity });

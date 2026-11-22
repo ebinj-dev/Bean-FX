@@ -17,6 +17,10 @@ export const runtime = "nodejs";
 const RenderSchema = z.object({
   startFrame: z.number().int().min(0).optional(),
   endFrame: z.number().int().min(1).optional(),
+  // M37: real output formats through the SAME durable job + FFmpeg pipeline
+  // (mp4 default, byte-compatible with the previous behavior; mov/wav/mp3
+  // select container+codecs — no second renderer, no new job type).
+  format: z.enum(["mp4", "mov", "wav", "mp3"]).optional(),
 });
 
 export async function POST(req: NextRequest, ctx: { params: Promise<{ projectId: string }> }) {
@@ -52,6 +56,7 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ projectId:
     projectId,
     startFrame: parsed.data.startFrame,
     endFrame: parsed.data.endFrame,
+    format: parsed.data.format,
   });
   return NextResponse.json({ jobId }, { status: 202 });
 }

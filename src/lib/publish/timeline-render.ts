@@ -24,6 +24,7 @@ import { clipEndFrame, type Clip, type Sequence } from "@/lib/editor/model";
 import { sequenceEndFrame } from "@/lib/editor/preview";
 import { ffmpegEffectChain, ffmpegEffectChainAnimated, segmentSplitFrames } from "@/lib/editor/filters";
 import { ffmpegVolumeArgs } from "@/lib/editor/audio";
+import { clipHasTransform, overlayPositionExprs, segmentTransformFilters, transformAt, transformBoundaryFrames, transformNeedsSegments } from "@/lib/editor/transform";
 import { buildGraphicFilters } from "@/lib/nikki/render";
 import { jobManager } from "@/lib/job-runner";
 import { probeMediaDeep } from "@/lib/media-analysis";
@@ -87,12 +88,28 @@ function clipRelSrcSec(plan: RenderClipPlan, seq: Sequence, clipRelFrame: number
   return (clip.sourceInFrame + srcOffset) / (clip.sourceFps.num / clip.sourceFps.den);
 }
 
+/** M37 — segment-split decision for ONE plan inside ONE window (the exact
+ *  boundary set the split path will use). Single source of truth shared by
+ *  emitVisualSegment and the run loop, which must know whether a clip took
+ *  the split path — that changes the overlay-position geometry contract
+ *  (re-fitted segments are pre-centered; unsplit segments need the centering
+ *  compensation term in the position expression). */
+function computeSegmentSplits(plan: RenderClipPlan, clipRelWinStart: number, winDurFrames: number): number[] {
+  const animated = plan.clip.effects.some((e) => e.enabled && e.animatedParams.length > 0);
+  const effectSplits = animated ? segmentSplitFrames(plan.clip.effects, plan.clip.timelineDurationFrames) : [];
+  const tBoundaries = clipHasTransform(plan.clip) && transformNeedsSegments(plan.clip) ? transformBoundaryFrames(plan.clip, plan.clip.timelineDurationFrames) : [];
+  return [...new Set([...effectSplits, ...tBoundaries])].filter((f) => f > clipRelWinStart && f < clipRelWinStart + winDurFrames);
+}
+
 /**
  * M27 P2 — emit ONE clip's video segment. Animated clips with non-expr
  * keyframed params (colorbalance/gblur/unsharp families) are SPLIT at their
  * keyframe frames into per-segment constant chains (real processing, real
  * concat — no fabricated animation); expr-capable params (eq family,
  * vignette) animate exactly via eval=frame t-expressions with no split.
+ * M37 — clip transforms (position/scale/rotation/opacity) ride the same
+ * machinery: geometry filters per segment, sampled splits for animated
+ * scale/opacity, exact expressions where the filter supports them.
  */
 function emitVisualSegment(
   parts: string[],
@@ -103,14 +120,21 @@ function emitVisualSegment(
   outLabel: string,
   uid: string,
   renderStartFrame: number,
+  /** M37: when any clip in the run is transformed, every run segment carries
+   *  alpha (yuva420p) so the per-clip positioned overlays and the xfade stay
+   *  format-consistent. */
+  forceAlphaFormat = false,
 ): void {
   const fps = seq.fps.num / seq.fps.den;
   const fpsR = { num: seq.fps.num, den: seq.fps.den };
   const fit = { width: seq.width, height: seq.height };
   const clipRelWinStart = Math.max(0, plan.winStartFrame - plan.clip.timelineStartFrame);
   const winDurFrames = plan.winEndFrame - plan.winStartFrame;
+  // M37: transform keyframes join the split set when scale/opacity is
+  // animated (piecewise-constant export); x/y/rotation alone animate exactly.
+  const hasTransform = clipHasTransform(plan.clip);
   const animated = plan.clip.effects.some((e) => e.enabled && e.animatedParams.length > 0);
-  const splits = animated ? segmentSplitFrames(plan.clip.effects, plan.clip.timelineDurationFrames).filter((f) => f > clipRelWinStart && f < clipRelWinStart + winDurFrames) : [];
+  const splits = computeSegmentSplits(plan, clipRelWinStart, winDurFrames);
   if (splits.length === 0) {
     // Static OR expr-only animation: one segment, exact t-expressions.
     const seg = buildSegmentBase(plan, seq, isImage);
@@ -118,6 +142,19 @@ function emitVisualSegment(
       ? ffmpegEffectChainAnimated(plan.clip.effects, clipRelWinStart, fpsR, fit)
       : ffmpegEffectChain(plan.clip.effects, fit);
     if (chain) seg.push(chain);
+    // M37: clip transform geometry — rotate → scale → opacity (the same order
+    // the preview's CSS transform applies). Animated rotation alone stays
+    // exact (per-frame rotate expression); scale/opacity animation forces
+    // the sampled split path instead.
+    if (hasTransform) {
+      seg.push(
+        ...segmentTransformFilters(plan.clip, seq, clipRelWinStart, {
+          exactRotation: !transformNeedsSegments(plan.clip),
+          tOffsetSec: (plan.clip.timelineStartFrame - renderStartFrame) / fps,
+        }),
+      );
+    }
+    if (forceAlphaFormat && !seg.some((f) => f.startsWith("format=yuva420p"))) seg.push("format=yuva420p");
     // M27 fix: shift PTS so the segment's t equals its TRUE position in the
     // render window (enable windows and tpad-free overlays line up).
     const offsetSec = (plan.winStartFrame - renderStartFrame) / fps;
@@ -146,6 +183,28 @@ function emitVisualSegment(
     }
     const chain = ffmpegEffectChainAnimated(plan.clip.effects, b0, fpsR, fit);
     if (chain) sub.push(chain);
+    // M37: transform constants sampled at this segment's boundary (stepped
+    // export of animated scale/rotation/opacity — exact at keyframes), then a
+    // re-fit back to the sequence dims: a transform scale changes the segment
+    // size, and concat requires uniform inputs. Smaller → transparent pad
+    // (alpha preserved — content stays center-aligned exactly like the CSS
+    // scale-around-center); larger → center crop (the frame clips overflow,
+    // same as the preview). The canvas overlay then positions the W×H stream
+    // by the raw offset only (no centering compensation — see
+    // overlayPositionExprs' refitToSequence flag).
+    if (hasTransform) {
+      sub.push(...segmentTransformFilters(plan.clip, seq, b0, { exactRotation: false, tOffsetSec: 0 }));
+      const s = transformAt(plan.clip, plan.clip.timelineStartFrame + b0).scale;
+      if (Math.abs(s - 1) > 1e-9) {
+        if (s < 1) {
+          if (!sub.some((f) => f.startsWith("format=yuva420p"))) sub.push("format=yuva420p");
+          sub.push(`pad=${seq.width}:${seq.height}:(ow-iw)/2:(oh-ih)/2:color=black@0`);
+        } else {
+          sub.push(`crop=${seq.width}:${seq.height}:(iw-${seq.width})/2:(ih-${seq.height})/2`);
+        }
+      }
+    }
+    if (forceAlphaFormat && !sub.some((f) => f.startsWith("format=yuva420p"))) sub.push("format=yuva420p");
     const lab = `[sub${uid}${i}]`;
     subLabels.push(lab);
     parts.push(`${`[bs${uid}${i}]`}${sub.join(",")}${lab}`);
@@ -196,19 +255,26 @@ function visualSegmentFilters(plan: RenderClipPlan, seq: Sequence, isImage: bool
   return filters;
 }
 
-/** TransitionKind → ffmpeg xfade transition name; null = not exportable. */
+/** TransitionKind → ffmpeg xfade transition name; null = not exportable.
+ *  M37 parity: ZOOM_IN exports as the real `zoomin` xfade (verified present
+ *  on this ffmpeg build); FADE_FROM_BLACK maps to `fadeblack` (xfade has no
+ *  one-sided through-black between two clips — fadeblack IS the through-black
+ *  style, so both TO and FROM black render the through-black transition and
+ *  neither silently degrades to a plain dissolve). ZOOM_OUT remains
+ *  unexportable (no `zoomout` xfade exists) — it is skipped and disclosed
+ *  via the transition report, never faked. */
 const XFADE_KINDS: Record<string, string | null> = {
   CUT: null,
   CROSS_DISSOLVE: "fade",
   FADE_TO_BLACK: "fadeblack",
-  FADE_FROM_BLACK: "fade",
+  FADE_FROM_BLACK: "fadeblack",
   WIPE_LEFT: "wipeleft",
   WIPE_RIGHT: "wiperight",
   SLIDE_LEFT: "slideleft",
   SLIDE_RIGHT: "slideright",
   PUSH_LEFT: "pushleft",
   PUSH_RIGHT: "pushright",
-  ZOOM_IN: null,
+  ZOOM_IN: "zoomin",
   ZOOM_OUT: null,
 };
 
@@ -279,6 +345,7 @@ export function buildTimelineGraph(seq: Sequence, startFrame: number, endFrame: 
   {
     let segCounter = 0;
     let compCounter = 0;
+    let bgCounter = 0;
     const trackIds = [...new Set(visualPlans.map((p) => p.trackIndex))];
     for (const trackIndex of trackIds) {
       const trackPlans = visualPlans.filter((p) => p.trackIndex === trackIndex);
@@ -296,14 +363,37 @@ export function buildTimelineGraph(seq: Sequence, startFrame: number, endFrame: 
         }
       }
       for (const run of runs) {
+        // M37: a run containing ANY transformed clip renders ALL its clips
+        // through per-clip transparent canvases (alpha-consistent xfade
+        // inputs, exact per-clip position/opacity — measured graph design).
+        const runTransformed = run.plans.some((p) => clipHasTransform(p.clip));
         const labels: string[] = [];
         for (let i = 0; i < run.plans.length; i++) {
           const plan = run.plans[i];
           const input = assetInputs.get(plan.clip.sourceAssetId)!;
           const label = `[tseg${segCounter}]`;
-          emitVisualSegment(parts, plan, seq, input.index, input.isImage, label, `s${segCounter}`, startFrame);
+          emitVisualSegment(parts, plan, seq, input.index, input.isImage, label, `s${segCounter}`, startFrame, runTransformed);
           segCounter += 1;
-          labels.push(label);
+          let streamLabel = label;
+          if (runTransformed) {
+            // Position THIS clip on its own transparent canvas (window-
+            // relative clock — the canvas starts at t=0 of the render window
+            // and spans to the clip's window end; timestamps align by value).
+            const bg = `[tbg${bgCounter}]`;
+            const dSec = (plan.winEndFrame - startFrame) / fps;
+            parts.push(`color=c=black@0.0:s=${seq.width}x${seq.height}:r=${fps}:d=${q(Math.max(1 / fps, dSec))},setsar=1${bg}`);
+            // Split-path clips are re-fitted (pre-centered) — their position
+            // expression carries NO scale-centering compensation.
+            const tookSplitPath = computeSegmentSplits(plan, Math.max(0, plan.winStartFrame - plan.clip.timelineStartFrame), plan.winEndFrame - plan.winStartFrame).length > 0;
+            const pos = overlayPositionExprs(plan.clip, seq, fps, (plan.clip.timelineStartFrame - startFrame) / fps, tookSplitPath && clipHasTransform(plan.clip));
+            const out = `[tpos${bgCounter}]`;
+            const xy = pos.x ? `x='${pos.x}':` : "";
+            const yy = pos.y ? `y='${pos.y}':` : "";
+            parts.push(`${bg}${label}overlay=${xy}${yy}eof_action=pass${out}`);
+            bgCounter += 1;
+            streamLabel = out;
+          }
+          labels.push(streamLabel);
         }
         let runLabel = labels[0];
         for (let i = 1; i < labels.length; i++) {
@@ -337,8 +427,15 @@ export function buildTimelineGraph(seq: Sequence, startFrame: number, endFrame: 
     const en = (Math.min(clipEndFrame(seq, cap), endFrame) - startFrame) / fps;
     const style = cap.captionStyle;
     const yPos = style?.position === "TOP" ? "h*0.08" : style?.position === "CENTER" ? "(h-text_h)/2" : "h*0.86";
+    // M37: caption clip transform position offsets (composition px). Scale/
+    // rotation/opacity are not modeled for drawtext text yet — the preview
+    // caption box reflects position only, so the two paths agree.
+    const tx = cap.transform.x;
+    const ty = cap.transform.y;
+    const xExpr = Math.abs(tx) > 1e-9 ? `(w-text_w)/2+${q(tx)}` : "(w-text_w)/2";
+    const yExpr = Math.abs(ty) > 1e-9 ? `${yPos}+${q(ty)}` : yPos;
     parts.push(
-      `${videoLabel}drawtext=fontfile=${FALLBACK_FONT}:text='${escDrawtext(cap.captionText!)}':fontsize=${style?.fontSize ?? 48}:fontcolor=${(style?.color ?? "#FFFFFF").replace("#", "0x")}:x=(w-text_w)/2:y=${yPos}:enable='between(t\\,${q(st)}\\,${q(en)})'${videoLabel}`,
+      `${videoLabel}drawtext=fontfile=${FALLBACK_FONT}:text='${escDrawtext(cap.captionText!)}':fontsize=${style?.fontSize ?? 48}:fontcolor=${(style?.color ?? "#FFFFFF").replace("#", "0x")}:x=${xExpr}:y=${yExpr}:enable='between(t\\,${q(st)}\\,${q(en)})'${videoLabel}`,
     );
   }
 
@@ -415,8 +512,55 @@ export function buildTimelineGraph(seq: Sequence, startFrame: number, endFrame: 
   };
 }
 
+// ── M37: output formats ───────────────────────────────────────────────────────
+// The timeline renderer previously hardcoded MP4/H.264/AAC. The formats below
+// are additive and back-compatible: "mp4" (default) is byte-identical to the
+// old behavior; "mov" reuses the same H.264/AAC encoding inside Apple's
+// container (the ffmpeg mov muxer — +faststart applies to both); "wav" and
+// "mp3" are AUDIO-ONLY exports of the exact same mix graph (the video chains
+// exist in the graph but ffmpeg executes only chains that feed mapped
+// outputs, so unmapped video is never computed — no second renderer, no
+// second job queue; the same durable RENDER_TIMELINE job path is reused).
+
+export type RenderOutputFormat = "mp4" | "mov" | "wav" | "mp3";
+export const RENDER_OUTPUT_FORMATS: readonly RenderOutputFormat[] = ["mp4", "mov", "wav", "mp3"];
+
+export interface RenderOutputSpec {
+  /** File extension and ExportFile.format value. */
+  extension: string;
+  /** Audio-only exports map ONLY [mixout] and skip the video conformance gates. */
+  audioOnly: boolean;
+  /** Encoder arguments shared by the single-pass and windowed paths. */
+  encoderArgs: string[];
+}
+
+export function renderOutputSpec(format: RenderOutputFormat): RenderOutputSpec {
+  switch (format) {
+    case "mov":
+      return {
+        extension: "mov",
+        audioOnly: false,
+        encoderArgs: ["-c:v", "libx264", "-preset", "veryfast", "-crf", "20", "-pix_fmt", "yuv420p", "-threads", "2", "-x264-params", "rc-lookahead=10:ref=2", "-c:a", "aac", "-b:a", "192k", "-movflags", "+faststart"],
+      };
+    case "wav":
+      return { extension: "wav", audioOnly: true, encoderArgs: ["-vn", "-c:a", "pcm_s16le"] };
+    case "mp3":
+      return { extension: "mp3", audioOnly: true, encoderArgs: ["-vn", "-c:a", "libmp3lame", "-b:a", "320k"] };
+    case "mp4":
+    default:
+      return {
+        extension: "mp4",
+        audioOnly: false,
+        encoderArgs: ["-c:v", "libx264", "-preset", "veryfast", "-crf", "20", "-pix_fmt", "yuv420p", "-threads", "2", "-x264-params", "rc-lookahead=10:ref=2", "-c:a", "aac", "-b:a", "192k", "-movflags", "+faststart"],
+      };
+  }
+}
+
 export async function runTimelineRenderJob(job: { id: string; userId: string; paramsJson: string | null }): Promise<void> {
-  const params = (job.paramsJson ? JSON.parse(job.paramsJson) : {}) as { projectId?: string; startFrame?: number; endFrame?: number; reviewRevisionId?: string };
+  const params = (job.paramsJson ? JSON.parse(job.paramsJson) : {}) as { projectId?: string; startFrame?: number; endFrame?: number; reviewRevisionId?: string; format?: string };
+  const formatRaw = typeof params.format === "string" ? params.format.toLowerCase() : "mp4";
+  const format: RenderOutputFormat = (RENDER_OUTPUT_FORMATS as readonly string[]).includes(formatRaw) ? (formatRaw as RenderOutputFormat) : "mp4";
+  const spec = renderOutputSpec(format);
   const projectId = params.projectId ?? "";
   const project = await db.project.findUnique({ where: { id: projectId } });
   if (!project) throw new Error("Project not found for this user.");
@@ -477,7 +621,7 @@ export async function runTimelineRenderJob(job: { id: string; userId: string; pa
   }
 
   const transitionReport: TransitionPlanReport = { applied: [], skipped: [] };
-  const outPath = pathInsideMediaRoot("timeline-renders", `u_${job.userId}`, `seq_${projectId}_${Date.now().toString(36)}.mp4`);
+  const outPath = pathInsideMediaRoot("timeline-renders", `u_${job.userId}`, `seq_${projectId}_${Date.now().toString(36)}.${spec.extension}`);
   await mkdir(path.dirname(outPath), { recursive: true });
 
   // M20 §3: LONG-FORM WINDOWED DURABLE RENDERING. One giant filter_complex
@@ -491,7 +635,9 @@ export async function runTimelineRenderJob(job: { id: string; userId: string; pa
   const LONG_FORM_THRESHOLD_SEC = 240;
   const WINDOW_SEC = 60;
   const totalWindows = Math.ceil(totalSec / WINDOW_SEC);
-  if (totalSec > LONG_FORM_THRESHOLD_SEC) {
+  // M37: audio-only exports never window — the mix graph is light and the
+  // concat demuxer path for wav needs no lossless-stitching machinery.
+  if (!spec.audioOnly && totalSec > LONG_FORM_THRESHOLD_SEC) {
     const segPaths: string[] = [];
     let listPath: string | null = null;
     const cleanupTemp = async () => {
@@ -535,20 +681,16 @@ export async function runTimelineRenderJob(job: { id: string; userId: string; pa
       }
       const wReport = w === 0 ? transitionReport : { applied: [], skipped: [] };
       const wGraph = buildTimelineGraph(seq, windowStartFrame, windowEndFrame, used, wReport);
-      const segPath = pathInsideMediaRoot("timeline-renders", `u_${job.userId}`, `seg_${projectId}_${w}_${Date.now().toString(36)}.mp4`);
+      const segPath = pathInsideMediaRoot("timeline-renders", `u_${job.userId}`, `seg_${projectId}_${w}_${Date.now().toString(36)}.${spec.extension}`);
       segPaths.push(segPath);
       const winArgs = [
         "-y", "-loglevel", "error",
         ...winInputArgs,
         "-filter_complex", wGraph.filterComplex,
         "-map", wGraph.videoLabel, "-map", "[mixout]",
-        "-c:v", "libx264", "-preset", "veryfast", "-crf", "20", "-pix_fmt", "yuv420p",
-        // M20 §3: bounded-memory encode on small hosts — cap x264 threads and
-        // lookahead so a window's RSS stays well under the OOM line even when
-        // the host also runs the app server (observed: default thread/lookahead
-        // auto-sizing pushed the 4GB container into global OOM).
-        "-threads", "2", "-x264-params", "rc-lookahead=10:ref=2",
-        "-c:a", "aac", "-b:a", "192k",
+        // M37: the encoder caps moved into renderOutputSpec (shared with the
+        // single-pass path — identical settings, so stream-copy concat holds).
+        ...spec.encoderArgs,
         "-t", q(winSec),
         segPath,
       ];
@@ -583,7 +725,8 @@ export async function runTimelineRenderJob(job: { id: string; userId: string; pa
     });
     // Register the assembled output (validation happens below via the shared path).
     const probe = await probeMediaDeep(outPath);
-    if (!probe.hasVideo) throw new Error("Rendered file has no video stream — rejected.");
+    // M37: video conformance gates apply to video formats only.
+    if (!spec.audioOnly && !probe.hasVideo) throw new Error("Rendered file has no video stream — rejected.");
     // M28: conformance gates before publication — a successful ffmpeg exit
     // alone is not evidence of a valid output. Duration must track the window
     // (tolerance max(0.5s, 2%) for container rounding); dimensions must equal
@@ -591,7 +734,7 @@ export async function runTimelineRenderJob(job: { id: string; userId: string; pa
     if (probe.durationSec !== null && Math.abs(probe.durationSec - totalSec) > Math.max(0.5, totalSec * 0.02)) {
       throw new Error(`Rendered duration ${probe.durationSec.toFixed(2)}s does not match the requested window ${totalSec.toFixed(2)}s — output rejected, retry the render.`);
     }
-    if (probe.width && probe.height && (probe.width !== seq.width || probe.height !== seq.height)) {
+    if (!spec.audioOnly && probe.width && probe.height && (probe.width !== seq.width || probe.height !== seq.height)) {
       throw new Error(`Rendered dimensions ${probe.width}×${probe.height} do not match the sequence fit ${seq.width}×${seq.height} — output rejected.`);
     }
     const st = await stat(outPath);
@@ -599,7 +742,7 @@ export async function runTimelineRenderJob(job: { id: string; userId: string; pa
       data: {
         userId: job.userId,
         kind: "TIMELINE_RENDER",
-        format: "mp4",
+        format: format,
         filename: path.basename(outPath),
         storagePath: outPath,
         sizeBytes: st.size,
@@ -614,6 +757,7 @@ export async function runTimelineRenderJob(job: { id: string; userId: string; pa
           fps: `${seq.fps.num}/${seq.fps.den}`,
           windowed: true,
           windows: segPaths.length,
+          format,
           transitions: { applied: transitionReport.applied, skipped: transitionReport.skipped },
         }),
       },
@@ -627,16 +771,15 @@ export async function runTimelineRenderJob(job: { id: string; userId: string; pa
   }
 
   const graph = buildTimelineGraph(seq, startFrame, endFrame, used, transitionReport);
+  // M37: audio-only formats map ONLY the mix — unmapped video chains are not
+  // executed by ffmpeg (it computes only chains feeding mapped outputs).
+  const mapArgs = spec.audioOnly ? ["-map", "[mixout]"] : ["-map", graph.videoLabel, "-map", "[mixout]"];
   const args = [
     "-y", "-loglevel", "error",
     ...inputArgs,
     "-filter_complex", graph.filterComplex,
-    "-map", graph.videoLabel, "-map", "[mixout]",
-    "-c:v", "libx264", "-preset", "veryfast", "-crf", "20", "-pix_fmt", "yuv420p",
-    // M20 §3: same bounded-memory encode caps as the long-form windows.
-    "-threads", "2", "-x264-params", "rc-lookahead=10:ref=2",
-    "-c:a", "aac", "-b:a", "192k",
-    "-movflags", "+faststart",
+    ...mapArgs,
+    ...spec.encoderArgs,
     "-t", q(totalSec),
     outPath,
   ];
@@ -648,13 +791,14 @@ export async function runTimelineRenderJob(job: { id: string; userId: string; pa
     onDone: async () => {
       // Validate the REAL output before registering it.
       const probe = await probeMediaDeep(outPath);
-      if (!probe.hasVideo) throw new Error("Rendered file has no video stream — rejected.");
+      if (!spec.audioOnly && !probe.hasVideo) throw new Error("Rendered file has no video stream — rejected.");
+      if (spec.audioOnly && !probe.hasAudio) throw new Error("Rendered audio file has no audio stream — rejected.");
       const st = await stat(outPath);
       const exportRow = await db.exportFile.create({
         data: {
           userId: job.userId,
           kind: "TIMELINE_RENDER",
-          format: "mp4",
+          format: format,
           filename: path.basename(outPath),
           storagePath: outPath,
           sizeBytes: st.size,
@@ -667,6 +811,7 @@ export async function runTimelineRenderJob(job: { id: string; userId: string; pa
             width: seq.width,
             height: seq.height,
             fps: seq.fps,
+            format,
             segments: { video: graph.videoPlanCount, audio: graph.audioPlanCount, skippedMissing: graph.skippedMissing },
             transitions: { applied: transitionReport.applied, skipped: transitionReport.skipped },
           }),

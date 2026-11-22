@@ -30,6 +30,7 @@ import type { Rational } from "@/lib/editor/time";
 import { PlaybackController, publishFrame, subscribeFrame } from "@/lib/editor/playback";
 import { AudioPreviewMixer, setActiveMixer } from "@/lib/editor/audio-mixer";
 import { cssEffectFilter, cssEffectFilterAt } from "@/lib/editor/filters";
+import { cssTransformStyle, transformAt } from "@/lib/editor/transform";
 import { volumeAutomationAt } from "@/lib/editor/audio";
 import { unsupportedCodecMessage } from "@/lib/editor/codec-support";
 import { CompositionCanvas } from "@/components/bean/editor/composition-canvas";
@@ -52,6 +53,13 @@ function nextClipOnTrack(sequence: Sequence, clipId: string) {
   );
 }
 
+/**
+ * M37 — transition PREVIEW with per-kind geometry: the preview now mirrors
+ * what the export's xfade actually renders per kind (wipe/slide/push/zoom
+ * move the INCOMING frame; fadeblack ramps THROUGH black; ZOOM_OUT exports
+ * as a straight cut — xfade has no zoomout — so the preview honestly shows
+ * the cut too, never a transition the export will skip).
+ */
 function paintTransitionLayer(ctx: CanvasRenderingContext2D, seq: Sequence, frame: number, slots: (HTMLVideoElement | null)[]): boolean {
   let painted = false;
   for (const t of seq.transitions) {
@@ -61,20 +69,66 @@ function paintTransitionLayer(ctx: CanvasRenderingContext2D, seq: Sequence, fram
     if (!a || !b || a.trackId !== b.trackId || b.timelineStartFrame !== a.timelineStartFrame + a.timelineDurationFrames) continue;
     const track = seq.tracks.find((tr) => tr.id === b.trackId);
     if (!track || (track.kind !== "VIDEO" && track.kind !== "OVERLAY") || !track.visible) continue;
+    if (t.kind === "CUT" || t.kind === "ZOOM_OUT") continue; // export renders a straight cut for these — preview agrees
     // The incoming clip must be the PRELOADED idle element (adjacent-next).
     const incomingAssetId = b.sourceAssetId;
     const incoming = slots.find((el) => el && el.dataset.asset === incomingAssetId && !el.className.includes("hidden"));
     const active = slots.find((el) => el && el.className.includes("max-h-full"));
     if (!incoming || incoming === active || incoming.readyState < 2) continue;
-    const alpha = (frame - t.startFrame + 1) / Math.max(1, t.endFrame - t.startFrame);
+    const W = ctx.canvas.width;
+    const H = ctx.canvas.height;
+    const alpha = Math.min(1, Math.max(0, (frame - t.startFrame + 1) / Math.max(1, t.endFrame - t.startFrame)));
     try {
       ctx.save();
-      ctx.globalAlpha = Math.min(1, Math.max(0, alpha));
-      ctx.drawImage(incoming, 0, 0, ctx.canvas.width, ctx.canvas.height);
+      switch (t.kind) {
+        case "WIPE_LEFT": // incoming revealed left→right (xfade wipeleft)
+          ctx.beginPath();
+          ctx.rect(0, 0, W * alpha, H);
+          ctx.clip();
+          ctx.drawImage(incoming, 0, 0, W, H);
+          break;
+        case "WIPE_RIGHT":
+          ctx.beginPath();
+          ctx.rect(W - W * alpha, 0, W * alpha, H);
+          ctx.clip();
+          ctx.drawImage(incoming, 0, 0, W, H);
+          break;
+        case "SLIDE_LEFT": // incoming slides in from the right (xfade slideleft)
+        case "PUSH_LEFT": // push approximation: incoming edge advances across the outgoing
+          ctx.drawImage(incoming, W * (1 - alpha), 0, W, H);
+          break;
+        case "SLIDE_RIGHT":
+        case "PUSH_RIGHT":
+          ctx.drawImage(incoming, -W * (1 - alpha), 0, W, H);
+          break;
+        case "ZOOM_IN": // incoming grows from the center (xfade zoomin)
+        {
+          const s = 0.3 + 0.7 * alpha;
+          const w = W * s;
+          const h = H * s;
+          ctx.globalAlpha = alpha;
+          ctx.drawImage(incoming, (W - w) / 2, (H - h) / 2, w, h);
+          break;
+        }
+        case "FADE_TO_BLACK": // through-black ramp (xfade fadeblack)
+        case "FADE_FROM_BLACK":
+          if (alpha < 0.5) {
+            ctx.fillStyle = `rgba(0,0,0,${(alpha * 2).toFixed(3)})`;
+            ctx.fillRect(0, 0, W, H);
+          } else {
+            ctx.globalAlpha = (alpha - 0.5) * 2;
+            ctx.drawImage(incoming, 0, 0, W, H);
+          }
+          break;
+        default: // CROSS_DISSOLVE — alpha ramp (xfade fade)
+          ctx.globalAlpha = alpha;
+          ctx.drawImage(incoming, 0, 0, W, H);
+      }
       ctx.restore();
       painted = true;
     } catch {
       // decode not ready — the straight cut remains visible (honest degradation)
+      ctx.restore();
     }
   }
   return painted;
@@ -307,17 +361,77 @@ export function ProgramMonitor({
   // M17 §7: before/after comparison — hold the COMPARE button to bypass the
   // preview filter (the export chain is unchanged; this is preview-only).
   const [comparing, setComparing] = useState(false);
-  // Visibility + filter for the ACTIVE pool element (imperative, but driven
-  // by real state changes — asset swaps and effect edits — not per-frame).
+  // M37 — clip transform preview: position/scale/rotation/opacity (static or
+  // keyframed) evaluated at the CURRENT playhead through the SAME shared
+  // module the export path uses (lib/editor/transform.ts — parity by
+  // construction). x/y are composition pixels scaled by the element's
+  // contain-fit factor so the preview tracks the sequence coordinates.
+  const previewTransform = useMemo(() => {
+    if (!activeVideo) return null;
+    return transformAt(activeVideo.clip, playhead);
+  }, [activeVideo, playhead]);
+  // Image assets fit the frame differently than video elements — their display
+  // factor is measured from the <img> itself and kept in state (a render-time
+  // ref read would violate the react-compiler rules).
+  const [imageDisplayScale, setImageDisplayScale] = useState(1);
+  const imageTransformStyle = previewTransform ? cssTransformStyle(previewTransform, imageDisplayScale) : null;
+  const displayScaleRef = useRef(1);
+  const measureDisplayScale = useCallback(() => {
+    if (!sequence) return;
+    const el = [videoARef.current, videoBRef.current].find((v) => v && !v.className.includes("hidden")) ?? videoARef.current;
+    if (!el) return;
+    const rect = el.getBoundingClientRect();
+    if (rect.width > 0 && rect.height > 0) {
+      displayScaleRef.current = Math.min(rect.width / sequence.width, rect.height / sequence.height);
+    }
+  }, [sequence]);
+  // Visibility + filter + transform for the ACTIVE pool element (imperative,
+  // but driven by real state changes — asset swaps and effect/transform edits
+  // — not per-frame; per-frame animation rides the frame bus below).
   useEffect(() => {
     const slots = [videoARef.current, videoBRef.current];
+    measureDisplayScale();
+    const activeTransform = previewTransform ? cssTransformStyle(previewTransform, displayScaleRef.current) : null;
     for (const el of slots) {
       if (!el) continue;
       const isActive = el.dataset.asset === activeAssetId && activeAssetId !== null && !isImageAsset;
       el.className = isActive ? "max-h-full max-w-full" : "hidden";
       el.style.filter = isActive && !comparing ? previewFilter ?? "" : "";
+      // M37: clip transform (the export chain applies the same order:
+      // rotate → scale → translate, so preview and export agree).
+      if (isActive && activeTransform) {
+        el.style.transform = activeTransform.transform ?? "";
+        el.style.opacity = activeTransform.opacity ?? "";
+      } else {
+        el.style.transform = "";
+        el.style.opacity = "";
+      }
     }
-  }, [activeAssetId, isImageAsset, previewFilter, comparing]);
+  }, [activeAssetId, isImageAsset, previewFilter, comparing, previewTransform, measureDisplayScale]);
+  // M37: display size changes (window resize) re-measure the composition→
+  // display factor; settled transforms re-apply on the next React pass.
+  useEffect(() => {
+    const onResize = () => measureDisplayScale();
+    window.addEventListener("resize", onResize);
+    return () => window.removeEventListener("resize", onResize);
+  }, [measureDisplayScale]);
+  // M37: keyframed transforms animate during PLAYBACK via the frame bus —
+  // React re-renders are transport-level only, so the per-frame picture here
+  // is imperative (same pattern as the NIIKI canvas painter above).
+  useEffect(() => {
+    return subscribeFrame((frame) => {
+      const seq = seqRef.current;
+      if (!seq) return;
+      const active = activeVideoClipAt(seq, frame);
+      if (!active) return;
+      const t = cssTransformStyle(transformAt(active.clip, frame), displayScaleRef.current);
+      for (const el of [videoARef.current, videoBRef.current]) {
+        if (!el || el.className.includes("hidden")) continue;
+        el.style.transform = t.transform ?? "";
+        el.style.opacity = t.opacity ?? "";
+      }
+    });
+  }, []);
 
   // ---- double-buffered video element driver --------------------------------
   // Which pool slot is active. Effect deps intentionally coarse: the driver
@@ -516,9 +630,29 @@ export function ProgramMonitor({
         <video ref={videoARef} playsInline preload="auto" className="hidden" onEnded={() => onPlayingChange(false)} onError={() => onDecodeError?.(decodeErrorMessage ?? "Video decode error — the source may be unsupported or corrupted.")} />
         <video ref={videoBRef} playsInline preload="auto" className="hidden" onEnded={() => onPlayingChange(false)} onError={() => onDecodeError?.(decodeErrorMessage ?? "Video decode error — the source may be unsupported or corrupted.")} />
         {/* IMAGE assets are stills on VIDEO tracks — rendered as an <img>,
-            never fed to the <video> decoder. Same preview filter chain. */}
-        {isImageAsset && videoAssetId && (
-          <img src={api.mediaUrl(videoAssetId)} alt="" className="max-h-full max-w-full object-contain" style={{ filter: previewFilter ?? "" }} />
+            never fed to the <video> decoder. Same preview filter + transform
+            chains (M37: transform uses the same shared evaluator; the
+            contain-fit display factor is measured from the img itself —
+            state, not a render-time ref read). */}
+        {isImageAsset && videoAssetId && activeVideo && (
+          <img
+            ref={(el) => {
+              if (!el || !sequence) return;
+              const rect = el.getBoundingClientRect();
+              if (rect.width > 0 && rect.height > 0) {
+                const s = Math.min(rect.width / sequence.width, rect.height / sequence.height);
+                setImageDisplayScale((prev) => (Math.abs(prev - s) > 0.01 ? s : prev));
+              }
+            }}
+            src={api.mediaUrl(videoAssetId)}
+            alt=""
+            className="max-h-full max-w-full object-contain"
+            style={{
+              filter: previewFilter ?? "",
+              transform: imageTransformStyle?.transform ?? undefined,
+              opacity: imageTransformStyle?.opacity ?? undefined,
+            }}
+          />
         )}
         {/* NIIKI motion graphics canvas (per-frame bus painting above). */}
         {sequence && (

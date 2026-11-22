@@ -242,6 +242,37 @@ export const FILTER_EFFECTS: FilterEffectSpec[] = [
     css: () => `grayscale(1)`,
     param: { key: "value", min: 0, max: 1, step: 1, default: 1 },
   },
+  // ── M37: previously schema-valid DEAD effects (accepted by the model and by
+  // AI proposals but mapped nowhere — silent no-ops). Now real on BOTH paths,
+  // registered LAST so flips apply after color work and alpha applies last
+  // (CSS filter lists and FFmpeg chains are generated in the same order).
+  {
+    type: "flipH",
+    label: "Flip horizontal",
+    group: "transform",
+    ffmpeg: () => `hflip`,
+    css: () => `scaleX(-1)`,
+    param: { key: "value", min: 0, max: 1, step: 1, default: 1 },
+  },
+  {
+    type: "flipV",
+    label: "Flip vertical",
+    group: "transform",
+    ffmpeg: () => `vflip`,
+    css: () => `scaleY(-1)`,
+    param: { key: "value", min: 0, max: 1, step: 1, default: 1 },
+  },
+  {
+    type: "opacity",
+    label: "Opacity",
+    group: "transform",
+    // Alpha LAST on both paths: CSS opacity() on the element, FFmpeg alpha
+    // scale on the segment stream before compositing. Stacks multiplicatively
+    // with the clip's transform.opacity (separate controls, same stage).
+    ffmpeg: (p) => `format=yuva420p,colorchannelmixer=aa=${Math.max(0, Math.min(1, num(p, "value", 1))).toFixed(4)}`,
+    css: (p) => `opacity(${Math.max(0, Math.min(1, num(p, "value", 1))).toFixed(4)})`,
+    param: { key: "value", min: 0, max: 1, step: 0.05, default: 1 },
+  },
 ];
 
 /** Effects that are audio-only (never in the visual filter chain). */
