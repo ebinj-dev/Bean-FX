@@ -202,9 +202,13 @@ async function recoverStaleClaims(): Promise<void> {
       // OOM). With renders serialized globally, killing the orphan encoders
       // before requeueing is safe — nothing else is rendering.
       if (job.type === JOB_TYPE_RENDER_TIMELINE) {
+        // M37 fix: scoped orphan kill. The old host-wide `pkill -9 ffmpeg`
+        // also murdered live proxy/variant/composition encoders owned by
+        // OTHER jobs. Each spawn now records a per-job pidfile; recovery
+        // kills only the verified PID of THIS job (never other encoders).
         try {
-          const { execSync } = await import("child_process");
-          execSync("pkill -9 ffmpeg || true", { timeout: 5_000 });
+          const { killOrphanFfmpegForJob } = await import("@/lib/job-runner");
+          await killOrphanFfmpegForJob(job.id);
         } catch { /* best effort — no orphan to kill, or kill not permitted */ }
       }
       const resumed = await db.job.updateMany({

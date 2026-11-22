@@ -216,6 +216,18 @@ export function ClipInspector({
             className={sliderClass}
           />
         </label>
+        <label className="flex flex-col gap-1">
+          ROTATION (°)
+          <input
+            type="range"
+            min={-180}
+            max={180}
+            step={1}
+            value={clip.transform.rotation}
+            onChange={(e) => applyProps({ transform: { ...clip.transform, rotation: Number(e.target.value) } })}
+            className={sliderClass}
+          />
+        </label>
       </div>
 
       {/* Caption editing for caption clips */}

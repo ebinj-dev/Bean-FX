@@ -313,8 +313,12 @@ export function EditorTool({ user }: { user: { id: string }; onLogout: () => voi
         e.preventDefault();
         step(e.shiftKey ? 12 : 1);
       } else if ((e.key === "s" || e.key === "S") && !e.metaKey && !e.ctrlKey) {
-        if (snap) setSnap(false);
-        else splitAtPlayhead();
+        // M37 fix: S always splits (razor semantics — S previously toggled
+        // snapping OFF instead of splitting whenever snap was enabled, so the
+        // razor was unreachable with snap on). Snapping keeps its toolbar
+        // toggle; Shift+S also splits (no accidental double action).
+        e.preventDefault();
+        splitAtPlayhead();
       } else if (e.key === "Delete" || e.key === "Backspace") {
         e.preventDefault();
         deleteSelection(false);
@@ -635,6 +639,9 @@ function TimelineRenderPanel({ projectId, onNotice }: { projectId: string; onNot
   const [rangeMode, setRangeMode] = useState<"full" | "preview" | "custom">("full");
   const [startSec, setStartSec] = useState("0");
   const [endSec, setEndSec] = useState("");
+  // M37 — real output formats: one durable RENDER_TIMELINE job, one FFmpeg
+  // pipeline; mp4/mov/wav/mp3 select container+codecs (no second renderer).
+  const [format, setFormat] = useState<"mp4" | "mov" | "wav" | "mp3">("mp4");
   const load = useCallback(() => {
     fetch(`/api/editor/projects/${projectId}/render`).then((r) => r.json()).then((d) => setState(d)).catch(() => undefined);
   }, [projectId]);
@@ -646,7 +653,7 @@ function TimelineRenderPanel({ projectId, onNotice }: { projectId: string; onNot
   const render = async (range?: { startFrame?: number; endFrame?: number }) => {
     setBusy(true);
     try {
-      const res = await fetch(`/api/editor/projects/${projectId}/render`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(range ?? {}) });
+      const res = await fetch(`/api/editor/projects/${projectId}/render`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ...(range ?? {}), format }) });
       const body = (await res.json()) as { jobId?: string; error?: string; code?: string };
       if (body.jobId) onNotice(`Render job queued — ${body.jobId}`);
       else onNotice(body.error ?? "Render enqueue failed.");
@@ -690,6 +697,14 @@ function TimelineRenderPanel({ projectId, onNotice }: { projectId: string; onNot
             <input aria-label="Range end seconds" value={endSec} onChange={(e) => setEndSec(e.target.value.replace(/[^0-9.]/g, "").slice(0, 8))} className="w-14 rounded border border-[#2a2a2a] bg-[#111110] px-1 py-0.5 text-[9px] text-[#d4d4d0]" placeholder="end s" />
           </span>
         )}
+        {/* M37 — output format (real backend formats through the same pipeline). */}
+        <span className="ml-auto flex items-center gap-1">
+          {(["mp4", "mov", "wav", "mp3"] as const).map((f) => (
+            <button key={f} type="button" onClick={() => setFormat(f)} className={`rounded border px-1.5 py-0.5 uppercase ${format === f ? "border-[#d4a017] text-[#d4a017]" : "border-[#2a2a2a] text-[#d8d8d2] hover:border-[#d4a017]"}`}>
+              {f}
+            </button>
+          ))}
+        </span>
       </div>
       <p className="mb-2 text-[9px] leading-relaxed text-[#6a6a64]">
         Renders the CURRENT sequence: every visual clip (effects, fades), captions, graphics and the full audio mix through the durable worker; output validated with FFprobe before it appears below.

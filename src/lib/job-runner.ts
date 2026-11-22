@@ -1,6 +1,42 @@
 import { spawn, ChildProcess } from "child_process";
+import { mkdirSync, readFileSync, rmSync, writeFileSync } from "fs";
+import path from "path";
 import { db } from "@/lib/db";
+import { MEDIA_ROOT } from "@/lib/media-storage";
 import type { JobStatus } from "@/lib/types";
+
+// ── M37: scoped orphan recovery ─────────────────────────────────────────────
+// The stale-claim recovery path previously ran a host-wide `pkill -9 ffmpeg`,
+// which also killed live proxy/variant/composition encoders owned by OTHER
+// jobs. Instead, every spawned ffmpeg records its PID in a per-job pidfile;
+// recovery kills ONLY that verified PID (its /proc cmdline must still be
+// ffmpeg — no PID-reuse collateral). Cross-process safe, no schema change.
+export function ffmpegPidFile(jobId: string): string {
+  return path.join(MEDIA_ROOT, "tmp", `ffmpeg-${jobId}.pid`);
+}
+
+/** Kill the orphaned ffmpeg recorded for this job, if any. Returns true when
+ *  a live ffmpeg process was actually killed. */
+export async function killOrphanFfmpegForJob(jobId: string): Promise<boolean> {
+  const file = ffmpegPidFile(jobId);
+  let raw: string;
+  try {
+    raw = readFileSync(file, "utf8").trim();
+  } catch {
+    return false; // no pidfile — the encoder already settled or never started
+  }
+  rmSync(file, { force: true });
+  const pid = Number(raw);
+  if (!Number.isInteger(pid) || pid <= 1) return false;
+  try {
+    const cmdline = await (await import("fs/promises")).readFile(`/proc/${pid}/cmdline`, "utf8").catch(() => "");
+    if (!cmdline || !cmdline.includes("ffmpeg")) return false; // PID reused by an unrelated process
+    process.kill(pid, "SIGKILL");
+    return true;
+  } catch {
+    return false; // already gone, or not permitted — never escalate to pkill
+  }
+}
 
 interface ActiveJob {
   child: ChildProcess;
@@ -94,6 +130,13 @@ export class JobManager {
         stdio: ["ignore", "pipe", "pipe"],
       });
       this.active.set(jobId, { child, cancelled: false });
+      if (child.pid) {
+        try {
+          const pidFile = ffmpegPidFile(jobId);
+          mkdirSync(path.dirname(pidFile), { recursive: true });
+          writeFileSync(pidFile, String(child.pid));
+        } catch { /* best effort — recovery falls back to "no orphan known" */ }
+      }
 
       let stderrBuf = "";
       let lastUpdate = 0;
@@ -123,6 +166,7 @@ export class JobManager {
 
       child.on("close", (code, signal) => {
         void (async () => {
+          try { rmSync(ffmpegPidFile(jobId), { force: true }); } catch { /* best effort */ }
           const entry = this.active.get(jobId);
           const timedOut = entry?.timedOut === true;
           // M18 §6 fix: a SIGKILL the user did not request is almost always the
