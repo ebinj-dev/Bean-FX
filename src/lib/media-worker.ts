@@ -550,7 +550,14 @@ async function runProjectImportJob(job: { id: string; userId: string; paramsJson
       data: {
         status: "COMPLETED", progress: 100, stage: `Imported as "${result.projectName}"`,
         projectId: result.projectId, assetCount: result.assetsCreated + result.assetsReused,
-        manifestJson: JSON.stringify({ result: { assetsCreated: result.assetsCreated, assetsReused: result.assetsReused, versionsRestored: result.versionsRestored, clipsRestored: result.clipsRestored } }),
+        manifestJson: JSON.stringify({
+          result: { assetsCreated: result.assetsCreated, assetsReused: result.assetsReused, versionsRestored: result.versionsRestored, clipsRestored: result.clipsRestored },
+          // M40 §6 — validated by planImport before restore: the package's
+          // export range metadata (identity + range audit trail) survives the
+          // import on the archive record. No ExportFile rows are created —
+          // outputs are not imported, only their audit metadata is preserved.
+          exports: plan.manifest.exports ?? null,
+        }),
       },
     });
     // The staged zip is disposable once the import completes atomically.
