@@ -645,7 +645,12 @@ function TimelineRenderPanel({ projectId, onNotice }: { projectId: string; onNot
   // POST; two or more submit a real BATCH (independent RENDER_TIMELINE jobs
   // via /render/batch — same job type, same graph, same validation).
   const [formats, setFormats] = useState<Set<"mp4" | "mov" | "wav" | "mp3">>(new Set(["mp4"]));
-  const [batch, setBatch] = useState<{ items: Array<{ format: string; jobId: string; status: string; progress: number; stage: string | null; export: { id: string; filename: string; sizeBytes: number } | null }>; batch: { total: number; completed: number; failed: number; cancelled: number; active: number; batchComplete: boolean; allSucceeded: boolean } } | null>(null);
+  // M39 §7 — per-item timeline ranges: each selected format may carry its own
+  // start/end seconds (blank = full timeline for that item). Off = the M38
+  // common range applies to every item (unchanged default).
+  const [perItemRanges, setPerItemRanges] = useState(false);
+  const [itemRangeSec, setItemRangeSec] = useState<Record<string, { start: string; end: string }>>({});
+  const [batch, setBatch] = useState<{ items: Array<{ format: string; jobId: string; status: string; progress: number; stage: string | null; range?: { startFrame?: number; endFrame?: number } | null; export: { id: string; filename: string; sizeBytes: number } | null }>; batch: { total: number; completed: number; failed: number; cancelled: number; active: number; batchComplete: boolean; allSucceeded: boolean } } | null>(null);
   const toggleFormat = (f: "mp4" | "mov" | "wav" | "mp3") => {
     setFormats((prev) => {
       const next = new Set(prev);
@@ -664,6 +669,15 @@ function TimelineRenderPanel({ projectId, onNotice }: { projectId: string; onNot
     const id = window.setInterval(load, 3000);
     return () => window.clearInterval(id);
   }, [load]);
+  /** M39 §7 — one selected format's own range, in frames (blank = full). */
+  const itemRangeFrames = (f: string): { startFrame?: number; endFrame?: number } => {
+    if (!perItemRanges) return {};
+    const r = itemRangeSec[f];
+    if (!r) return {};
+    const st = Math.max(0, Math.round((Number(r.start) || 0) * 30));
+    const en = r.end ? Math.max(st + 1, Math.round(Number(r.end) * 30)) : undefined;
+    return en ? { startFrame: st, endFrame: en } : st > 0 ? { startFrame: st } : {};
+  };
   const render = async (range?: { startFrame?: number; endFrame?: number }) => {
     setBusy(true);
     try {
@@ -677,7 +691,10 @@ function TimelineRenderPanel({ projectId, onNotice }: { projectId: string; onNot
       } else {
         // M38 batch: one durable RENDER_TIMELINE job per format, per-item
         // validation and duplicate protection on the server.
-        const res = await fetch(`/api/editor/projects/${projectId}/render/batch`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ...(range ?? {}), formats: selected }) });
+        // M39 §7 — with per-item ranges on, each item submits its OWN range
+        // (`items` form); off, the M38 common-range form is preserved.
+        const bodyRequest = perItemRanges ? { items: selected.map((f) => ({ format: f, ...itemRangeFrames(f) })) } : { ...(range ?? {}), formats: selected };
+        const res = await fetch(`/api/editor/projects/${projectId}/render/batch`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(bodyRequest) });
         const body = (await res.json()) as { batch?: Array<{ format: string; jobId: string; reused: boolean }>; error?: string };
         if (res.ok && body.batch) {
           const fresh = body.batch.filter((b) => !b.reused).map((b) => b.format);
@@ -691,11 +708,14 @@ function TimelineRenderPanel({ projectId, onNotice }: { projectId: string; onNot
     }
   };
   /** M38 — retry an eligible failed/cancelled batch item by re-submitting
-   *  only that format (FAILED items are outside the dedup reuse set). */
-  const retryFormat = async (format: string) => {
+   *  only that format (FAILED items are outside the dedup reuse set).
+   *  M39 §7 — the item's own range is preserved on retry (previously a
+   *  ranged item would have re-rendered the full timeline). */
+  const retryFormat = async (format: string, itemRange?: { startFrame?: number; endFrame?: number } | null) => {
     setBusy(true);
     try {
-      const res = await fetch(`/api/editor/projects/${projectId}/render/batch`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ formats: [format] }) });
+      const ranged = itemRange && (itemRange.startFrame !== undefined || itemRange.endFrame !== undefined);
+      const res = await fetch(`/api/editor/projects/${projectId}/render/batch`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(ranged ? { formats: [format], ...itemRange } : { formats: [format] }) });
       onNotice(res.ok ? `Re-queued ${format.toUpperCase()} export.` : "Retry refused.");
       load();
     } finally {
@@ -746,6 +766,13 @@ function TimelineRenderPanel({ projectId, onNotice }: { projectId: string; onNot
             <input aria-label="Range end seconds" value={endSec} onChange={(e) => setEndSec(e.target.value.replace(/[^0-9.]/g, "").slice(0, 8))} className="w-14 rounded border border-[#2a2a2a] bg-[#111110] px-1 py-0.5 text-[9px] text-[#d4d4d0]" placeholder="end s" />
           </span>
         )}
+        {/* M39 §7 — per-item ranges: each selected format gets its own
+            start/end; blank inputs mean that item renders the full timeline. */}
+        {formats.size > 1 && (
+          <button type="button" onClick={() => setPerItemRanges((v) => !v)} className={`rounded border px-1.5 py-0.5 ${perItemRanges ? "border-[#d4a017] text-[#d4a017]" : "border-[#2a2a2a] text-[#d8d8d2] hover:border-[#d4a017]"}`} title="Give each selected format its own range (blank = full timeline)">
+            PER-ITEM RANGES
+          </button>
+        )}
         {/* M37/M38 — output formats: multi-select. One selected = the M37
             single export; 2+ = a real batch of independent durable jobs.
             Audio formats (wav/mp3) render the same mix audio-only — the media
@@ -758,6 +785,25 @@ function TimelineRenderPanel({ projectId, onNotice }: { projectId: string; onNot
           ))}
         </span>
       </div>
+      {/* M39 §7 — per-item range inputs (seconds, 30 fps convention shared
+          with the common custom range). Shown only for real batches. */}
+      {perItemRanges && formats.size > 1 && (
+        <div className="mb-2 grid gap-1">
+          {[...formats].map((f) => {
+            const r = itemRangeSec[f] ?? { start: "", end: "" };
+            const upd = (k: "start" | "end", v: string) => setItemRangeSec((prev) => ({ ...prev, [f]: { ...r, [k]: v } }));
+            return (
+              <span key={f} className="flex items-center gap-1 text-[9px] text-[#8f8f8a]">
+                <span className="w-8 font-mono uppercase text-[#d4a017]">{f}</span>
+                <input aria-label={`${f} range start seconds`} value={r.start} onChange={(e) => upd("start", e.target.value.replace(/[^0-9.]/g, "").slice(0, 8))} className="w-14 rounded border border-[#2a2a2a] bg-[#111110] px-1 py-0.5 text-[9px] text-[#d4d4d0]" placeholder="start s" />
+                <span>→</span>
+                <input aria-label={`${f} range end seconds`} value={r.end} onChange={(e) => upd("end", e.target.value.replace(/[^0-9.]/g, "").slice(0, 8))} className="w-14 rounded border border-[#2a2a2a] bg-[#111110] px-1 py-0.5 text-[9px] text-[#d4d4d0]" placeholder="end s" />
+                <span className="text-[#6a6a64]">blank = full timeline</span>
+              </span>
+            );
+          })}
+        </div>
+      )}
       <p className="mb-2 text-[9px] leading-relaxed text-[#6a6a64]">
         Renders the CURRENT sequence: every visual clip (effects, fades), captions, graphics and the full audio mix through the durable worker; output validated with FFprobe before it appears below.
       </p>
@@ -799,6 +845,10 @@ function TimelineRenderPanel({ projectId, onNotice }: { projectId: string; onNot
             <div key={it.jobId} className="mt-1 rounded bg-[#111110] px-2 py-1.5 text-[10px]">
               <div className="flex items-center justify-between gap-2">
                 <span className="font-mono text-[9px] uppercase text-[#d4a017]">{it.format}</span>
+                {/* M39 §7 — visible per-item range (frames; absent = full). */}
+                {it.range && (it.range.startFrame !== undefined || it.range.endFrame !== undefined) && (
+                  <span className="font-mono text-[9px] text-[#7a7a76]">{it.range.startFrame ?? 0}–{it.range.endFrame ?? "end"}f</span>
+                )}
                 <span className={it.status === "COMPLETED" ? "text-[#4cc47f]" : it.status === "FAILED" ? "text-[#c45c4c]" : it.status === "CANCELLED" ? "text-[#8f8f8a]" : "text-[#d4a017]"}>{it.status}</span>
                 <span className="font-mono text-[9px] text-[#6a6a64]">{Math.round(it.progress)}%</span>
               </div>
@@ -812,7 +862,7 @@ function TimelineRenderPanel({ projectId, onNotice }: { projectId: string; onNot
                 <button type="button" onClick={() => void cancelJob(it.jobId)} className="mt-0.5 rounded border border-[#c45c4c]/40 px-1.5 py-0.5 text-[9px] text-[#c45c4c] hover:bg-[#c45c4c]/10">Cancel</button>
               )}
               {(it.status === "FAILED" || it.status === "CANCELLED") && (
-                <button type="button" onClick={() => void retryFormat(it.format)} disabled={busy} className="mt-0.5 rounded border border-[#d4a017] px-1.5 py-0.5 text-[9px] text-[#d4a017] hover:bg-[#d4a017]/10 disabled:opacity-40">Retry {it.format.toUpperCase()}</button>
+                <button type="button" onClick={() => void retryFormat(it.format, it.range)} disabled={busy} className="mt-0.5 rounded border border-[#d4a017] px-1.5 py-0.5 text-[9px] text-[#d4a017] hover:bg-[#d4a017]/10 disabled:opacity-40">Retry {it.format.toUpperCase()}</button>
               )}
             </div>
           ))}
