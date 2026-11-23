@@ -1,0 +1,187 @@
+/**
+ * BEAN FX — M38 §4: batch multi-format timeline export.
+ *
+ * ONE submission enqueues several M37 output formats (mp4/mov/wav/mp3) as
+ * INDEPENDENT durable RENDER_TIMELINE jobs on the existing worker — the SAME
+ * job type, the SAME FFmpeg graph (including the M37 transform evaluator),
+ * the SAME schema-validated format contract as the single-export route.
+ * No second queue, no parallel renderer, no placeholder states.
+ *
+ * Lifecycle per item: QUEUED → PROCESSING → (worker stages) → COMPLETED,
+ * with the repository's real failure/cancellation conventions (DELETE
+ * /api/jobs/[id]; recovery via the worker's stale-claim sweep). Batch
+ * progress is computed from REAL item states only — a batch is complete
+ * only when every item is terminal, and successful only when every item
+ * COMPLETED. Duplicate protection: one ACTIVE (QUEUED/PROCESSING) job per
+ * (project, format, range); completed items are reported as reused instead
+ * of re-rendered; FAILED/CANCELLED items may be re-submitted (that is the
+ * retry path).
+ */
+import { NextRequest, NextResponse } from "next/server";
+import { z } from "zod";
+import { db } from "@/lib/db";
+import { getCurrentUser } from "@/lib/auth";
+import { badRequest, unauthorized } from "@/lib/process-helpers";
+import { enqueueMediaJob, JOB_TYPE_RENDER_TIMELINE } from "@/lib/job-helpers";
+import { assertWithinLimit, PlanLimitError, planLimitResponse } from "@/lib/billing/entitlements";
+import { RENDER_OUTPUT_FORMATS } from "@/lib/publish/timeline-render";
+import { audit } from "@/lib/audit";
+
+export const runtime = "nodejs";
+
+const formatEnum = z.enum(RENDER_OUTPUT_FORMATS as unknown as [string, ...string[]]);
+const BatchRenderSchema = z.object({
+  formats: z.array(formatEnum).min(1).max(RENDER_OUTPUT_FORMATS.length),
+  startFrame: z.number().int().min(0).optional(),
+  endFrame: z.number().int().min(1).optional(),
+});
+
+interface RenderParams {
+  projectId?: string;
+  startFrame?: number;
+  endFrame?: number;
+  format?: string;
+}
+
+function sameRange(a: RenderParams, b: { startFrame?: number; endFrame?: number }): boolean {
+  return (a.startFrame ?? undefined) === (b.startFrame ?? undefined) && (a.endFrame ?? undefined) === (b.endFrame ?? undefined);
+}
+
+export async function POST(req: NextRequest, ctx: { params: Promise<{ projectId: string }> }) {
+  const user = await getCurrentUser();
+  if (!user) return unauthorized();
+  const { projectId } = await ctx.params;
+  const project = await db.project.findFirst({ where: { id: projectId, userId: user.id } });
+  if (!project) return badRequest("Project not found or not owned by the caller.");
+  const parsed = BatchRenderSchema.safeParse(await req.json().catch(() => null));
+  if (!parsed.success) {
+    return badRequest(`Invalid request: ${parsed.error.issues.map((i) => i.message).join("; ")} (formats must be a subset of ${RENDER_OUTPUT_FORMATS.join(", ")})`);
+  }
+  // M30: workspace EDITORs may render shared projects (same as the single route).
+  {
+    const { getProjectAccess, canEdit } = await import("@/lib/collab");
+    const access = await getProjectAccess(user.id, project);
+    if (!canEdit(access)) return badRequest("Project not found or not owned by the caller.");
+  }
+  const { formats, startFrame, endFrame } = parsed.data;
+  const uniqueFormats = [...new Set(formats)];
+
+  const version = await db.timelineVersion.findFirst({ where: { projectId }, orderBy: { versionNumber: "desc" } });
+  if (!version) return badRequest("The project has no sequence to render yet.");
+
+  // M25 P2 — plan entitlements, metered per item (each item is a real render).
+  try {
+    const seq = JSON.parse(version.sequenceJson) as { clips?: Array<{ timelineStartFrame: number; timelineDurationFrames: number }>; fps?: { num: number; den: number } };
+    const fps = seq.fps && seq.fps.den ? seq.fps.num / seq.fps.den : 30;
+    const seqEnd = (seq.clips ?? []).reduce((m, c) => Math.max(m, c.timelineStartFrame + c.timelineDurationFrames), 0);
+    const renderEnd = endFrame ?? seqEnd;
+    const estMinutes = Math.max(1 / 60, (renderEnd - (startFrame ?? 0)) / Math.max(1, fps) / 60);
+    await assertWithinLimit(user.id, "maxConcurrentRenders");
+    await assertWithinLimit(user.id, "monthlyExportMinutes", Math.ceil(estMinutes * uniqueFormats.length));
+  } catch (err) {
+    if (err instanceof PlanLimitError) {
+      const { body, status } = planLimitResponse(err);
+      return NextResponse.json(body, { status });
+    }
+    throw err;
+  }
+
+  const created: Array<{ format: string; jobId: string; reused: boolean; status: string }> = [];
+  const rejected: Array<{ format: string; reason: string }> = [];
+  for (const format of uniqueFormats) {
+    // Duplicate-submission protection: one ACTIVE job per (project, format, range).
+    const recent = await db.job.findMany({
+      where: { userId: user.id, type: "RENDER_TIMELINE", status: { in: ["QUEUED", "PROCESSING"] } },
+      orderBy: { createdAt: "desc" },
+      take: 50,
+      select: { id: true, status: true, paramsJson: true },
+    });
+    const active = recent.find((j) => {
+      try {
+        const p = JSON.parse(j.paramsJson ?? "{}") as RenderParams;
+        return p.projectId === projectId && (p.format ?? "mp4") === format && sameRange(p, { startFrame, endFrame });
+      } catch {
+        return false;
+      }
+    });
+    if (active) {
+      created.push({ format, jobId: active.id, reused: true, status: active.status });
+      continue;
+    }
+    const jobId = await enqueueMediaJob(user.id, JOB_TYPE_RENDER_TIMELINE, {
+      projectId,
+      startFrame,
+      endFrame,
+      format,
+    });
+    created.push({ format, jobId, reused: false, status: "QUEUED" });
+  }
+  await audit("render.batch", { userId: user.id, detail: JSON.stringify({ projectId, formats: created.map((c) => c.format), reused: created.filter((c) => c.reused).length, rejected: rejected.length, range: { startFrame, endFrame } }) });
+  return NextResponse.json({ batch: created, rejected, range: { startFrame, endFrame } }, { status: 202 });
+}
+
+export async function GET(_req: NextRequest, ctx: { params: Promise<{ projectId: string }> }) {
+  const user = await getCurrentUser();
+  if (!user) return unauthorized();
+  const { projectId } = await ctx.params;
+  const project = await db.project.findFirst({ where: { id: projectId, userId: user.id } });
+  if (!project) return badRequest("Project not found.");
+
+  const jobs = await db.job.findMany({
+    where: { userId: user.id, type: "RENDER_TIMELINE", paramsJson: { contains: projectId } },
+    orderBy: { createdAt: "desc" },
+    take: 24,
+    select: { id: true, status: true, stage: true, progress: true, message: true, createdAt: true, paramsJson: true, exportId: true },
+  });
+  const items: Array<{
+    format: string;
+    jobId: string;
+    status: string;
+    progress: number;
+    stage: string | null;
+    message: string | null;
+    createdAt: string;
+    range: { startFrame?: number; endFrame?: number };
+    export: { id: string; filename: string; sizeBytes: number; durationSec: number | null; format: string } | null;
+  }> = [];
+  for (const j of jobs) {
+    let p: RenderParams = {};
+    try {
+      p = JSON.parse(j.paramsJson ?? "{}") as RenderParams;
+    } catch {
+      continue;
+    }
+    if (p.projectId !== projectId) continue;
+    let ex: { id: string; filename: string; sizeBytes: number; durationSec: number | null; format: string } | null = null;
+    if (j.exportId) {
+      const row = await db.exportFile.findUnique({ where: { id: j.exportId }, select: { id: true, filename: true, sizeBytes: true, durationSec: true, format: true } });
+      if (row) ex = row;
+    }
+    items.push({
+      format: p.format ?? "mp4",
+      jobId: j.id,
+      status: j.status,
+      progress: j.progress,
+      stage: j.stage,
+      message: j.message,
+      createdAt: j.createdAt.toISOString(),
+      range: { startFrame: p.startFrame, endFrame: p.endFrame },
+      export: ex,
+    });
+  }
+  const terminal = items.filter((i) => ["COMPLETED", "FAILED", "CANCELLED"].includes(i.status));
+  const allTerminal = items.length > 0 && terminal.length === items.length;
+  const allSucceeded = allTerminal && items.every((i) => i.status === "COMPLETED");
+  return NextResponse.json({
+    items,
+    batch: {
+      total: items.length,
+      completed: items.filter((i) => i.status === "COMPLETED").length,
+      failed: items.filter((i) => i.status === "FAILED").length,
+      cancelled: items.filter((i) => i.status === "CANCELLED").length,
+      active: items.filter((i) => ["QUEUED", "PROCESSING"].includes(i.status)).length,
+      batchComplete: allTerminal,
+      allSucceeded,
+    },
+  });
+}

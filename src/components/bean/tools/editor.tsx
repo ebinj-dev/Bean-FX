@@ -641,9 +641,23 @@ function TimelineRenderPanel({ projectId, onNotice }: { projectId: string; onNot
   const [endSec, setEndSec] = useState("");
   // M37 — real output formats: one durable RENDER_TIMELINE job, one FFmpeg
   // pipeline; mp4/mov/wav/mp3 select container+codecs (no second renderer).
-  const [format, setFormat] = useState<"mp4" | "mov" | "wav" | "mp3">("mp4");
+  // M38 — multi-select: one selected format keeps the exact M37 single-export
+  // POST; two or more submit a real BATCH (independent RENDER_TIMELINE jobs
+  // via /render/batch — same job type, same graph, same validation).
+  const [formats, setFormats] = useState<Set<"mp4" | "mov" | "wav" | "mp3">>(new Set(["mp4"]));
+  const [batch, setBatch] = useState<{ items: Array<{ format: string; jobId: string; status: string; progress: number; stage: string | null; export: { id: string; filename: string; sizeBytes: number } | null }>; batch: { total: number; completed: number; failed: number; cancelled: number; active: number; batchComplete: boolean; allSucceeded: boolean } } | null>(null);
+  const toggleFormat = (f: "mp4" | "mov" | "wav" | "mp3") => {
+    setFormats((prev) => {
+      const next = new Set(prev);
+      if (next.has(f)) {
+        if (next.size > 1) next.delete(f); // keep at least one format selected
+      } else next.add(f);
+      return next;
+    });
+  };
   const load = useCallback(() => {
     fetch(`/api/editor/projects/${projectId}/render`).then((r) => r.json()).then((d) => setState(d)).catch(() => undefined);
+    fetch(`/api/editor/projects/${projectId}/render/batch`).then((r) => (r.ok ? r.json() : null)).then((d) => d && setBatch(d)).catch(() => undefined);
   }, [projectId]);
   useEffect(() => {
     load();
@@ -653,10 +667,36 @@ function TimelineRenderPanel({ projectId, onNotice }: { projectId: string; onNot
   const render = async (range?: { startFrame?: number; endFrame?: number }) => {
     setBusy(true);
     try {
-      const res = await fetch(`/api/editor/projects/${projectId}/render`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ...(range ?? {}), format }) });
-      const body = (await res.json()) as { jobId?: string; error?: string; code?: string };
-      if (body.jobId) onNotice(`Render job queued — ${body.jobId}`);
-      else onNotice(body.error ?? "Render enqueue failed.");
+      const selected = [...formats];
+      if (selected.length === 1) {
+        // Existing M37 single-export contract (unchanged endpoint + params).
+        const res = await fetch(`/api/editor/projects/${projectId}/render`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ...(range ?? {}), format: selected[0] }) });
+        const body = (await res.json()) as { jobId?: string; error?: string; code?: string };
+        if (body.jobId) onNotice(`Render job queued — ${body.jobId}`);
+        else onNotice(body.error ?? "Render enqueue failed.");
+      } else {
+        // M38 batch: one durable RENDER_TIMELINE job per format, per-item
+        // validation and duplicate protection on the server.
+        const res = await fetch(`/api/editor/projects/${projectId}/render/batch`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ...(range ?? {}), formats: selected }) });
+        const body = (await res.json()) as { batch?: Array<{ format: string; jobId: string; reused: boolean }>; error?: string };
+        if (res.ok && body.batch) {
+          const fresh = body.batch.filter((b) => !b.reused).map((b) => b.format);
+          const reused = body.batch.filter((b) => b.reused).map((b) => b.format);
+          onNotice([fresh.length ? `Batch queued: ${fresh.join(", ")}` : "", reused.length ? `already active: ${reused.join(", ")}` : ""].filter(Boolean).join(" — "));
+        } else onNotice(body.error ?? "Batch export failed.");
+      }
+      load();
+    } finally {
+      setBusy(false);
+    }
+  };
+  /** M38 — retry an eligible failed/cancelled batch item by re-submitting
+   *  only that format (FAILED items are outside the dedup reuse set). */
+  const retryFormat = async (format: string) => {
+    setBusy(true);
+    try {
+      const res = await fetch(`/api/editor/projects/${projectId}/render/batch`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ formats: [format] }) });
+      onNotice(res.ok ? `Re-queued ${format.toUpperCase()} export.` : "Retry refused.");
       load();
     } finally {
       setBusy(false);
@@ -679,9 +719,18 @@ function TimelineRenderPanel({ projectId, onNotice }: { projectId: string; onNot
     <div className="mt-4 border-t border-[#2a2a2a] pt-3">
       <div className="mb-1.5 flex items-center justify-between">
         <span className="bean-label text-[10px] text-[#d4a017]">RENDER TIMELINE (FFmpeg)</span>
-        <button type="button" onClick={() => void render(rangeFrames(30))} disabled={busy} className="rounded border border-[#d4a017] px-2 py-1 text-[10px] font-bold text-[#d4a017] hover:bg-[#d4a017] hover:text-[#0c0c0c] disabled:opacity-40">
-          {busy ? "…" : "RENDER SEQUENCE"}
-        </button>
+        <span className="flex items-center gap-1.5">
+          {formats.size === 1 && (
+            <button type="button" onClick={() => void render(rangeFrames(30))} disabled={busy} className="rounded border border-[#d4a017] px-2 py-1 text-[10px] font-bold text-[#d4a017] hover:bg-[#d4a017] hover:text-[#0c0c0c] disabled:opacity-40">
+              {busy ? "…" : "RENDER SEQUENCE"}
+            </button>
+          )}
+          {formats.size > 1 && (
+            <button type="button" onClick={() => void render(rangeFrames(30))} disabled={busy} className="rounded border border-[#d4a017] px-2 py-1 text-[10px] font-bold text-[#d4a017] hover:bg-[#d4a017] hover:text-[#0c0c0c] disabled:opacity-40">
+              {busy ? "…" : `BATCH EXPORT (${formats.size} FORMATS)`}
+            </button>
+          )}
+        </span>
       </div>
       {/* M25 P3 — export range presets (real backend range support). */}
       <div className="mb-2 flex flex-wrap items-center gap-1.5 text-[9px] text-[#8f8f8a]">
@@ -697,10 +746,13 @@ function TimelineRenderPanel({ projectId, onNotice }: { projectId: string; onNot
             <input aria-label="Range end seconds" value={endSec} onChange={(e) => setEndSec(e.target.value.replace(/[^0-9.]/g, "").slice(0, 8))} className="w-14 rounded border border-[#2a2a2a] bg-[#111110] px-1 py-0.5 text-[9px] text-[#d4d4d0]" placeholder="end s" />
           </span>
         )}
-        {/* M37 — output format (real backend formats through the same pipeline). */}
+        {/* M37/M38 — output formats: multi-select. One selected = the M37
+            single export; 2+ = a real batch of independent durable jobs.
+            Audio formats (wav/mp3) render the same mix audio-only — the media
+            type is never silently switched. */}
         <span className="ml-auto flex items-center gap-1">
           {(["mp4", "mov", "wav", "mp3"] as const).map((f) => (
-            <button key={f} type="button" onClick={() => setFormat(f)} className={`rounded border px-1.5 py-0.5 uppercase ${format === f ? "border-[#d4a017] text-[#d4a017]" : "border-[#2a2a2a] text-[#d8d8d2] hover:border-[#d4a017]"}`}>
+            <button key={f} type="button" onClick={() => toggleFormat(f)} className={`rounded border px-1.5 py-0.5 uppercase ${formats.has(f) ? "border-[#d4a017] text-[#d4a017]" : "border-[#2a2a2a] text-[#d8d8d2] hover:border-[#d4a017]"}`}>
               {f}
             </button>
           ))}
@@ -732,6 +784,40 @@ function TimelineRenderPanel({ projectId, onNotice }: { projectId: string; onNot
           <span className="font-mono text-[9px] text-[#4cc47f]">{(e.sizeBytes / 1024 / 1024).toFixed(1)}MB · {e.durationSec?.toFixed?.(1) ?? "?"}s</span>
         </a>
       ))}
+      {/* M38 — batch items: REAL per-item states from the durable worker.
+          Progress counts terminal items only; a batch is complete when every
+          item is terminal and successful only when every item COMPLETED. */}
+      {batch && batch.items.length > 0 && (
+        <div className="mt-2 border-t border-[#1c1c1a] pt-2">
+          <div className="flex items-center justify-between">
+            <span className="bean-label text-[9px] text-[#7a7a76]">BATCH QUEUE ({batch.batch.completed}/{batch.batch.total} completed{batch.batch.failed ? `, ${batch.batch.failed} failed` : ""})</span>
+            {batch.batch.batchComplete && (
+              <span className={`text-[9px] ${batch.batch.allSucceeded ? "text-[#4cc47f]" : "text-[#c45c4c]"}`}>{batch.batch.allSucceeded ? "BATCH COMPLETE" : "BATCH COMPLETE — WITH FAILURES"}</span>
+            )}
+          </div>
+          {batch.items.map((it) => (
+            <div key={it.jobId} className="mt-1 rounded bg-[#111110] px-2 py-1.5 text-[10px]">
+              <div className="flex items-center justify-between gap-2">
+                <span className="font-mono text-[9px] uppercase text-[#d4a017]">{it.format}</span>
+                <span className={it.status === "COMPLETED" ? "text-[#4cc47f]" : it.status === "FAILED" ? "text-[#c45c4c]" : it.status === "CANCELLED" ? "text-[#8f8f8a]" : "text-[#d4a017]"}>{it.status}</span>
+                <span className="font-mono text-[9px] text-[#6a6a64]">{Math.round(it.progress)}%</span>
+              </div>
+              {it.stage && <div className="text-[9px] text-[#8f8f8a]">{it.stage}</div>}
+              {it.export && (
+                <a href={`/api/exports/${it.export.id}/file`} className="mt-0.5 inline-block text-[9px] text-[#4cc47f] underline">
+                  {it.export.filename} · {(it.export.sizeBytes / 1024 / 1024).toFixed(1)}MB
+                </a>
+              )}
+              {(it.status === "QUEUED" || it.status === "PROCESSING") && (
+                <button type="button" onClick={() => void cancelJob(it.jobId)} className="mt-0.5 rounded border border-[#c45c4c]/40 px-1.5 py-0.5 text-[9px] text-[#c45c4c] hover:bg-[#c45c4c]/10">Cancel</button>
+              )}
+              {(it.status === "FAILED" || it.status === "CANCELLED") && (
+                <button type="button" onClick={() => void retryFormat(it.format)} disabled={busy} className="mt-0.5 rounded border border-[#d4a017] px-1.5 py-0.5 text-[9px] text-[#d4a017] hover:bg-[#d4a017]/10 disabled:opacity-40">Retry {it.format.toUpperCase()}</button>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
