@@ -78,6 +78,36 @@ export interface ManifestMask {
   sha256: string;
 }
 
+/**
+ * M40 §6 — per-export range metadata carried in a project package (AUDIT
+ * TRAIL ONLY — export BYTES are never packaged: outputs stay regenerable by
+ * re-render, per the standing product rule that final deliverables are
+ * user-scoped artifacts). The section preserves exactly what the historical
+ * record contains: identity, format, size/duration, and the render range in
+ * FRAMES (never reconstructed from rounded display timestamps). Ranges come
+ * from the export's own render params (M39 per-item batch contract).
+ */
+export interface ManifestExport {
+  /** Original ExportFile row id — stable identity for audit (not remapped on import: no rows are created from metadata). */
+  exportId: string;
+  /** ExportFile.kind (e.g. TIMELINE_RENDER). */
+  kind: string;
+  /** mp4 | mov | wav | mp3. */
+  format: string;
+  /** Original output filename (bare name — bytes are NOT shipped). */
+  filename: string;
+  sizeBytes: number;
+  /** Probed duration at render time. */
+  durationSec: number | null;
+  /** "partial" = explicit frame range below; "full" = whole timeline (no range in the historical record); "unknown" = record unreadable. */
+  rangeKind: "partial" | "full" | "unknown";
+  startFrame: number | null;
+  endFrame: number | null;
+  /** Timebase as rendered, "num/den" (from the export's render params) or null when unknown. */
+  fps: string | null;
+  createdAt: string;
+}
+
 export interface PackageManifest {
   formatVersion: string;
   schemaVersion: string;
@@ -88,11 +118,65 @@ export interface PackageManifest {
   assets: ManifestAsset[];
   /** M33 Track B: subject masks for referenced footage (version chains included). */
   masks: ManifestMask[];
+  /** M40 §6: range-aware export metadata (identity + range audit trail; no bytes). */
+  exports?: ManifestExport[];
   /** Content that was deliberately NOT packaged (regenerable/derived). */
   omitted: { kind: string; reason: string; count: number }[];
 }
 
 // ── safe package paths ──────────────────────────────────────────────────────
+
+/**
+ * M40 §6 — validate the OPTIONAL `exports[]` manifest section on import.
+ * Old packages without the section import unchanged (returns []). A malformed
+ * or malicious section is a package defect: callers reject the import with
+ * PermanentJobError instead of silently dropping audit metadata. Rules:
+ * types must match the contract; partial ranges need a non-negative integer
+ * start and/or a positive integer end with end > start when both exist;
+ * filenames are bare names (no separators, no traversal); fps is "num/den"
+ * or null; exportIds must be unique.
+ */
+export function validateManifestExports(exports: ManifestExport[] | null | undefined): string[] {
+  if (exports == null) return [];
+  if (!Array.isArray(exports)) return ["exports section is not an array"];
+  const issues: string[] = [];
+  const seen = new Set<string>();
+  exports.forEach((x, i) => {
+    const label = `exports[${i}]${x && typeof x === "object" && typeof x.exportId === "string" && x.exportId ? ` (${x.exportId})` : ""}`;
+    if (!x || typeof x !== "object") { issues.push(`${label}: not an object`); return; }
+    if (typeof x.exportId !== "string" || x.exportId.length === 0) issues.push(`${label}: missing exportId`);
+    if (typeof x.kind !== "string" || x.kind.length === 0) issues.push(`${label}: missing kind`);
+    if (typeof x.format !== "string" || x.format.length === 0) issues.push(`${label}: missing format`);
+    if (typeof x.filename !== "string" || x.filename.length === 0 || x.filename.includes("/") || x.filename.includes("\\") || x.filename.includes("..")) issues.push(`${label}: filename must be a bare name (no path separators)`);
+    if (typeof x.sizeBytes !== "number" || !Number.isFinite(x.sizeBytes) || x.sizeBytes < 0) issues.push(`${label}: invalid sizeBytes`);
+    if (x.durationSec != null && (typeof x.durationSec !== "number" || !Number.isFinite(x.durationSec) || x.durationSec < 0)) issues.push(`${label}: invalid durationSec`);
+    if (x.rangeKind !== "partial" && x.rangeKind !== "full" && x.rangeKind !== "unknown") issues.push(`${label}: rangeKind must be partial|full|unknown`);
+    if (x.rangeKind === "partial") {
+      const s = x.startFrame;
+      const e = x.endFrame;
+      const hasS = typeof s === "number";
+      const hasE = typeof e === "number";
+      if (!hasS && !hasE) issues.push(`${label}: partial range requires a start or an end frame`);
+      if (hasS && (!Number.isInteger(s) || (s as number) < 0)) issues.push(`${label}: startFrame must be an integer ≥ 0`);
+      if (hasE && (!Number.isInteger(e) || (e as number) < 1)) issues.push(`${label}: endFrame must be an integer ≥ 1`);
+      if (hasS && hasE && (e as number) <= (s as number)) issues.push(`${label}: reversed range (end ≤ start)`);
+    } else {
+      // "full" and "unknown" records carry NO range — a frames-bearing record
+      // claiming to be full/unknown is internally inconsistent.
+      if (x.startFrame != null) issues.push(`${label}: startFrame must be null for rangeKind ${x.rangeKind}`);
+      if (x.endFrame != null) issues.push(`${label}: endFrame must be null for rangeKind ${x.rangeKind}`);
+    }
+    if (x.startFrame != null && typeof x.startFrame !== "number") issues.push(`${label}: startFrame must be a number or null`);
+    if (x.endFrame != null && typeof x.endFrame !== "number") issues.push(`${label}: endFrame must be a number or null`);
+    if (x.fps != null && (typeof x.fps !== "string" || !/^\d+\/\d+$/.test(x.fps))) issues.push(`${label}: fps must be "num/den" or null`);
+    if (typeof x.createdAt !== "string" || x.createdAt.length === 0) issues.push(`${label}: missing createdAt`);
+    if (typeof x.exportId === "string" && x.exportId.length > 0) {
+      if (seen.has(x.exportId)) issues.push(`${label}: duplicate exportId ${x.exportId}`);
+      seen.add(x.exportId);
+    }
+  });
+  return issues;
+}
 
 /** Media assets live under media/<assetId><ext>; manifest + project at root. */
 export function packagePathForAsset(assetId: string, originalName: string, storagePath: string): string {
@@ -436,10 +520,42 @@ export async function buildManifest(
     throw new PermanentJobError(`Project media totals ${(totalBytes / 1024 / 1024).toFixed(0)} MB — over the ${(PROJECT_PACKAGE_BYTES_CAP / 1024 / 1024).toFixed(0)} MB package cap (memory-bounded honest limit).`);
   }
 
+  // ── M40 §6: range-aware export metadata (identity + range, never bytes) ────
+  // Every completed TIMELINE_RENDER output of this project contributes an
+  // audit record. The range comes verbatim from the export's own render
+  // params (the M39 per-item batch contract) — absent range keys mean the
+  // historical record rendered the WHOLE timeline ("full"); an unreadable
+  // record stays "unknown". Nothing is invented; no checksum is claimed
+  // (ExportFile rows carry no content hash, and the bytes do not ship).
+  const exportRows = await db.exportFile.findMany({
+    where: { userId, kind: "TIMELINE_RENDER", paramsJson: { contains: projectId } },
+    orderBy: { createdAt: "desc" },
+    take: 200,
+  });
+  const manifestExports: ManifestExport[] = exportRows.map((e) => {
+    let range: Pick<ManifestExport, "rangeKind" | "startFrame" | "endFrame" | "fps"> = { rangeKind: "unknown", startFrame: null, endFrame: null, fps: null };
+    try {
+      if (e.paramsJson) {
+        const p = JSON.parse(e.paramsJson) as { startFrame?: number; endFrame?: number; fps?: string };
+        const hasStart = typeof p.startFrame === "number" && p.startFrame >= 0;
+        const hasEnd = typeof p.endFrame === "number" && p.endFrame > 0;
+        const fps = typeof p.fps === "string" && /^\d+\/\d+$/.test(p.fps) ? p.fps : null;
+        range = hasStart || hasEnd
+          ? { rangeKind: "partial", startFrame: hasStart ? (p.startFrame as number) : null, endFrame: hasEnd ? (p.endFrame as number) : null, fps }
+          : { rangeKind: "full", startFrame: null, endFrame: null, fps };
+      }
+    } catch { /* record unreadable — honest "unknown", never a guessed range */ }
+    return {
+      exportId: e.id, kind: e.kind, format: e.format, filename: path.basename(e.filename),
+      sizeBytes: e.sizeBytes, durationSec: e.durationSec, ...range, createdAt: e.createdAt.toISOString(),
+    };
+  });
+
   const omitted: PackageManifest["omitted"] = [];
   if (mode !== "FULL") omitted.push({ kind: "PROXY", reason: mode === "NO_PROXIES" ? "NO_PROXIES mode excludes editing proxies (regenerable from originals)" : "METADATA mode excludes all media", count: omittedProxies || 0 });
   if (mode === "METADATA") omitted.push({ kind: "ORIGINAL", reason: "METADATA mode ships manifest + timeline only; media must be relinked on import", count: referencedIds.length - missing.length });
-  omitted.push({ kind: "DERIVED", reason: "thumbnails, publish drafts, AI conversations/plans, export outputs, job records are regenerable or user-scoped and are never packaged", count: 0 });
+  omitted.push({ kind: "DERIVED", reason: "thumbnails, publish drafts, AI conversations/plans, job records are regenerable or user-scoped and are never packaged", count: 0 });
+  if (manifestExports.length > 0) omitted.push({ kind: "EXPORT_BYTES", reason: "final export outputs are never packaged (regenerable by re-render); identity + range metadata preserved in manifest.exports", count: manifestExports.length });
   if (masksWithoutBytes > 0) omitted.push({ kind: "MASK_BYTES", reason: "mask files missing on disk (or METADATA mode) — mask metadata still ships so import can restore an honest FAILED row", count: masksWithoutBytes });
 
   const manifest: PackageManifest = {
@@ -451,6 +567,7 @@ export async function buildManifest(
     timeline: { latestVersionNumber: latest.versionNumber, latestSequenceJson: latest.sequenceJson, history },
     assets: manifestAssets,
     masks: manifestMasks,
+    exports: manifestExports,
     omitted,
   };
   return { manifest, entries, totalBytes, missing };
@@ -599,6 +716,14 @@ export async function planImport(userId: string, zipPath: string): Promise<Impor
       const h = await sha256File(out);
       await rm(out, { force: true });
       if (h !== m.sha256) { invalidMasks.push({ maskId: m.maskId, reason: "checksum mismatch (corrupted or modified)" }); }
+    }
+    // M40 §6 — range-aware export metadata: validate the OPTIONAL exports[]
+    // section when present (old packages without it import unchanged). A
+    // malformed section rejects the package — audit metadata is never
+    // silently dropped, and nothing is written to the target user's rows.
+    const exportIssues = validateManifestExports(manifest.exports ?? null);
+    if (exportIssues.length > 0) {
+      throw new PermanentJobError(`Package manifest has invalid export metadata: ${exportIssues.slice(0, 3).join("; ")}${exportIssues.length > 3 ? ` (+${exportIssues.length - 3} more)` : ""} Nothing was imported.`);
     }
     return { manifest, zipPath, listing, invalidAssets: [], invalidMasks };
   } finally {

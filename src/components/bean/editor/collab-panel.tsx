@@ -17,6 +17,8 @@ type Revision = {
   id: string; sessionNo: number; versionNumber: number; fingerprint: string; status: string;
   title: string; instruction: string | null; dueAt: string | null; approvalPolicy: string;
   approvedAt: string | null; createdAt: string; previewReady: boolean; previewDurationSec: number | null;
+  /** M40 §7 — timeline range this revision's preview represents (null = full/legacy). */
+  previewRange: { startFrame: number; endFrame: number; fps: string | null } | null;
   commentCount: number;
   decisions: { state: string; reviewerUserId: string | null; guestName: string | null; decidedAt: string | null }[];
 };
@@ -108,6 +110,7 @@ export function CollabPanel({ projectId, onNotice }: { projectId: string; onNoti
   }, [projectId]);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     if (selectedRev) void loadDetail(selectedRev);
   }, [selectedRev]);
 
@@ -313,7 +316,7 @@ export function CollabPanel({ projectId, onNotice }: { projectId: string; onNoti
                 <span className="min-w-0 truncate">#{r.sessionNo} · {r.title}</span>
                 <span className={`ml-2 shrink-0 text-[10px] ${STATUS_COLOR[r.status] ?? "text-[#8f8f8a]"}`}>{r.status}</span>
               </div>
-              <div className="text-[10px] text-[#8f8f8a]">v{r.versionNumber} · fp {r.fingerprint.slice(0, 8)} · {r.commentCount} comments · {r.decisions.filter((d) => d.state !== "PENDING").length}/{r.decisions.length} decided</div>
+              <div className="text-[10px] text-[#8f8f8a]">v{r.versionNumber} · fp {r.fingerprint.slice(0, 8)} · {r.commentCount} comments · {r.decisions.filter((d) => d.state !== "PENDING").length}/{r.decisions.length} decided{r.previewRange ? ` · range ${r.previewRange.startFrame}–${r.previewRange.endFrame}f` : ""}</div>
             </button>
           ))}
         </div>

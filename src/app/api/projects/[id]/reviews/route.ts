@@ -8,6 +8,7 @@ import { getCurrentUser } from "@/lib/auth";
 import { getProjectAccess, canCreateReview, canEdit, revisionFingerprint, transitionRevision } from "@/lib/collab";
 import { enqueueMediaJob, JOB_TYPE_RENDER_TIMELINE } from "@/lib/job-helpers";
 import { notify, notifyMany } from "@/lib/notify";
+import { previewRangeFromParams } from "@/lib/review-access";
 
 export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string }> }) {
   const user = await getCurrentUser();
@@ -134,6 +135,12 @@ export async function GET(_req: NextRequest, ctx: { params: Promise<{ id: string
       _count: { select: { comments: true } },
     },
   });
+  // M40 §7 — per-revision preview range, derived read-only from each preview
+  // export's own render params (frames, per the M39 range contract). Absent
+  // for legacy/full-timeline previews — never invented.
+  const previewIds = revisions.map((r) => r.previewExportId).filter((v): v is string => Boolean(v));
+  const previewRows = previewIds.length > 0 ? await db.exportFile.findMany({ where: { id: { in: previewIds } }, select: { id: true, paramsJson: true } }) : [];
+  const rangeByExport = new Map(previewRows.map((p) => [p.id, previewRangeFromParams(p.paramsJson)]));
   return NextResponse.json({
     revisions: revisions.map((r) => ({
       id: r.id, sessionNo: r.sessionNo, versionNumber: r.versionNumber,
@@ -141,6 +148,7 @@ export async function GET(_req: NextRequest, ctx: { params: Promise<{ id: string
       instruction: r.instruction, dueAt: r.dueAt, approvalPolicy: r.approvalPolicy,
       approvedAt: r.approvedAt, createdAt: r.createdAt, supersededById: r.supersededById,
       previewReady: Boolean(r.previewExportId), previewDurationSec: r.previewDurationSec,
+      previewRange: r.previewExportId ? rangeByExport.get(r.previewExportId) ?? null : null,
       commentCount: r._count.comments,
       decisions: r.assignments.map((a) => ({ state: a.state, reviewerUserId: a.reviewerUserId, guestName: a.guestName, decidedAt: a.decidedAt })),
     })),

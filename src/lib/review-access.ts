@@ -111,3 +111,37 @@ export function canActorResolve(actor: ReviewActor, commentAuthorUserId: string 
 export function guestHeaders(linkId: string, guestToken: string, maxAgeSec: number): string[] {
   return [`beanfx_review=${encodeURIComponent(`${linkId}.${guestToken}`)}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${maxAgeSec}`];
 }
+
+/**
+ * M40 §7 — the timeline range a review preview represents, parsed from the
+ * preview export's OWN render params (the M39 range contract: frames, not
+ * rounded timestamps). Returns null when the historical record has no range
+ * (legacy/full-timeline renders) — "unknown" is never invented. Read-only
+ * derivation for display: nothing here mutates the immutable revision.
+ */
+export function previewRangeFromParams(paramsJson: string | null | undefined): { startFrame: number; endFrame: number; fps: string | null } | null {
+  if (!paramsJson) return null;
+  try {
+    const p = JSON.parse(paramsJson) as { startFrame?: number; endFrame?: number; fps?: string };
+    // A field that is PRESENT but malformed makes the whole record
+    // untrustworthy — sanitize-and-guess is exactly the reconstruction this
+    // helper exists to avoid. Absent fields are open boundaries (M39: an
+    // end-only range means "from the timeline start").
+    const startField = p.startFrame;
+    const endField = p.endFrame;
+    const startPresent = startField !== undefined && startField !== null;
+    const endPresent = endField !== undefined && endField !== null;
+    const startOk = !startPresent || (typeof startField === "number" && Number.isInteger(startField) && startField >= 0);
+    const endOk = !endPresent || (typeof endField === "number" && Number.isInteger(endField) && endField > 0);
+    if (!startOk || !endOk) return null;
+    if (!startPresent && !endPresent) return null; // legacy/full-timeline record
+    const fps = typeof p.fps === "string" && /^\d+\/\d+$/.test(p.fps) ? p.fps : null;
+    return {
+      startFrame: startPresent ? (startField as number) : 0,
+      endFrame: endPresent ? (endField as number) : 0,
+      fps,
+    };
+  } catch {
+    return null; // unreadable record — stay silent rather than guess
+  }
+}

@@ -4,7 +4,7 @@
  * timebase; seconds are derived display data only. */
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
-import { canActorApprove, canActorComment, canActorResolve, resolveReviewActor, type ReviewActor } from "@/lib/review-access";
+import { canActorApprove, canActorComment, canActorResolve, previewRangeFromParams, resolveReviewActor, type ReviewActor } from "@/lib/review-access";
 
 import { DECISIONS, transitionRevision } from "@/lib/collab";
 import { notify, notifyMany } from "@/lib/notify";
@@ -24,8 +24,14 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ id: string 
   const assignments = await db.reviewAssignment.findMany({ where: { revisionId: id } });
   const preview = revision.previewExportId ? await db.exportFile.findUnique({
     where: { id: revision.previewExportId },
-    select: { id: true, durationSec: true, sizeBytes: true, format: true, filename: true },
+    select: { id: true, durationSec: true, sizeBytes: true, format: true, filename: true, paramsJson: true },
   }) : null;
+  // M40 §7 — the timeline range this preview represents, derived read-only
+  // from the export's own render params (frames, per the M39 range contract).
+  // Absent for legacy/full-timeline previews — never invented. Read-only:
+  // immutable revisions are untouched; guests see frames only (no paths,
+  // no storage identifiers).
+  const previewRange = preview ? previewRangeFromParams(preview.paramsJson) : null;
   const myDecision = actor.kind === "USER"
     ? assignments.find((a) => a.reviewerUserId === actor.userId) ?? null
     : actor.kind === "GUEST"
@@ -43,7 +49,7 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ id: string 
       sequenceId: revision.timelineVersionId,
     },
     project: { id: revision.project.id, name: revision.project.name },
-    preview: preview ? { ...preview, url: `/api/reviews/${id}/preview` } : null,
+    preview: preview ? { id: preview.id, durationSec: preview.durationSec, sizeBytes: preview.sizeBytes, format: preview.format, filename: preview.filename, url: `/api/reviews/${id}/preview`, range: previewRange } : null,
     comments: comments.map((c) => ({
       id: c.id, parentId: c.parentId, authorUserId: c.authorUserId, guestName: c.guestName,
       frame: c.frame, fpsNum: c.fpsNum, fpsDen: c.fpsDen, timeSeconds: c.timeSeconds,

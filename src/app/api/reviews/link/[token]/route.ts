@@ -8,6 +8,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { sha256Hex, expireStaleReviewLinks, newOpaqueToken } from "@/lib/collab";
 import { REVIEW_COOKIE, guestHeaders } from "@/lib/review-access";
+import { previewRangeFromParams } from "@/lib/review-access";
 
 const GUEST_SESSION_TTL_SEC = 30 * 24 * 3600;
 
@@ -42,11 +43,17 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ token: stri
     }
   }
   const unresolved = await db.reviewComment.count({ where: { revisionId: link.revision.id, status: "OPEN" } });
+  // M40 §7 — guest-safe range summary: frames + fps only, derived read-only
+  // from the preview export's own render params. No paths, no storage ids.
+  const previewParams = link.revision.previewExportId
+    ? (await db.exportFile.findUnique({ where: { id: link.revision.previewExportId }, select: { paramsJson: true } }))?.paramsJson ?? null
+    : null;
   return NextResponse.json({
     revision: { ...link.revision, fingerprint: link.revision.fingerprint.slice(0, 16) },
     permission: link.permission,
     expiresAt: link.expiresAt,
     unresolvedComments: unresolved,
+    previewRange: previewRangeFromParams(previewParams),
     previewUrl: link.revision.previewExportId ? `/api/reviews/link/${encodeURIComponent(token)}/preview` : null,
   });
 }
