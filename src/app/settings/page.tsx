@@ -28,6 +28,16 @@ type SubState = {
   paymentsEnabled: boolean;
 };
 type BillingEventRow = { id: string; type: string; detailJson: string | null; createdAt: string };
+// M39 §4 — admin storage visibility (GET /api/admin/storage/lifecycle).
+type StorageGroup = { key: string; label: string; bytes: number; files: number; categories: string[] };
+type StorageVisibilityInfo = {
+  totalManagedBytes: number;
+  groups: StorageGroup[];
+  reclaimable: { estimatedBytes: number; eligibleFiles: number; scannedFiles: number; protectedFiles: number; protectedBytes: number; limits: { minAgeHours: number; maxFiles: number; maxBytes: number } };
+  inaccessible: Array<{ category: string; reason: string }>;
+  lastCleanup: { ranAt: string; deletedFiles: number; failedFiles: number; reclaimedBytes: number } | null;
+  note: string;
+};
 
 const fmtBytes = (n: number | null) => {
   if (n === null || n === undefined) return "—";
@@ -70,6 +80,9 @@ export default function SettingsPage() {
   // M24 §6 — honest system status (public health + admin ops).
   const [health, setHealth] = useState<HealthInfo | null>(null);
   const [adminHealth, setAdminHealth] = useState<HealthInfo | null>(null);
+  // M39 §4 — admin storage visibility (read-only; cleanup stays CLI/API-only).
+  const [adminStorage, setAdminStorage] = useState<StorageVisibilityInfo | null>(null);
+  const [storageBusy, setStorageBusy] = useState(false);
   // M25 P2 — plan & usage (real subscription + entitlements + usage).
   const [sub, setSub] = useState<SubState | null>(null);
   const [plans, setPlans] = useState<PlanEntry[] | null>(null);
@@ -260,6 +273,20 @@ export default function SettingsPage() {
     setAdminHealth(next ?? { status: "unavailable" });
     const a = await fetch("/api/admin/audit?take=15");
     if (a.ok) setAuditFeed(((await a.json()) as { events: Array<{ id: string; action: string; detail: string | null; createdAt: string }> }).events);
+  };
+
+  /** M39 §4 — read-only storage visibility (visibility endpoint never cleans up). */
+  const loadAdminStorage = async () => {
+    setStorageBusy(true);
+    try {
+      const res = await fetch("/api/admin/storage/lifecycle");
+      if (res.ok) setAdminStorage(((await res.json()) as { visibility: StorageVisibilityInfo }).visibility ?? null);
+      else setAdminStorage(null);
+    } catch {
+      setAdminStorage(null);
+    } finally {
+      setStorageBusy(false);
+    }
   };
 
   if (loading) return <main className="mx-auto max-w-3xl px-6 py-16 text-sm text-[#8f8f8a]">Loading…</main>;
@@ -507,7 +534,52 @@ export default function SettingsPage() {
           <h2 id="sysstatus-h" className="text-sm font-semibold text-[#d8d8d2]">System status (admin)</h2>
           <div className="mt-2 flex flex-wrap items-center gap-2">
             <button type="button" className={btn} onClick={loadAdminStatus}>Load operational status</button>
+            <button type="button" className={btn} onClick={loadAdminStorage} disabled={storageBusy}>Load storage visibility</button>
           </div>
+          {/* M39 §4 — storage visibility: read-only, admin-only, never triggers cleanup. */}
+          {adminStorage && (
+            <div className="mt-3 border-t border-[#2a2a26] pt-3" data-testid="storage-visibility">
+              <span className={label}>Managed storage (visibility only — cleanup is a separate explicit admin action)</span>
+              <div className="mt-1 overflow-x-auto">
+                <table className="w-full min-w-[420px] text-left text-[11px]">
+                  <thead>
+                    <tr className="text-[#6a6a64]">
+                      <th className="py-0.5 pr-3 font-medium">Class</th>
+                      <th className="py-0.5 pr-3 font-medium">Files</th>
+                      <th className="py-0.5 font-medium">Bytes</th>
+                    </tr>
+                  </thead>
+                  <tbody className="text-[#b8b8b2]">
+                    {adminStorage.groups.map((g) => (
+                      <tr key={g.key}>
+                        <td className="py-0.5 pr-3">{g.label}</td>
+                        <td className="py-0.5 pr-3">{g.files}</td>
+                        <td className="py-0.5">{fmtBytes(g.bytes)}</td>
+                      </tr>
+                    ))}
+                    <tr className="border-t border-[#2a2a26]">
+                      <td className="py-0.5 pr-3 font-semibold text-[#d8d8d2]">Total managed</td>
+                      <td className="py-0.5 pr-3">{adminStorage.groups.reduce((n, g) => n + g.files, 0)}</td>
+                      <td className="py-0.5 font-semibold text-[#d8d8d2]">{fmtBytes(adminStorage.totalManagedBytes)}</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+              <ul className="mt-2 space-y-0.5 text-[11px] text-[#8f8f8a]">
+                <li><strong className="text-[#b8b8b2]">Estimated reclaimable (dry-run, not yet freed):</strong> {fmtBytes(adminStorage.reclaimable.estimatedBytes)} across {adminStorage.reclaimable.eligibleFiles} eligible artifact(s) — min age {adminStorage.reclaimable.limits.minAgeHours}h, run limits {adminStorage.reclaimable.limits.maxFiles} files / {fmtBytes(adminStorage.reclaimable.limits.maxBytes)}.</li>
+                <li><strong className="text-[#b8b8b2]">Protected in scanned classes:</strong> {adminStorage.reclaimable.protectedFiles} file(s) / {fmtBytes(adminStorage.reclaimable.protectedBytes)} (referenced, too young, or over run limits).</li>
+                {adminStorage.lastCleanup ? (
+                  <li><strong className="text-[#b8b8b2]">Last cleanup (actual):</strong> {new Date(adminStorage.lastCleanup.ranAt).toLocaleString()} — {adminStorage.lastCleanup.deletedFiles} deleted, {adminStorage.lastCleanup.failedFiles} failed, {fmtBytes(adminStorage.lastCleanup.reclaimedBytes)} actually reclaimed.</li>
+                ) : (
+                  <li><strong className="text-[#b8b8b2]">Last cleanup (actual):</strong> no execute run recorded yet.</li>
+                )}
+                {adminStorage.inaccessible.length > 0 && (
+                  <li className="text-amber-400"><strong>Unknown (unreadable, not counted as zero):</strong> {adminStorage.inaccessible.map((i) => `${i.category} (${i.reason})`).join(", ")}</li>
+                )}
+              </ul>
+              <p className="mt-1 text-[10px] leading-relaxed text-[#6a6a64]">{adminStorage.note}</p>
+            </div>
+          )}
           {/* M25 P7 — admin plan assignment (payments disabled; manual only). */}
           <div className="mt-3 border-t border-[#2a2a26] pt-3">
             <span className={label}>Assign plan (manual — payments disabled)</span>

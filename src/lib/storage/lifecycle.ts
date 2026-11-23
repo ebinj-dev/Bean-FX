@@ -380,3 +380,91 @@ export async function storageUsage(): Promise<StorageUsageSummary> {
     note: "Estimates from the managed roots only; reclaimed-vs-protected distinctions come from lifecycle runs, never from this summary.",
   };
 }
+
+/** M39 §4 — admin storage visibility: truthful rollups of the usage classes,
+ *  a bounded dry-run GC outlook, categories that could not be read (reported
+ *  unknown, never pretended zero), and the last AUDITED cleanup execution.
+ *  Read-only in every field: "reclaimable" is always an ESTIMATE from a dry
+ *  run; only lastCleanup.reclaimedBytes reports bytes actually deleted. */
+export interface StorageVisibilitySummary {
+  totalManagedBytes: number;
+  /** Rollups over the same measured classes — no double counting: every
+   *  category appears in exactly one group and groups sum to the total. */
+  groups: Array<{ key: string; label: string; bytes: number; files: number; categories: string[] }>;
+  /** Dry-run GC outlook under the CURRENT conservative limits. */
+  reclaimable: {
+    estimatedBytes: number;
+    eligibleFiles: number;
+    scannedFiles: number;
+    protectedFiles: number;
+    protectedBytes: number;
+    limits: { minAgeHours: number; maxFiles: number; maxBytes: number };
+  };
+  /** Categories whose directory could not be read (permission/IO) — their
+   *  bytes are UNKNOWN, not zero. */
+  inaccessible: Array<{ category: string; reason: string }>;
+  /** Latest `storage.lifecycle.execute` audit record, if any. */
+  lastCleanup: { ranAt: string; deletedFiles: number; failedFiles: number; reclaimedBytes: number } | null;
+  note: string;
+}
+
+const VISIBILITY_GROUPS: Array<{ key: string; label: string; categories: string[] }> = [
+  { key: "original-media", label: "Original & uploaded media", categories: ["originals"] },
+  { key: "final-deliverables", label: "Final exports & renders", categories: ["exports", "timeline-renders", "publish-variants"] },
+  { key: "packages-archives", label: "Packages & archives", categories: ["packages", "project-archives"] },
+  { key: "proxies-previews", label: "Proxies & previews", categories: ["proxies", "publish-thumbnails"] },
+  { key: "derived-cache", label: "Derived cache (regenerable)", categories: ["waveforms"] },
+  { key: "temporary", label: "Temporary artifacts", categories: ["tmp", "laxii-outputs"] },
+];
+
+/** Every measured category, exported for tests — the groups must partition this exactly. */
+export const MEDIA_GROUP_CATEGORIES: readonly string[] = [...new Set(VISIBILITY_GROUPS.flatMap((g) => g.categories))];
+
+export async function storageVisibility(): Promise<StorageVisibilitySummary> {
+  const usage = await storageUsage();
+  const groups = VISIBILITY_GROUPS.map((g) => {
+    const members = usage.classes.filter((c) => g.categories.includes(c.category));
+    return { key: g.key, label: g.label, bytes: members.reduce((n, c) => n + c.bytes, 0), files: members.reduce((n, c) => n + c.files, 0), categories: g.categories };
+  });
+  // Bounded dry-run outlook — analysis mutates nothing.
+  const outlook = await analyzeLifecycle();
+  // Categories that exist but cannot be ENUMERATED must show UNKNOWN.
+  // (Directory read failures are the honest signal — a chmod 000 directory
+  // under a non-root deploy and a planted file both land here; ENOENT just
+  // means the class has no artifacts yet and truthfully reports zero.)
+  const inaccessible: Array<{ category: string; reason: string }> = [];
+  for (const s of VISIBILITY_GROUPS.flatMap((g) => g.categories)) {
+    try {
+      await fs.readdir(path.join(MEDIA_ROOT, s));
+    } catch (err) {
+      const code = (err as NodeJS.ErrnoException)?.code;
+      if (code !== "ENOENT") inaccessible.push({ category: s, reason: code ?? "unreadable" });
+    }
+  }
+  // Last audited EXECUTION (never the dry-run proposals).
+  const last = await db.auditEvent.findFirst({ where: { action: "storage.lifecycle.execute" }, orderBy: { createdAt: "desc" }, select: { createdAt: true, detail: true } });
+  let lastCleanup: StorageVisibilitySummary["lastCleanup"] = null;
+  if (last) {
+    try {
+      const d = JSON.parse(last.detail ?? "{}") as { deleted?: number; failed?: number; reclaimedBytes?: number };
+      lastCleanup = { ranAt: last.createdAt.toISOString(), deletedFiles: Number(d.deleted) || 0, failedFiles: Number(d.failed) || 0, reclaimedBytes: Number(d.reclaimedBytes) || 0 };
+    } catch {
+      lastCleanup = { ranAt: last.createdAt.toISOString(), deletedFiles: 0, failedFiles: 0, reclaimedBytes: 0 };
+    }
+  }
+  return {
+    totalManagedBytes: usage.totalManagedBytes,
+    groups,
+    reclaimable: {
+      estimatedBytes: outlook.reclaimableBytes,
+      eligibleFiles: outlook.eligibleFiles,
+      scannedFiles: outlook.scannedFiles,
+      protectedFiles: outlook.protectedFiles,
+      protectedBytes: outlook.protectedBytes,
+      limits: outlook.limits,
+    },
+    inaccessible,
+    lastCleanup,
+    note: "reclaimable.estimatedBytes is a dry-run ESTIMATE under the current limits (not yet freed); lastCleanup.reclaimedBytes is what a past execute run ACTUALLY deleted. Unreadable categories are unknown, not zero.",
+  };
+}

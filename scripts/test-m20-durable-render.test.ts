@@ -274,12 +274,19 @@ describe("M20 §3 — operational resilience", () => {
     // Operational runbook: clear orphaned encoders before restart.
     execSync("pkill -9 ffmpeg || true");
     (results.ops as Record<string, unknown>)["interrupt"] = { killedServerPid: serverPid, jobId };
-    // Restart the server.
+    // Restart the server. M39 portability fix: respawn from the CHECKOUT THE
+    // SUITE RUNS IN (process.cwd()) — the pre-M39 hardcoded /home/z/my-project
+    // cwd restarted a DIFFERENT (older) workspace when the repo lives
+    // elsewhere, so the recovery server was not the intended build. The
+    // contract is unchanged: same dev-server.sh, same env, same recovery
+    // sweep. BEANFX_DATA_DIR flows through process.env when the harness
+    // exports it (the M39 gate does) — keeping the respawn's media root
+    // isolated exactly like the primary server.
     const env = { ...process.env, DATABASE_URL: scratchLegacyDb("m20-durable-render"), PORT: "3117", RATE_LIMIT_SCALE: "50" };
     // Capture the respawned server's output — a silent respawn hides worker
     // crashes (run 6's post-T7 tick wedge had no trail because of stdio ignore).
     const srvLog = fs.openSync("/home/z/my-project/m20-respawn-server.log", "a");
-    spawn("bash", ["scripts/dev-server.sh"], { env, cwd: "/home/z/my-project", detached: true, stdio: ["ignore", srvLog, srvLog] }).unref();
+    spawn("bash", ["scripts/dev-server.sh"], { env, cwd: process.cwd(), detached: true, stdio: ["ignore", srvLog, srvLog] }).unref();
     let up = false;
     for (let i = 0; i < 90; i++) { // next dev cold start can exceed 60s after port release
       await new Promise((r) => setTimeout(r, 2000));
