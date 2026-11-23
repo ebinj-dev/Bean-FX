@@ -75,5 +75,9 @@ export async function GET() {
     throw e;
   }
   const usage = await storageUsage();
-  return NextResponse.json({ usage });
+  // M39 §4 — additive admin visibility: rollups + bounded dry-run outlook +
+  // last audited cleanup. Read-only; never triggers cleanup.
+  const { storageVisibility } = await import("@/lib/storage/lifecycle");
+  const visibility = await storageVisibility();
+  return NextResponse.json({ usage, visibility });
 }
