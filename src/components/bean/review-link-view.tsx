@@ -9,6 +9,8 @@ type LinkView = {
   permission: "VIEW" | "COMMENT" | "APPROVE";
   expiresAt: string;
   unresolvedComments: number;
+  /** M40 §7 — timeline range this preview represents (null = full timeline / legacy). */
+  previewRange: { startFrame: number; endFrame: number; fps: string | null } | null;
   previewUrl: string | null;
   passwordRequired?: boolean;
 };
@@ -154,8 +156,15 @@ export function ReviewLinkView({ token }: { token: string }) {
       </div>
 
       {view.previewUrl ? (
-        <video ref={videoRef} controls playsInline src={view.previewUrl} className="w-full rounded border border-[#2a2a2a] bg-black"
-          onTimeUpdate={(e) => setCurrentFrame(Math.round((e.currentTarget.currentTime || 0) * 30))} />
+        <div>
+          {view.previewRange && (
+            <div className="mb-1 inline-block rounded border border-[#2a2a2a] px-1.5 py-0.5 text-[9px] text-[#8f8f8a]" data-testid="guest-preview-range">
+              RANGE {view.previewRange.startFrame}–{view.previewRange.endFrame}f{view.previewRange.fps ? ` · ${view.previewRange.fps} fps` : ""}
+            </div>
+          )}
+          <video ref={videoRef} controls playsInline src={view.previewUrl} className="w-full rounded border border-[#2a2a2a] bg-black"
+            onTimeUpdate={(e) => setCurrentFrame(Math.round((e.currentTarget.currentTime || 0) * 30))} />
+        </div>
       ) : (
         <div className="rounded border border-[#2a2a2a] bg-[#0b0b0a] p-6 text-center text-[#8f8f8a]">The review preview is still rendering — refresh in a moment.</div>
       )}
