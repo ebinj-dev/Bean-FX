@@ -323,7 +323,15 @@ function planTrackTransitions(seq: Sequence, trackId: string, plans: RenderClipP
   return pairs;
 }
 
-export function buildTimelineGraph(seq: Sequence, startFrame: number, endFrame: number, assetInputs: Map<string, { index: number; isImage: boolean; hasAudio: boolean }>, report?: TransitionPlanReport) {
+export function buildTimelineGraph(seq: Sequence, startFrame: number, endFrame: number, assetInputs: Map<string, { index: number; isImage: boolean; hasAudio: boolean }>, report?: TransitionPlanReport, opts?: { audioOnly?: boolean }) {
+  // M38 fix: audio-only formats build a TRUE audio-only graph. ffmpeg 7.1.5
+  // (measured — this bug shipped in M37 and was caught by the M38 live batch
+  // suite) REJECTS filter-graph binding when any filter output is
+  // unconnected, so building the video composite and mapping only [mixout]
+  // fails at bind time on real audio-only renders. Skipping the video chains
+  // entirely is also strictly cheaper: no base canvas, no segments, no
+  // overlays are ever computed for WAV/MP3 exports.
+  const audioOnly = opts?.audioOnly === true;
   const fps = seq.fps.num / seq.fps.den;
   const totalSec = (endFrame - startFrame) / fps;
   const parts: string[] = [];
@@ -340,8 +348,11 @@ export function buildTimelineGraph(seq: Sequence, startFrame: number, endFrame: 
   // validated transition are xfade-merged into a "run" first (real frames
   // from both inputs); every run/solo clip then overlays the base with its
   // exact enable window — top-down track order preserved.
-  parts.push(`color=c=black:s=${seq.width}x${seq.height}:r=${fps}:d=${q(totalSec)},setsar=1[base]`);
+  // (M38: the whole video composite — segments, captions, graphics — is
+  // emitted only for video formats; interior indentation unchanged.)
   let videoLabel = "[base]";
+  if (!audioOnly) {
+  parts.push(`color=c=black:s=${seq.width}x${seq.height}:r=${fps}:d=${q(totalSec)},setsar=1[base]`);
   {
     let segCounter = 0;
     let compCounter = 0;
@@ -451,6 +462,7 @@ export function buildTimelineGraph(seq: Sequence, startFrame: number, endFrame: 
     const filters = buildGraphicFilters({ clip: g, localIn, localOut, offsetSec: (g.timelineStartFrame - startFrame) / fps }, { seq, fps, startFrame, endFrame });
     for (const f of filters) parts.push(`${videoLabel}${f}${videoLabel}`);
   }
+  }
 
   // Audio: silence bed + every audible segment → amix (no normalize: the
   // clip gains ARE the mix, matching the preview's linear sum).
@@ -506,7 +518,7 @@ export function buildTimelineGraph(seq: Sequence, startFrame: number, endFrame: 
   return {
     filterComplex: parts.join(";"),
     videoLabel,
-    videoPlanCount: visualPlans.length,
+    videoPlanCount: audioOnly ? 0 : visualPlans.length,
     audioPlanCount: audioPlans.length,
     skippedMissing: collectVisualPlans(seq, startFrame, endFrame).filter((p) => !assetInputs.has(p.clip.sourceAssetId)).length,
   };
@@ -770,9 +782,10 @@ export async function runTimelineRenderJob(job: { id: string; userId: string; pa
     return;
   }
 
-  const graph = buildTimelineGraph(seq, startFrame, endFrame, used, transitionReport);
-  // M37: audio-only formats map ONLY the mix — unmapped video chains are not
-  // executed by ffmpeg (it computes only chains feeding mapped outputs).
+  const graph = buildTimelineGraph(seq, startFrame, endFrame, used, transitionReport, { audioOnly: spec.audioOnly });
+  // M37: audio-only formats map ONLY the mix. (M38 fix: the graph is now
+  // genuinely audio-only — ffmpeg rejects ANY unconnected filter output at
+  // bind time, so the unmapped video composite broke WAV/MP3 renders.)
   const mapArgs = spec.audioOnly ? ["-map", "[mixout]"] : ["-map", graph.videoLabel, "-map", "[mixout]"];
   const args = [
     "-y", "-loglevel", "error",
