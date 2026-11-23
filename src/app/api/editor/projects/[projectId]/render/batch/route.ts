@@ -16,6 +16,15 @@
  * (project, format, range); completed items are reported as reused instead
  * of re-rendered; FAILED/CANCELLED items may be re-submitted (that is the
  * retry path).
+ *
+ * M39 §7 — per-item timeline ranges: each item may carry its OWN
+ * startFrame/endFrame (`items: [{format, startFrame, endFrame}, …]`).
+ * Ranges are validated per item (negative/malformed by schema; reversed
+ * and out-of-bounds against the sequence) BEFORE anything is enqueued —
+ * one invalid item rejects the whole request with per-item reasons and no
+ * partial submission. The M38 common-range form (formats + shared range)
+ * is preserved unchanged; the dedup identity (project, format, range)
+ * distinguishes genuinely different ranges.
  */
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
@@ -30,11 +39,31 @@ import { audit } from "@/lib/audit";
 export const runtime = "nodejs";
 
 const formatEnum = z.enum(RENDER_OUTPUT_FORMATS as unknown as [string, ...string[]]);
-const BatchRenderSchema = z.object({
-  formats: z.array(formatEnum).min(1).max(RENDER_OUTPUT_FORMATS.length),
+const BatchItemSchema = z.object({
+  format: formatEnum,
   startFrame: z.number().int().min(0).optional(),
   endFrame: z.number().int().min(1).optional(),
 });
+// M39 §7 — additive per-item timeline ranges: each batch item may carry its
+// OWN start/end frames. The M38 common-range form (formats + shared
+// startFrame/endFrame) is preserved unchanged; the two forms are mutually
+// exclusive so a request can never mix them ambiguously. Every item is
+// validated independently BEFORE anything is enqueued (all-or-nothing).
+const BatchRenderSchema = z
+  .object({
+    formats: z.array(formatEnum).min(1).max(RENDER_OUTPUT_FORMATS.length).optional(),
+    items: z.array(BatchItemSchema).min(1).max(24).optional(),
+    startFrame: z.number().int().min(0).optional(),
+    endFrame: z.number().int().min(1).optional(),
+  })
+  .superRefine((v, ctx) => {
+    if (v.items && v.formats !== undefined) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Provide either per-item 'items' or the common 'formats' form — not both." });
+    }
+    if (!v.items && !v.formats) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Provide 'items' (per-item ranges) or 'formats' (common range)." });
+    }
+  });
 
 interface RenderParams {
   projectId?: string;
@@ -63,21 +92,63 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ projectId:
     const access = await getProjectAccess(user.id, project);
     if (!canEdit(access)) return badRequest("Project not found or not owned by the caller.");
   }
-  const { formats, startFrame, endFrame } = parsed.data;
-  const uniqueFormats = [...new Set(formats)];
+  const { formats, items, startFrame, endFrame } = parsed.data;
+  // Normalize to a per-item list: the legacy form fans the common range out
+  // to every unique format (M38 behavior, unchanged); the items form keeps
+  // each item's own range. Identical items collapse the same way M38
+  // collapsed duplicate formats.
+  const normalized: Array<{ format: string; startFrame?: number; endFrame?: number }> = items
+    ? items
+    : [...new Set(formats ?? [])].map((format) => ({ format, startFrame, endFrame }));
+  const seen = new Set<string>();
+  const batchItems = normalized.filter((it) => {
+    const key = `${it.format}|${it.startFrame ?? ""}|${it.endFrame ?? ""}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
 
   const version = await db.timelineVersion.findFirst({ where: { projectId }, orderBy: { versionNumber: "desc" } });
   if (!version) return badRequest("The project has no sequence to render yet.");
+  const seq = JSON.parse(version.sequenceJson) as { clips?: Array<{ timelineStartFrame: number; timelineDurationFrames: number }>; fps?: { num: number; den: number } };
+  const fps = seq.fps && seq.fps.den ? seq.fps.num / seq.fps.den : 30;
+  const seqEnd = (seq.clips ?? []).reduce((m, c) => Math.max(m, c.timelineStartFrame + c.timelineDurationFrames), 0);
 
-  // M25 P2 — plan entitlements, metered per item (each item is a real render).
+  // M39 §7 — validate EVERY item's range BEFORE enqueueing anything: one
+  // invalid item rejects the whole request with per-item reasons and NO
+  // partial submission (a failed item can never strand its batch mates).
+  const rejected: Array<{ index: number; format: string; range: { startFrame?: number; endFrame?: number }; reason: string }> = [];
+  batchItems.forEach((item, index) => {
+    const { startFrame: s, endFrame: e } = item;
+    const range = { startFrame: s, endFrame: e };
+    if (s !== undefined && e !== undefined && e <= s) {
+      rejected.push({ index, format: item.format, range, reason: `reversed range (end frame ${e} ≤ start frame ${s})` });
+    } else if (seqEnd === 0 && (s !== undefined || e !== undefined)) {
+      rejected.push({ index, format: item.format, range, reason: "out of bounds (sequence has no clips)" });
+    } else if (e !== undefined && e > seqEnd) {
+      rejected.push({ index, format: item.format, range, reason: `out of bounds (sequence ends at frame ${seqEnd})` });
+    } else if (s !== undefined && s >= seqEnd) {
+      rejected.push({ index, format: item.format, range, reason: `out of bounds (sequence ends at frame ${seqEnd})` });
+    }
+  });
+  if (rejected.length > 0) {
+    await audit("render.batch.reject", { userId: user.id, detail: JSON.stringify({ projectId, rejected }) });
+    return NextResponse.json(
+      { error: `Invalid batch item(s): ${rejected.map((r) => `#${r.index} ${r.format} — ${r.reason}`).join("; ")}`, rejected },
+      { status: 400 },
+    );
+  }
+
+  // M25 P2 — plan entitlements, metered per item (each item is a real render
+  // measured by its own range).
   try {
-    const seq = JSON.parse(version.sequenceJson) as { clips?: Array<{ timelineStartFrame: number; timelineDurationFrames: number }>; fps?: { num: number; den: number } };
-    const fps = seq.fps && seq.fps.den ? seq.fps.num / seq.fps.den : 30;
-    const seqEnd = (seq.clips ?? []).reduce((m, c) => Math.max(m, c.timelineStartFrame + c.timelineDurationFrames), 0);
-    const renderEnd = endFrame ?? seqEnd;
-    const estMinutes = Math.max(1 / 60, (renderEnd - (startFrame ?? 0)) / Math.max(1, fps) / 60);
+    const estMinutes = batchItems.reduce((sum, item) => {
+      const end = item.endFrame ?? seqEnd;
+      const start = item.startFrame ?? 0;
+      return sum + Math.max(1 / 60, (end - start) / Math.max(1, fps) / 60);
+    }, 0);
     await assertWithinLimit(user.id, "maxConcurrentRenders");
-    await assertWithinLimit(user.id, "monthlyExportMinutes", Math.ceil(estMinutes * uniqueFormats.length));
+    await assertWithinLimit(user.id, "monthlyExportMinutes", Math.ceil(estMinutes));
   } catch (err) {
     if (err instanceof PlanLimitError) {
       const { body, status } = planLimitResponse(err);
@@ -86,10 +157,11 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ projectId:
     throw err;
   }
 
-  const created: Array<{ format: string; jobId: string; reused: boolean; status: string }> = [];
-  const rejected: Array<{ format: string; reason: string }> = [];
-  for (const format of uniqueFormats) {
-    // Duplicate-submission protection: one ACTIVE job per (project, format, range).
+  const created: Array<{ format: string; jobId: string; reused: boolean; status: string; range: { startFrame?: number; endFrame?: number } }> = [];
+  for (const item of batchItems) {
+    // Duplicate-submission protection: one ACTIVE job per (project, format,
+    // range) — the per-item range makes genuinely different ranges distinct
+    // identities while identical ranges still dedup.
     const recent = await db.job.findMany({
       where: { userId: user.id, type: "RENDER_TIMELINE", status: { in: ["QUEUED", "PROCESSING"] } },
       orderBy: { createdAt: "desc" },
@@ -99,25 +171,25 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ projectId:
     const active = recent.find((j) => {
       try {
         const p = JSON.parse(j.paramsJson ?? "{}") as RenderParams;
-        return p.projectId === projectId && (p.format ?? "mp4") === format && sameRange(p, { startFrame, endFrame });
+        return p.projectId === projectId && (p.format ?? "mp4") === item.format && sameRange(p, item);
       } catch {
         return false;
       }
     });
     if (active) {
-      created.push({ format, jobId: active.id, reused: true, status: active.status });
+      created.push({ format: item.format, jobId: active.id, reused: true, status: active.status, range: { startFrame: item.startFrame, endFrame: item.endFrame } });
       continue;
     }
     const jobId = await enqueueMediaJob(user.id, JOB_TYPE_RENDER_TIMELINE, {
       projectId,
-      startFrame,
-      endFrame,
-      format,
+      startFrame: item.startFrame,
+      endFrame: item.endFrame,
+      format: item.format,
     });
-    created.push({ format, jobId, reused: false, status: "QUEUED" });
+    created.push({ format: item.format, jobId, reused: false, status: "QUEUED", range: { startFrame: item.startFrame, endFrame: item.endFrame } });
   }
-  await audit("render.batch", { userId: user.id, detail: JSON.stringify({ projectId, formats: created.map((c) => c.format), reused: created.filter((c) => c.reused).length, rejected: rejected.length, range: { startFrame, endFrame } }) });
-  return NextResponse.json({ batch: created, rejected, range: { startFrame, endFrame } }, { status: 202 });
+  await audit("render.batch", { userId: user.id, detail: JSON.stringify({ projectId, items: created.map((c) => ({ format: c.format, range: c.range })), reused: created.filter((c) => c.reused).length }) });
+  return NextResponse.json({ batch: created, rejected: [], range: { startFrame, endFrame } }, { status: 202 });
 }
 
 export async function GET(_req: NextRequest, ctx: { params: Promise<{ projectId: string }> }) {
