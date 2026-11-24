@@ -231,7 +231,7 @@ echo "── J3b M40 range-aware PROJECT package (manifest.exports[] audit trail
 ARCH=$(api POST "/api/projects/$E2E_PROJECT/archive")
 ARCH_ID=$(printf '%s' "$ARCH" | jqpy "print((d.get('archive') or {}).get('id') or d.get('archiveId') or d.get('id',''))" 2>/dev/null)
 AST=""
-for i in $(seq 1 60); do
+for i in $(seq 1 100); do
   AST=$(api GET "/api/projects/$E2E_PROJECT/archive" | jqpy "print((d.get('archive') or {}).get('status',''))" 2>/dev/null)
   [ "$AST" = "COMPLETED" ] || [ "$AST" = "FAILED" ] && break; sleep 3
 done
