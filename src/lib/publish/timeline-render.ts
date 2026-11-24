@@ -154,7 +154,10 @@ function emitVisualSegment(
         }),
       );
     }
-    if (forceAlphaFormat && !seg.some((f) => f.startsWith("format=yuva420p"))) seg.push("format=yuva420p");
+    if (forceAlphaFormat && !seg.some((f) => f.startsWith("format=yuva420p"))) {
+      seg.push("format=yuva420p");
+      seg.push("setsar=1"); // M41: yuva420p re-derives SAR from source metadata — normalize AFTER it
+    }
     // M27 fix: shift PTS so the segment's t equals its TRUE position in the
     // render window (enable windows and tpad-free overlays line up).
     const offsetSec = (plan.winStartFrame - renderStartFrame) / fps;
@@ -197,14 +200,20 @@ function emitVisualSegment(
       const s = transformAt(plan.clip, plan.clip.timelineStartFrame + b0).scale;
       if (Math.abs(s - 1) > 1e-9) {
         if (s < 1) {
-          if (!sub.some((f) => f.startsWith("format=yuva420p"))) sub.push("format=yuva420p");
-          sub.push(`pad=${seq.width}:${seq.height}:(ow-iw)/2:(oh-ih)/2:color=black@0`);
+          if (!sub.some((f) => f.startsWith("format=yuva420p"))) {
+          sub.push("format=yuva420p");
+          sub.push("setsar=1"); // M41: see above — SAR must be normalized before the concat
+        }
+        sub.push(`pad=${seq.width}:${seq.height}:(ow-iw)/2:(oh-ih)/2:color=black@0`);
         } else {
           sub.push(`crop=${seq.width}:${seq.height}:(iw-${seq.width})/2:(ih-${seq.height})/2`);
         }
       }
     }
-    if (forceAlphaFormat && !sub.some((f) => f.startsWith("format=yuva420p"))) sub.push("format=yuva420p");
+    if (forceAlphaFormat && !sub.some((f) => f.startsWith("format=yuva420p"))) {
+      sub.push("format=yuva420p");
+      sub.push("setsar=1"); // M41: concat inputs must carry uniform SAR — normalize AFTER the format change
+    }
     const lab = `[sub${uid}${i}]`;
     subLabels.push(lab);
     parts.push(`${`[bs${uid}${i}]`}${sub.join(",")}${lab}`);

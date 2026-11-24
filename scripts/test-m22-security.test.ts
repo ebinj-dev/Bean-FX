@@ -8,6 +8,9 @@ import { beforeAll, describe, expect, test } from "bun:test";
 import { spawnSync } from "node:child_process";
 import { scratchLegacyDb } from "./legacy-fixture";
 
+// M41-A: repo-relative source paths for static source assertions.
+const REPO_ROOT = new URL("..", import.meta.url).pathname;
+
 const LIVE = "http://localhost:3117";
 process.env.NODE_ENV = "production";
 process.env.DATABASE_URL = scratchLegacyDb("m22-security"); // M34 Track B: isolated fixture, never db/custom.db
@@ -73,7 +76,7 @@ describe("S2 — token storage & revocation", () => {
 
 describe("S3 — localhost exposure & replay", () => {
   test("bridge never binds non-loopback (code + spawned-instance assertion)", () => {
-    const src = require("node:fs").readFileSync("/home/z/my-project/scripts/desktop-bridge.ts", "utf8");
+    const src = require("node:fs").readFileSync(`${REPO_ROOT}scripts/desktop-bridge.ts`, "utf8");
     expect(src).toContain("assertLoopbackBind(HOST)");
     expect(src).toContain("port: 0"); // ephemeral
   });
@@ -92,7 +95,7 @@ describe("S4 — CSRF/origin & cookie surface", () => {
   test("session-authenticated state-changing routes: no CSRF token but SameSite cookies + JSON content type required", async () => {
     // Verify the session cookie flags set by the REAL login route.
     const db2 = (await import("../src/lib/auth"));
-    const src = require("node:fs").readFileSync("/home/z/my-project/src/lib/auth.ts", "utf8");
+    const src = require("node:fs").readFileSync(`${REPO_ROOT}src/lib/auth.ts`, "utf8");
     expect(src).toContain("SameSite"); // partitioned cookie hardening
     void db2;
   });
@@ -113,13 +116,13 @@ describe("S5 — path traversal & unsafe file access", () => {
     await expect(store.save("..\\windows\\system32", "x")).rejects.toThrow(/unsafe credential name/);
   });
   test("bridge cache paths are server-controlled (no user path components in assetRef handling)", () => {
-    const src = require("node:fs").readFileSync("/home/z/my-project/scripts/desktop-bridge.ts", "utf8");
+    const src = require("node:fs").readFileSync(`${REPO_ROOT}scripts/desktop-bridge.ts`, "utf8");
     // cache keys are assetRefs (beanfx-asset://[A-Za-z0-9_-]) — never raw paths
     expect(src).not.toContain("readFileSync(req");
     expect(src).not.toContain("path.join(req");
   });
   test("v1 canonical export takes ids, never paths — no fs reads on user input", () => {
-    const src = require("node:fs").readFileSync("/home/z/my-project/src/app/api/v1/projects/[id]/canonical/route.ts", "utf8");
+    const src = require("node:fs").readFileSync(`${REPO_ROOT}src/app/api/v1/projects/[id]/canonical/route.ts`, "utf8");
     expect(src).not.toContain("readFile");
     expect(src).not.toContain("createReadStream");
   });
@@ -169,7 +172,7 @@ describe("S7 — sensitive information in logs & responses", () => {
 
 describe("S8 — dependency vulnerabilities & failure recovery", () => {
   test("OSV scan: zero known vulnerabilities in the dependency tree", () => {
-    const res = spawnSync("python3", ["-I", "scripts/m20-osv-scan.py"], { cwd: "/home/z/my-project", encoding: "utf8" });
+    const res = spawnSync("python3", ["-I", "scripts/m20-osv-scan.py"], { cwd: new URL("..", import.meta.url).pathname, encoding: "utf8" });
     expect(res.status).toBe(0);
     expect(res.stdout).toContain("saved");
   });

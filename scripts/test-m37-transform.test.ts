@@ -276,3 +276,27 @@ describe("M37 dead effects are now real", () => {
     }
   });
 });
+
+describe("M41 — SAR normalization before concat (real render regression)", () => {
+  test("animated-scale chains re-assert setsar AFTER format=yuva420p (M41 -22 defect)", () => {
+    // The piecewise (animated) transform path concatenates sub-segments. The
+    // alpha pixel-format conversion (format=yuva420p) re-derives SAR from the
+    // decoded source metadata, so a chain that ends on the format change can
+    // present a non-1:1 SAR to the concat while its siblings carry 1:1 —
+    // ffmpeg then fails the whole graph with -22 (observed live in the M41
+    // E2E journey: 1920x1080 SAR 4364:4365 vs 1:1; mp4/mov renders died while
+    // wav/mp3 passed, because the audio-only paths never hit the video concat).
+    const c = mkClip({
+      sourceOutFrame: 240,
+      timelineDurationFrames: 240,
+      keyframes: [kf("scale", 0, 1), kf("scale", 239, 1.25)],
+    });
+    const g = buildTimelineGraph(seqWith([c]), 0, 240, INPUTS);
+    expect(g.filterComplex).toContain("concat=");
+    expect(g.filterComplex).toContain("format=yuva420p");
+    // No chain may END on the pixel-format change right at a label: SAR must
+    // be re-asserted after it (format=yuva420p,setsar=1).
+    expect(g.filterComplex).not.toMatch(/format=yuva420p\[/);
+    expect(g.filterComplex).toContain("format=yuva420p,setsar=1");
+  });
+});

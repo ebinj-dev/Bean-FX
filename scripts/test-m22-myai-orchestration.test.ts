@@ -91,8 +91,8 @@ describe("upstream failure handling — NO false success (M22 P4)", () => {
     await Bun.write(slowBin, "#!/bin/bash\nsleep 30\n");
     await Bun.$`chmod +x ${slowBin}`.quiet();
     const { exitCode, stdout, stderr } = Bun.spawnSync({
-      cmd: ["bun", "-e", `process.env.BEANFX_ZAI_BIN='${slowBin}'; process.env.BEANFX_JAZMII_CLI_TIMEOUT_MS='400'; const m = await import('/home/z/my-project/src/lib/jazmii/providers'); try { await m.ZAI_VIDEO_PROVIDER.createTask({ prompt:'x', quality:'speed', size:'1280x720', fps:'30', durationSec:'5', operation:'textToVideo', withAudio:false }, null); console.log('FALSE_SUCCESS'); } catch (e) { console.log(e instanceof Error ? e.message : String(e)); }`],
-      cwd: "/home/z/my-project",
+      cmd: ["bun", "-e", `process.env.BEANFX_ZAI_BIN='${slowBin}'; process.env.BEANFX_JAZMII_CLI_TIMEOUT_MS='400'; const m = await import(process.cwd() + '/src/lib/jazmii/providers'); try { await m.ZAI_VIDEO_PROVIDER.createTask({ prompt:'x', quality:'speed', size:'1280x720', fps:'30', durationSec:'5', operation:'textToVideo', withAudio:false }, null); console.log('FALSE_SUCCESS'); } catch (e) { console.log(e instanceof Error ? e.message : String(e)); }`],
+      cwd: new URL("..", import.meta.url).pathname,
       env: { ...process.env },
       stdout: "pipe",
       stderr: "pipe",

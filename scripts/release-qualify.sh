@@ -103,14 +103,55 @@ done
 curl -fsS http://127.0.0.1:3117/api/health >/dev/null 2>&1 || fail "stage-2 server never became healthy"
 
 FAILED_SUITES=""
+# M41-A: suite-loop environment contract for the stage-2 server. The server
+# owns ONE scratch DB (:3117). Hybrid suites (direct PrismaClient + HTTP :3117)
+# must see the SAME file or their direct reads/writes target a different DB
+# than the server (observed: 21 of 96 suites failing on exactly this split:
+# record-not-found on rows the server created, and :3118/:hardcoded-path
+# defaults from the pre-M39 workspace layout). Suites that set their own
+# scratch DATABASE_URL override these; pure-HTTP suites are unaffected.
+#   DATABASE_URL           — default-PrismaClient suites (m28-pipeline sweep…)
+#   BEANFX_LEGACY_TEST_DB  — scratchLegacyDb hybrid suites (documented contract
+#                            in scripts/legacy-fixture.ts: "direct DB + HTTP
+#                            :3117 against the same file")
+#   M31_DB / M31_BASE / M33_BASE — suite overrides replacing the hardcoded
+#                            pre-M39 /home/z/my-project workspace paths and the
+#                            never-provided :3118 second server
 for f in $SUITES; do
-  if ! bun test "$f" > "/tmp/m40-stage2-$(basename "$f").log" 2>&1; then
+  if ! env DATABASE_URL="file:$STAGE2_DB" BEANFX_LEGACY_TEST_DB="file:$STAGE2_DB" \
+       M31_DB="file:$STAGE2_DB" M31_BASE="http://127.0.0.1:3117" M33_BASE="http://127.0.0.1:3117" \
+       bun test "$f" > "/tmp/m40-stage2-$(basename "$f").log" 2>&1; then
     FAILED_SUITES="$FAILED_SUITES $(basename "$f")"
     echo "[release] suite FAILED: $(basename "$f") (log: /tmp/m40-stage2-$(basename "$f").log)"
   fi
 done
-if [ -n "$FAILED_SUITES" ]; then RESULTS[tests]="FAIL"; fail "suites failed against the stage-2 integration server:$FAILED_SUITES"; fi
-RESULTS[tests]="PASS"
+# M42-A (M41 Phase F): truthful failure classification. A failed suite is
+# either a PRODUCT/TEST failure (release NOT QUALIFIED) or an evidence-
+# classified infrastructure blocker registered in scripts/release-blockers.json
+# (verdict BLOCKED BY OWNER / INFRASTRUCTURE; never counted as a pass).
+PASSED_COUNT=$(( $(echo "$SUITES" | wc -l) - $(wc -w <<< "$FAILED_SUITES") ))
+BLOCKED_SUITES=""; PRODUCT_FAILS=""; BLOCKED_TOTAL=0; BLOCKED_APPROVED=0
+for s in $FAILED_SUITES; do
+  CLS=$(python3 - "$s" <<'PYB'
+import json, sys
+reg = json.load(open("scripts/release-blockers.json"))
+entry = next((b for b in reg.get("blocked", []) if b.get("suite") == sys.argv[1]), None)
+print(("BLOCKED" if entry else "PRODUCT"), str(bool((entry or {}).get("ownerApproved", False))))
+PYB
+)
+  if [ "${CLS%% *}" = "BLOCKED" ]; then
+    BLOCKED_SUITES="$BLOCKED_SUITES $s"; BLOCKED_TOTAL=$((BLOCKED_TOTAL+1))
+    [ "${CLS#* }" = "True" ] && BLOCKED_APPROVED=$((BLOCKED_APPROVED+1))
+  else
+    PRODUCT_FAILS="$PRODUCT_FAILS $s"
+  fi
+done
+if [ -n "$PRODUCT_FAILS" ]; then RESULTS[tests]="FAIL"; fail "product/test suites failed against the stage-2 integration server:$PRODUCT_FAILS"; fi
+if [ -n "$BLOCKED_SUITES" ]; then
+  RESULTS[tests]="BLOCKED ($PASSED_COUNT passed, blocked:$BLOCKED_SUITES — see scripts/release-blockers.json)"
+else
+  RESULTS[tests]="PASS ($PASSED_COUNT suites)"
+fi
 
 echo "═══ 3/5 M20 LIVE GATE ═══"
 if [ "${SKIP_M20_GATE:-0}" = "1" ]; then
@@ -129,13 +170,33 @@ fi
 RESULTS[security]="PASS"
 
 echo "═══ 5/5 RELEASE QUALIFICATION ═══"
+# M42-A: explicit release states. QUALIFIED requires EVERY stage green AND
+# zero failed suites AND zero blocked suites. Infrastructure blockers force a
+# fail-closed exit 1 with verdict BLOCKED BY OWNER / INFRASTRUCTURE (or
+# QUALIFIED WITH DOCUMENTED LIMITATIONS when every blocker carries explicit
+# ownerApproved=true — the verdict string stays non-green and the exit stays 1:
+# a partially executed suite set is never presented as a complete passing run).
+FAILED_TOTAL=$(( $(wc -w <<< "$FAILED_SUITES") ))
+if [ "$FAILED_TOTAL" -eq 0 ] && [ -z "$BLOCKED_SUITES" ]; then
+  VERDICT="QUALIFIED"; EXIT_CODE=0
+elif [ "$FAILED_TOTAL" -eq 0 ] && [ "$BLOCKED_TOTAL" -eq "$BLOCKED_APPROVED" ]; then
+  VERDICT="QUALIFIED WITH DOCUMENTED LIMITATIONS"; EXIT_CODE=1
+elif [ "$FAILED_TOTAL" -eq 0 ]; then
+  VERDICT="BLOCKED BY OWNER / INFRASTRUCTURE"; EXIT_CODE=1
+else
+  VERDICT="NOT QUALIFIED"; EXIT_CODE=1
+fi
 cat > "$EVID/release-qualification.json" <<EOF
 {
   "ranAt": "$(date -u +%FT%TZ)",
   "sequence": ["build", "unit-integration", "m20-live-gate", "security", "qualification"],
   "results": { "build": "${RESULTS[build]}", "unit-integration": "${RESULTS[tests]}", "m20-live-gate": "${RESULTS[m20gate]}", "security": "${RESULTS[security]}" },
-  "verdict": "QUALIFIED",
+  "suites": { "passed": $PASSED_COUNT, "failedProduct": $(wc -w <<< "$PRODUCT_FAILS"), "failedProductList": $(python3 scripts/_json_wordlist.py "$PRODUCT_FAILS"), "blocked": $(python3 scripts/_json_wordlist.py "$BLOCKED_SUITES"), "blockedApproved": $BLOCKED_APPROVED, "blockedTotal": $BLOCKED_TOTAL, "blockedRegistry": "scripts/release-blockers.json" },
+  "verdict": "$VERDICT",
+  "failClosed": true,
+  "exitCode": $EXIT_CODE,
   "m20GateEvidence": "/home/z/my-project/download/m20-render-logs/gate-summary.json"
 }
 EOF
-echo "[release] VERDICT: QUALIFIED — all stages green; evidence: $EVID/release-qualification.json"
+echo "[release] VERDICT: $VERDICT — evidence: $EVID/release-qualification.json"
+exit $EXIT_CODE
