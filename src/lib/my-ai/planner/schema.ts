@@ -303,7 +303,7 @@ export type PlanStep = z.infer<typeof PlanStepSchema>;
  * never guessed into existence.
  */
 export interface PlanContextHint {
-  clips: Array<{ id: string; startFrame: number; durationFrames: number; trackKind?: string | null }>;
+  clips: Array<{ id: string; startFrame: number; durationFrames: number; trackKind?: string | null; sourceInFrame?: number; sourceOutFrame?: number }>;
   tracks: Array<{ id: string; kind: string }>;
   fps?: number;
 }
@@ -460,12 +460,23 @@ export function normalizePlanCommands(
       const clipId = resolveClip(rc.clipId ?? rc.clip_id);
       if (typeName === "TrimClip") {
         if (!clipId) { warnings.push(`TrimClip dropped: clip reference ${String(rc.clipId)} not resolvable to project media`); continue; }
-        const inF = Number(rc.startFrame ?? rc.sourceInFrame ?? 0);
+        const inF = Number(rc.startFrame ?? rc.sourceInFrame ?? rc.newSourceInFrame ?? NaN);
+        const outF = Number(rc.endFrame ?? rc.sourceOutFrame ?? rc.newSourceOutFrame ?? NaN);
         const dur = Number(rc.durationFrames ?? 0);
         const src = clipById(clipId)!;
-        const clampedIn = Math.max(0, Math.min(inF, Math.max(0, src.durationFrames - 1)));
-        const clampedOut = dur > 0 ? Math.min(clampedIn + dur, src.durationFrames) : src.durationFrames;
-        canonical.push({ type: "TrimClip", clipId, newSourceInFrame: clampedIn, newSourceOutFrame: clampedOut });
+        // M42-H — the clip's REAL source bounds (executor trims are absolute
+        // source positions on the asset; a trim outside the current source
+        // range collapses the timeline and is rejected fail-closed).
+        const sIn = Number.isFinite(src.sourceInFrame) ? (src.sourceInFrame as number) : 0;
+        const sOut = Number.isFinite(src.sourceOutFrame) ? (src.sourceOutFrame as number) : sIn + src.durationFrames;
+        let lo = Number.isFinite(inF) ? inF : sIn;
+        let hi = Number.isFinite(outF) ? outF : (dur > 0 ? lo + dur : sOut);
+        // LLM frames may be asset-absolute while the clip's source window is
+        // [sIn, sOut) — clamp the requested window INTO the real range.
+        lo = Math.max(sIn, Math.min(Math.round(lo), sOut - 1));
+        hi = Math.max(lo + 1, Math.min(Math.round(hi), sOut));
+        if (hi - lo < 1) { warnings.push(`TrimClip dropped: requested source window collapses to zero frames on clip ${clipId} (real source ${sIn}-${sOut})`); continue; }
+        canonical.push({ type: "TrimClip", clipId, newSourceInFrame: lo, newSourceOutFrame: hi });
       } else if (typeName === "AddTransition") {
         if (!clipId) { warnings.push(`AddTransition dropped: clip reference ${String(rc.clipId)} not resolvable`); continue; }
         const kindRaw = String(rc.transitionType ?? rc.kind ?? "CROSS_DISSOLVE");

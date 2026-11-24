@@ -40,6 +40,9 @@ export interface ProjectContext {
       hasKeyframes: boolean;
       hasEffects: boolean;
       assetKind: string | null;
+      /** M42-H — real source bounds so trims are planned against the asset. */
+      sourceInFrame: number;
+      sourceOutFrame: number;
     }[];
     gaps: { trackId: string; startFrame: number; endFrame: number }[];
     overlaps: number;
@@ -90,6 +93,8 @@ export async function resolveProjectContext(projectId: string, userId: string): 
       trackKind: seq.tracks.find((t) => t.id === c.trackId)?.kind ?? "?",
       startFrame: c.timelineStartFrame,
       durationFrames: c.timelineDurationFrames,
+      sourceInFrame: c.sourceInFrame,
+      sourceOutFrame: c.sourceOutFrame,
       label: c.label ?? null,
       caption: c.captionText ?? null,
       hasKeyframes: (c.keyframes?.length ?? 0) > 0,

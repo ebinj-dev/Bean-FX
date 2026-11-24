@@ -120,7 +120,7 @@ export async function createPlan(userId: string, projectId: string, request: str
     // that cannot be mapped honestly are dropped WITH a warning (visible in
     // the plan card), never guessed into existence.
     const norm = normalizePlanCommands(validated.steps as unknown as Array<Record<string, unknown>>, {
-      clips: ctx.sequence.clips.map((c) => ({ id: c.id, startFrame: c.startFrame, durationFrames: c.durationFrames, trackKind: c.trackKind })),
+      clips: ctx.sequence.clips.map((c) => ({ id: c.id, startFrame: c.startFrame, durationFrames: c.durationFrames, trackKind: c.trackKind, sourceInFrame: c.sourceInFrame, sourceOutFrame: c.sourceOutFrame })),
       tracks: ctx.sequence.tracks.map((t) => ({ id: t.id, kind: t.kind })),
       fps: ctx.sequence.fps,
     });
