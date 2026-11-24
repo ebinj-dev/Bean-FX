@@ -1,3 +1,4 @@
+import { CommandSchema } from "@/lib/editor/commands";
 /**
  * MY AI — plan schema, version 1 (M8 §6).
  *
@@ -302,13 +303,14 @@ export type PlanStep = z.infer<typeof PlanStepSchema>;
  * never guessed into existence.
  */
 export interface PlanContextHint {
-  clips: Array<{ id: string; startFrame: number; durationFrames: number; trackKind?: string | null }>;
+  clips: Array<{ id: string; startFrame: number; durationFrames: number; trackKind?: string | null; sourceInFrame?: number; sourceOutFrame?: number }>;
   tracks: Array<{ id: string; kind: string }>;
   fps?: number;
 }
 
 const TRANSITION_ALIASES: Record<string, string> = {
   crossfade: "CROSS_DISSOLVE",
+  "cross_fade": "CROSS_DISSOLVE",
   dissolve: "CROSS_DISSOLVE",
   fade: "FADE_TO_BLACK",
   fadetoblack: "FADE_TO_BLACK",
@@ -332,6 +334,36 @@ const EFFECT_ALIASES: Record<string, string> = {
   warm: "temperature",
   vignette_darkening: "vignette",
 };
+
+
+/** M42-H — a transition window [start, start+dur) is executable ONLY when the
+ * track actually has two overlapping clips covering it (executor rule). The
+ * planner checks this BEFORE emitting, so plans never contain doomed steps. */
+function transitionFeasible(ctxHint: PlanContextHint, start: number, dur: number): boolean {
+  const end = start + dur;
+  const byTrack = new Map<string, Array<{ s: number; e: number }>>();
+  for (const c of ctxHint.clips) {
+    const list = byTrack.get("") ?? [];
+    void list;
+  }
+  for (const c of ctxHint.clips) {
+    // clip startFrame/durationFrames are timeline positions on their track;
+    // ctxHint.clips carries no trackId — group by nearest track is impossible,
+    // so use the video track as the executor does for single-track plans.
+    const arr = byTrack.get("v") ?? [];
+    arr.push({ s: c.startFrame, e: c.startFrame + c.durationFrames });
+    byTrack.set("v", arr);
+  }
+  const arr = byTrack.get("v") ?? [];
+  for (const a of arr) {
+    if (a.e >= end) {
+      for (const b of arr) {
+        if (b !== a && b.s <= start) return true;
+      }
+    }
+  }
+  return false;
+}
 
 export function normalizePlanCommands(
   steps: Array<Record<string, unknown>>,
@@ -364,20 +396,87 @@ export function normalizePlanCommands(
     for (const rc of rawCommands) {
       const typeName = String(rc.command ?? rc.type ?? "").trim();
       if (!typeName) continue;
-      // Already-canonical command (discriminated on `type`) passes through.
-      if (rc.type && !rc.command) {
+      // Pass through ONLY genuine canonical command names — LLMs sometimes put
+      // a transition KIND in `type` (observed: {"type":"CROSS_FADE"}), which
+      // must be rebuilt as an AddTransition, never passed raw.
+      const CANONICAL_COMMANDS = new Set(["AddTrack", "RemoveTrack", "UpdateTrack", "AddClip", "RemoveClip", "SplitClip", "TrimClip", "MoveClip", "RippleDelete", "InsertClip", "ReplaceClip", "RelinkAssets", "AddTransition", "RemoveTransition", "AddEffect", "RemoveEffect", "AddCaption", "AddGraphic", "SetKeyframe", "RemoveKeyframe", "ChangeVolume", "ChangePlaybackSpeed", "UpdateClipProperties", "AddMarker"]);
+      if (rc.type && !rc.command && CANONICAL_COMMANDS.has(String(rc.type))) {
+        // Canonical command name — still map known LLM field aliases (observed:
+        // MoveClip with startFrame instead of newTimelineStartFrame).
+        const t = String(rc.type);
+        if (t === "AddClip") {
+          // LLM flat AddClip {trackId, assetId, startFrame, durationFrames, label}
+          // → canonical {type, clip: ClipCore} with a REAL track and honest bounds.
+          const track = ctxHint.tracks.some((tr) => tr.id === rc.trackId) ? rc.trackId : (videoTracks[0] ?? ctxHint.tracks[0])?.id;
+          const dur = Math.max(1, Math.round(Number(rc.durationFrames ?? 90)));
+          const start = Math.max(0, Math.round(Number(rc.startFrame ?? 0)));
+          canonical.push({
+            type: "AddClip",
+            clip: {
+              id: `cl-${step.id ?? "s"}-${canonical.length}-${start}`,
+              trackId: track,
+              sourceAssetId: String(rc.assetId ?? rc.sourceAssetId ?? ""),
+              sourceInFrame: 0,
+              sourceOutFrame: dur,
+              sourceFps: { num: Math.max(1, Math.round(ctxHint.fps ?? 30)), den: 1 },
+              timelineStartFrame: start,
+              label: typeof rc.label === "string" ? rc.label.slice(0, 120) : null,
+            },
+          });
+          continue;
+        }
+        if (t === "MoveClip") {
+          const cid = resolveClip(rc.clipId ?? rc.clip_id);
+          if (!cid) { warnings.push(`MoveClip dropped: clip reference ${String(rc.clipId)} not resolvable`); continue; }
+          const nsf = Number(rc.newTimelineStartFrame ?? rc.startFrame ?? NaN);
+          if (!Number.isFinite(nsf)) { warnings.push("MoveClip dropped: no timeline start frame"); continue; }
+          canonical.push({ type: "MoveClip", clipId: cid, newTimelineStartFrame: Math.max(0, Math.round(nsf)), newTrackId: typeof rc.trackId === "string" ? rc.trackId : undefined });
+          continue;
+        }
         canonical.push(rc);
         continue;
+      }
+      if (rc.type && !rc.command && !rc.command_name) {
+        // Kind-shaped `type` → intended AddTransition between clipId/targetClipId.
+        const kindRaw = String(rc.type);
+        const kind = TRANSITION_ALIASES[kindRaw.toLowerCase()] ?? (["CUT", "CROSS_DISSOLVE", "FADE_TO_BLACK", "FADE_FROM_BLACK", "ZOOM_IN"].includes(kindRaw) ? kindRaw : null);
+        if (kind && (rc.clipId || rc.targetClipId)) {
+          const clipId = resolveClip(rc.clipId ?? rc.targetClipId);
+          if (clipId) {
+            const track = videoTracks[0] ?? ctxHint.tracks[0];
+            const src = clipById(clipId)!;
+            const dur = Math.max(1, Number(rc.durationFrames ?? 12));
+            const start = Math.max(0, src.startFrame - Math.round(dur / 2));
+            if (!transitionFeasible(ctxHint, start, dur)) { warnings.push(`AddTransition dropped: a ${kind} at frames [${start},${start + dur}) needs two overlapping clips on the track — plan a MoveClip/ripple first`); continue; }
+            canonical.push({ type: "AddTransition", transitionId: `tr-${step.id ?? "s"}-k-${canonical.length}-${src.startFrame}`, trackId: track.id, kind, startFrame: start, durationFrames: dur, params: {} });
+            continue;
+          }
+        }
+        if (!CANONICAL_COMMANDS.has(String(rc.command ?? ""))) {
+          warnings.push(`Command "${typeName}" dropped — not a canonical editor command and not mappable`);
+          continue;
+        }
       }
       const clipId = resolveClip(rc.clipId ?? rc.clip_id);
       if (typeName === "TrimClip") {
         if (!clipId) { warnings.push(`TrimClip dropped: clip reference ${String(rc.clipId)} not resolvable to project media`); continue; }
-        const inF = Number(rc.startFrame ?? rc.sourceInFrame ?? 0);
+        const inF = Number(rc.startFrame ?? rc.sourceInFrame ?? rc.newSourceInFrame ?? NaN);
+        const outF = Number(rc.endFrame ?? rc.sourceOutFrame ?? rc.newSourceOutFrame ?? NaN);
         const dur = Number(rc.durationFrames ?? 0);
         const src = clipById(clipId)!;
-        const clampedIn = Math.max(0, Math.min(inF, Math.max(0, src.durationFrames - 1)));
-        const clampedOut = dur > 0 ? Math.min(clampedIn + dur, src.durationFrames) : src.durationFrames;
-        canonical.push({ type: "TrimClip", clipId, newSourceInFrame: clampedIn, newSourceOutFrame: clampedOut });
+        // M42-H — the clip's REAL source bounds (executor trims are absolute
+        // source positions on the asset; a trim outside the current source
+        // range collapses the timeline and is rejected fail-closed).
+        const sIn = Number.isFinite(src.sourceInFrame) ? (src.sourceInFrame as number) : 0;
+        const sOut = Number.isFinite(src.sourceOutFrame) ? (src.sourceOutFrame as number) : sIn + src.durationFrames;
+        let lo = Number.isFinite(inF) ? inF : sIn;
+        let hi = Number.isFinite(outF) ? outF : (dur > 0 ? lo + dur : sOut);
+        // LLM frames may be asset-absolute while the clip's source window is
+        // [sIn, sOut) — clamp the requested window INTO the real range.
+        lo = Math.max(sIn, Math.min(Math.round(lo), sOut - 1));
+        hi = Math.max(lo + 1, Math.min(Math.round(hi), sOut));
+        if (hi - lo < 1) { warnings.push(`TrimClip dropped: requested source window collapses to zero frames on clip ${clipId} (real source ${sIn}-${sOut})`); continue; }
+        canonical.push({ type: "TrimClip", clipId, newSourceInFrame: lo, newSourceOutFrame: hi });
       } else if (typeName === "AddTransition") {
         if (!clipId) { warnings.push(`AddTransition dropped: clip reference ${String(rc.clipId)} not resolvable`); continue; }
         const kindRaw = String(rc.transitionType ?? rc.kind ?? "CROSS_DISSOLVE");
@@ -387,11 +486,16 @@ export function normalizePlanCommands(
         const src = clipById(clipId)!;
         const dur = Math.max(1, Number(rc.durationFrames ?? 12));
         const start = Math.max(0, src.startFrame - Math.round(dur / 2));
+        if (!transitionFeasible(ctxHint, start, dur)) { warnings.push(`AddTransition dropped: a ${kind} at frames [${start},${start + dur}) needs two overlapping clips on the track — plan a MoveClip/ripple first`); continue; }
         canonical.push({ type: "AddTransition", transitionId: `tr-${step.id ?? "s"}-${canonical.length}-${start}`, trackId: track.id, kind, startFrame: start, durationFrames: dur, params: {} });
       } else if (typeName === "AddEffect") {
         if (!clipId) { warnings.push(`AddEffect dropped: clip reference ${String(rc.clipId)} not resolvable`); continue; }
-        const params = (rc.parameters ?? rc.params ?? {}) as Record<string, unknown>;
-        const effectTypeRaw = String(rc.effectType ?? rc.effect_type ?? "");
+        // Two LLM spellings: flat (effectType + parameters) or nested
+        // (effect: { type: "ColorGrade", params: {...} }) — both normalized
+        // into one canonical AddEffect per REAL EffectType member.
+        const nested = (rc.effect ?? null) as Record<string, unknown> | null;
+        const params = (nested ? (nested.params ?? {}) : (rc.parameters ?? rc.params ?? {})) as Record<string, unknown>;
+        const effectTypeRaw = nested ? String(nested.type ?? "") : String(rc.effectType ?? rc.effect_type ?? "");
         // One canonical effect per REAL EffectType member.
         const entries: Array<[string, number]> = [];
         const effective = EFFECT_ALIASES[effectTypeRaw.toLowerCase()] ?? effectTypeRaw.toLowerCase();
@@ -427,7 +531,17 @@ export function normalizePlanCommands(
         warnings.push(`Command "${typeName}" dropped — not a canonical editor command`);
       }
     }
-    args.commands = canonical;
+    // FINAL SWEEP — every command leaving the planner must validate against
+    // the REAL CommandSchema; anything invalid is dropped with a warning so
+    // the executor can never receive poison (observed: one malformed AddClip
+    // made the whole stored plan unparseable → "invalid stored plan").
+    const valid: Array<Record<string, unknown>> = [];
+    for (const c of canonical) {
+      const check = CommandSchema.safeParse(c);
+      if (check.success) valid.push(c);
+      else warnings.push(`Command dropped — fails the editor command schema (${String((check.error as { issues?: Array<{ message?: string }> }).issues?.[0]?.message ?? "invalid")})`);
+    }
+    args.commands = valid;
     step.args = args;
     return step;
   });

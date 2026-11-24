@@ -120,12 +120,23 @@ export async function createPlan(userId: string, projectId: string, request: str
     // that cannot be mapped honestly are dropped WITH a warning (visible in
     // the plan card), never guessed into existence.
     const norm = normalizePlanCommands(validated.steps as unknown as Array<Record<string, unknown>>, {
-      clips: ctx.sequence.clips.map((c) => ({ id: c.id, startFrame: c.startFrame, durationFrames: c.durationFrames, trackKind: c.trackKind })),
+      clips: ctx.sequence.clips.map((c) => ({ id: c.id, startFrame: c.startFrame, durationFrames: c.durationFrames, trackKind: c.trackKind, sourceInFrame: c.sourceInFrame, sourceOutFrame: c.sourceOutFrame })),
       tracks: ctx.sequence.tracks.map((t) => ({ id: t.id, kind: t.kind })),
       fps: ctx.sequence.fps,
     });
     validated.steps = norm.steps as unknown as PlanStep[];
     for (const w of norm.warnings) validated.warnings.push(w);
+    // M42-H — an LLM plan with ZERO executable commands is a no-op (observed
+    // live: the model returned APPLY_COMMANDS steps with empty commands[]).
+    // That is an INVALID_RESPONSE — fall back to the deterministic planner
+    // rather than offering the user an empty "edit".
+    const commandCount = validated.steps.reduce((n, st) => {
+      const args = st.args as { commands?: unknown[] } | undefined;
+      return n + (st.operation === "APPLY_COMMANDS" && Array.isArray(args?.commands) ? args.commands.length : 0);
+    }, 0);
+    if (commandCount === 0) {
+      throw new LLMError("INVALID_RESPONSE", "plan contains no executable commands (empty APPLY_COMMANDS steps)");
+    }
     const persisted = await persistPlan(validated, userId, projectId, conversationId ?? null, "llm", model);
     return { plan: validated, mode: "llm", note: `Plan proposed by ${model} and validated against project context; approval required before any step runs.` };
   } catch (err) {
