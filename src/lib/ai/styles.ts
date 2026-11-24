@@ -96,6 +96,12 @@ const INTENT_KEYWORDS: Record<string, string[]> = {
   reframe: ["9:16", "vertical version", "reframe", "aspect"],
 };
 
+/** Whole-word keyword hit (substring matches like "ad" in "adjustments" are false positives — live-demo defect). */
+function wordHit(lower: string, kw: string): boolean {
+  const esc = kw.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  return new RegExp(`(^|[^a-z0-9])${esc}([^a-z0-9]|$)`).test(lower);
+}
+
 export function matchStyles(prompt: string): Array<{ recipe: StyleRecipe; score: number; matchedOn: string[] }> {
   const file = loadStyleRecipes();
   const lower = prompt.toLowerCase();
@@ -103,14 +109,14 @@ export function matchStyles(prompt: string): Array<{ recipe: StyleRecipe; score:
     let score = 0;
     const matchedOn: string[] = [];
     for (const [intent, kws] of Object.entries(INTENT_KEYWORDS)) {
-      const hit = kws.some((k) => lower.includes(k));
-      if (hit && recipe.id.startsWith(intent) || (hit && recipe.family === intent)) {
+      const hit = kws.some((k) => wordHit(lower, k));
+      if (hit && (recipe.id.startsWith(intent) || recipe.family === intent)) {
         score += 3;
         matchedOn.push(intent);
       }
     }
-    for (const kw of ["45-second", "trailer", "reel", "wedding", "gaming", "product", "documentary", "captions", "vertical", "silences", "beat", "music"]) {
-      if (lower.includes(kw) && JSON.stringify(recipe).toLowerCase().includes(kw)) {
+    for (const kw of ["trailer", "reel", "wedding", "gaming", "product", "documentary", "captions", "vertical", "silences", "beat", "music", "montage", "cinematic", "tutorial", "podcast", "sports", "advertisement"]) {
+      if (wordHit(lower, kw) && JSON.stringify(recipe).toLowerCase().includes(kw)) {
         score += 1;
         matchedOn.push(kw);
       }

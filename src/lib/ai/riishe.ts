@@ -38,7 +38,12 @@ export interface RiisheChatResult {
 export function classifyIntent(message: string): RiisheIntent {
   const m = message.toLowerCase();
   if (/show me (three|3|some|different).*(styles?|options?)|which styles?|what styles?/.test(m)) return "style-compare";
-  if (/analy(s|z)e|inspect|understand|scene map|what.?s in (the|these|this) (clips?|footage|videos?)/.test(m)) return "analysis";
+  // A prompt that both asks for analysis AND an edit (e.g. "Analyze the
+  // footage and create a montage… Show me the editing plan") is a BUILD —
+  // the build path runs the bounded analysis and plans from it. Pure
+  // inspection prompts (no edit verbs/deliverables) stay analysis.
+  const asksForEdit = /create|make|turn|build|edit|montage|trailer|reel|produce|generate|cut|arrange|apply/.test(m);
+  if (/analy(s|z)e|inspect|understand|scene map|what.?s in (the|these|this) (clips?|footage|videos?)/.test(m) && !asksForEdit) return "analysis";
   if (/undo|redo|revert|last change/.test(m)) return "history-op";
   if (/make the (intro|ending|opening)|shorter|longer|instead|warmer|cooler|faster|slower|smaller|bigger|change the|remove the transition|keep the original audio/.test(m)) return "scoped-revision";
   if (/turn|make|create|build|edit|produce|generate/.test(m)) return "build";
@@ -134,7 +139,11 @@ export async function riisheChat(
     const request = intent === "scoped-revision"
       ? `Revise the current edit: ${message}`
       : `${message}${style ? ` (style: ${style.id})` : ""}`;
-    const plan = await createPlan(userId, projectId, request, conversation);
+    // createPlan persists conversationId with a REAL FK to the Conversation
+    // table — only pass through ids the client actually owns (rows created by
+    // the conversations API). The chat's own continuity is UI-level
+    // (localStorage key), so a synthetic id here would violate the FK.
+    const plan = await createPlan(userId, projectId, request, conversationId);
     return {
       reply: [
         intent === "scoped-revision" ? "Revision planned against the CURRENT timeline (your manual edits are preserved — the plan re-validates against the latest revision)." : "Here is my editing plan for your approval.",

@@ -13,7 +13,7 @@
  * gates (§8). The planner NEVER executes anything.
  */
 import { db } from "@/lib/db";
-import { AIPlanSchema, normalizeLLMPlan, PLAN_SCHEMA_VERSION, type AIPlan, type PlanStep } from "./schema";
+import { AIPlanSchema, normalizeLLMPlan, normalizePlanCommands, PLAN_SCHEMA_VERSION, type AIPlan, type PlanStep } from "./schema";
 import { resolveProjectContext, type ProjectContext } from "@/lib/my-ai/context/resolver";
 import { chatValidated } from "@/lib/my-ai/gateway/structured";
 import { llmHealth, LLMError } from "@/lib/my-ai/gateway/provider";
@@ -108,6 +108,24 @@ export async function createPlan(userId: string, projectId: string, request: str
     );
     // Cross-check against the REAL context: reject plans inventing state.
     const validated = validateAgainstContext(data, ctx);
+    // The server owns the context version — the model must never supply it
+    // (live-demo defect: the model echoed the project id as contextVersion,
+    // which then failed the executor's staleness check). Same rule as the
+    // deterministic path below.
+    validated.contextVersion = contextVersion;
+    validated.idempotencyKey = idempotencyKey;
+    validated.planId = planId;
+    // M42-H — normalize LLM command shapes into the canonical vocabulary with
+    // REAL clip/track ids before the plan is offered for approval. Commands
+    // that cannot be mapped honestly are dropped WITH a warning (visible in
+    // the plan card), never guessed into existence.
+    const norm = normalizePlanCommands(validated.steps as unknown as Array<Record<string, unknown>>, {
+      clips: ctx.sequence.clips.map((c) => ({ id: c.id, startFrame: c.startFrame, durationFrames: c.durationFrames, trackKind: c.trackKind })),
+      tracks: ctx.sequence.tracks.map((t) => ({ id: t.id, kind: t.kind })),
+      fps: ctx.sequence.fps,
+    });
+    validated.steps = norm.steps as unknown as PlanStep[];
+    for (const w of norm.warnings) validated.warnings.push(w);
     const persisted = await persistPlan(validated, userId, projectId, conversationId ?? null, "llm", model);
     return { plan: validated, mode: "llm", note: `Plan proposed by ${model} and validated against project context; approval required before any step runs.` };
   } catch (err) {
@@ -131,28 +149,48 @@ async function persistPlan(
   mode: "llm" | "deterministic-fallback",
   model?: string,
 ): Promise<string> {
-  const row = await db.aIPlan.create({
-    data: {
-      id: plan.planId,
-      userId,
-      projectId,
-      conversationId,
-      schemaVersion: PLAN_SCHEMA_VERSION,
-      status: "AWAITING_APPROVAL",
-      requestSummary: plan.requestSummary,
-      stepsJson: JSON.stringify(plan.steps),
-      contextVersion: plan.contextVersion,
-      plannerMode: mode === "llm" ? `llm:${model ?? "unknown"}` : "deterministic-fallback",
-      engines: JSON.stringify(plan.engines),
-      warningsJson: JSON.stringify(plan.warnings),
-      idempotencyKey: plan.idempotencyKey,
-      expiresAt: new Date(Date.now() + Number(process.env.BEANFX_MYAI_PLAN_TTL_MS ?? 30 * 60_000)),
-    },
-  });
-  await db.automationAudit.create({
-    data: { userId, projectId, action: "PLAN_CREATED", detailJson: JSON.stringify({ planId: plan.planId, mode, steps: plan.steps.length }) },
-  });
-  return row.id;
+  try {
+    const row = await db.aIPlan.create({
+      data: {
+        id: plan.planId,
+        userId,
+        projectId,
+        conversationId,
+        schemaVersion: PLAN_SCHEMA_VERSION,
+        status: "AWAITING_APPROVAL",
+        requestSummary: plan.requestSummary,
+        stepsJson: JSON.stringify(plan.steps),
+        contextVersion: plan.contextVersion,
+        plannerMode: mode === "llm" ? `llm:${model ?? "unknown"}` : "deterministic-fallback",
+        engines: JSON.stringify(plan.engines),
+        warningsJson: JSON.stringify(plan.warnings),
+        idempotencyKey: plan.idempotencyKey,
+        expiresAt: new Date(Date.now() + Number(process.env.BEANFX_MYAI_PLAN_TTL_MS ?? 30 * 60_000)),
+      },
+    });
+    await db.automationAudit.create({
+      data: { userId, projectId, action: "PLAN_CREATED", detailJson: JSON.stringify({ planId: plan.planId, mode, steps: plan.steps.length }) },
+    });
+    return row.id;
+  } catch (err) {
+    // Idempotency: the same (userId, idempotencyKey) plan already exists —
+    // return it instead of failing (the key's whole purpose; the live demo
+    // exposed duplicate requests surfacing as planner errors).
+    const code = (err as { code?: string }).code;
+    if (code === "P2002") {
+      const existing = await db.aIPlan.findFirst({
+        where: { userId, idempotencyKey: plan.idempotencyKey, projectId },
+        orderBy: { createdAt: "desc" },
+      });
+      if (existing) {
+        await db.automationAudit.create({
+          data: { userId, projectId, action: "PLAN_IDEMPOTENT_HIT", detailJson: JSON.stringify({ planId: existing.id, requestedPlanId: plan.planId }) },
+        });
+        return existing.id;
+      }
+    }
+    throw err;
+  }
 }
 
 /** Deterministic cross-check: context refs must be REAL (no invented ids). */

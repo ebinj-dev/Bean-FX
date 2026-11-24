@@ -15,7 +15,7 @@ import type { Sequence } from "@/lib/editor/model";
 import type { EditorSession } from "@/hooks/use-editor-session";
 
 type ModelInfo = { id: string; displayName: string; ready: boolean; readyReason: string; type: string };
-type PlanSummary = { planId: string; status: string; mode?: string; engines?: string[]; steps?: number; warnings?: number; expectedChanges?: string[]; note?: string; result?: { applied?: number; failed?: number; note?: string } };
+type PlanSummary = { planId: string; status: string; mode?: string; engines?: string[]; steps?: number; warnings?: number; expectedChanges?: string[]; note?: string; result?: { applied?: number; failed?: number; note?: string; steps?: Array<{ stepId: string; operation: string; status: string; detail?: string }> }; approvalSummary?: { steps?: number; warnings?: number; expectedChanges?: string[] } | null };
 type ChatMessage = { role: "user" | "assistant"; content: string; mode?: string; styles?: Array<{ id: string; name: string; purpose: string; disclosedGaps: Array<{ capability: string; reason: string }> }>; planId?: string };
 
 const btn = "rounded border border-[#2a2a2a] px-2 py-1 text-[10px] text-[#d8d8d2] hover:border-[#d4a017] hover:text-[#d4a017] disabled:opacity-40";
@@ -95,7 +95,10 @@ export function AiEditChat({ sequence, session, projectId, selectionContext }: {
       setMessages((m) => [...m, { role: "assistant", content: res.reply, mode: res.mode, styles: res.styles, planId: res.planId }]);
       if (res.planId) {
         const detail = await jfetch<PlanSummary>(`/api/my-ai/plans/${res.planId}`).catch(() => null);
-        setPlan(detail ?? { planId: res.planId, status: "PENDING", mode: res.planMode, note: res.planNote });
+        const merged: PlanSummary = detail
+          ? { ...detail, mode: res.planMode, note: res.planNote ?? detail.note, steps: detail.approvalSummary?.steps ?? detail.steps, warnings: detail.approvalSummary?.warnings ?? detail.warnings, expectedChanges: detail.approvalSummary?.expectedChanges ?? detail.expectedChanges }
+          : { planId: res.planId, status: "AWAITING_APPROVAL", mode: res.planMode, note: res.planNote };
+        setPlan(merged);
       }
     } catch (err) {
       if ((err as Error).name === "AbortError") setMessages((m) => [...m, { role: "assistant", content: "Cancelled — the request was stopped before completion (nothing was applied).", mode: "cancelled" }]);
@@ -114,8 +117,20 @@ export function AiEditChat({ sequence, session, projectId, selectionContext }: {
       const res = await jfetch<PlanSummary & { ok?: boolean; status?: string; note?: string }>(`/api/my-ai/plans/${plan.planId}`, {
         method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ action }),
       });
-      setPlan({ ...plan, status: res.status ?? plan.status, note: res.note ?? plan.note, result: action === "execute" ? (res.result ?? plan.result) : plan.result });
-      if (action === "execute") setNotice("Execution finished — the timeline reflects the approved steps (undo/redo available in the editor history).");
+      if (action === "execute") {
+        // The authoritative execution report lives on the plan row — refetch it.
+        const detail = await jfetch<PlanSummary>(`/api/my-ai/plans/${plan.planId}`).catch(() => null);
+        setPlan({ ...plan, status: detail?.status ?? res.status ?? plan.status, note: detail?.note ?? plan.note, result: detail?.result ?? plan.result });
+        const steps = ((detail?.result?.steps ?? res.result?.steps ?? []) as Array<{ status: string; detail?: string }>);
+        const applied = steps.filter((x) => x.status === "COMPLETED").length;
+        const failed = steps.filter((x) => x.status === "FAILED");
+        const skipped = steps.filter((x) => x.status === "SKIPPED").length;
+        setNotice(failed.length === 0 && skipped === 0
+          ? `Execution finished: ${applied} step(s) applied — the timeline reflects the approved steps (undo/redo available in the editor history).`
+          : `Execution finished with problems: ${applied} applied, ${failed.length} failed, ${skipped} skipped. ${failed[0]?.detail ?? ""} — nothing was fabricated; adjust and re-plan.`);
+      } else {
+        setPlan({ ...plan, status: res.status ?? plan.status, note: res.note ?? plan.note });
+      }
     } catch (err) {
       setNotice(err instanceof Error ? err.message : "plan action failed");
     } finally {
@@ -202,11 +217,22 @@ export function AiEditChat({ sequence, session, projectId, selectionContext }: {
             {plan.expectedChanges?.length ? (
               <ul className="mt-1 list-disc pl-4 text-[10px] text-[#a8a8a0]">{plan.expectedChanges.slice(0, 8).map((c, i) => <li key={i}>{c}</li>)}</ul>
             ) : null}
-            {plan.result && <p className="mt-1 text-[10px] text-[#a8a8a0]">execution: {plan.result.applied ?? 0} applied, {plan.result.failed ?? 0} failed — {plan.result.note ?? ""}</p>}
+            {plan.result && (() => {
+              const st = plan.result?.steps ?? [];
+              const applied = st.filter((x) => x.status === "COMPLETED").length;
+              const failed = st.filter((x) => x.status === "FAILED");
+              const skipped = st.filter((x) => x.status === "SKIPPED").length;
+              return (
+                <div className="mt-1 text-[10px] text-[#a8a8a0]">
+                  <p>execution: {applied} applied, {failed.length} failed, {skipped} skipped{plan.result?.note ? ` — ${plan.result.note}` : ""}</p>
+                  {failed.length > 0 && <p className="text-[#d4a017]">failed: {failed.map((f) => `${f.stepId} ${f.operation} — ${(f.detail ?? "").slice(0, 120)}`).join("; ")}</p>}
+                </div>
+              );
+            })()}
             {plan.note && <p className="mt-1 text-[9px] text-[#6a6a64]">{plan.note}</p>}
             <div className="mt-2 flex flex-wrap gap-1">
-              <button type="button" className={btn} disabled={busy !== null || plan.status !== "PENDING"} onClick={() => void planAction("approve")}>Approve</button>
-              <button type="button" className={btn} disabled={busy !== null || plan.status !== "APPROVED"} onClick={() => void planAction("execute")}>Apply to timeline</button>
+              <button type="button" className={btn} disabled={busy !== null || (plan.status !== "AWAITING_APPROVAL" && plan.status !== "DRAFT" && plan.status !== "PENDING")} onClick={() => void planAction("approve")}>Approve</button>
+              <button type="button" className={btn} disabled={busy !== null || (plan.status !== "APPROVED" && plan.status !== "QUEUED")} onClick={() => void planAction("execute")}>Apply to timeline</button>
               <button type="button" className={btn} disabled={busy !== null} onClick={() => void planAction("reject")}>Reject</button>
               <button type="button" className={btn} disabled={busy !== null} onClick={() => void planAction("cancel")}>Cancel</button>
             </div>
