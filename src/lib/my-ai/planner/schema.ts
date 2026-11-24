@@ -309,6 +309,7 @@ export interface PlanContextHint {
 
 const TRANSITION_ALIASES: Record<string, string> = {
   crossfade: "CROSS_DISSOLVE",
+  "cross_fade": "CROSS_DISSOLVE",
   dissolve: "CROSS_DISSOLVE",
   fade: "FADE_TO_BLACK",
   fadetoblack: "FADE_TO_BLACK",
@@ -364,10 +365,32 @@ export function normalizePlanCommands(
     for (const rc of rawCommands) {
       const typeName = String(rc.command ?? rc.type ?? "").trim();
       if (!typeName) continue;
-      // Already-canonical command (discriminated on `type`) passes through.
-      if (rc.type && !rc.command) {
+      // Pass through ONLY genuine canonical command names — LLMs sometimes put
+      // a transition KIND in `type` (observed: {"type":"CROSS_FADE"}), which
+      // must be rebuilt as an AddTransition, never passed raw.
+      const CANONICAL_COMMANDS = new Set(["AddTrack", "RemoveTrack", "UpdateTrack", "AddClip", "RemoveClip", "SplitClip", "TrimClip", "MoveClip", "RippleDelete", "InsertClip", "ReplaceClip", "RelinkAssets", "AddTransition", "RemoveTransition", "AddEffect", "RemoveEffect", "AddCaption", "AddGraphic", "SetKeyframe", "RemoveKeyframe", "ChangeVolume", "ChangePlaybackSpeed", "UpdateClipProperties", "AddMarker"]);
+      if (rc.type && !rc.command && CANONICAL_COMMANDS.has(String(rc.type))) {
         canonical.push(rc);
         continue;
+      }
+      if (rc.type && !rc.command && !rc.command_name) {
+        // Kind-shaped `type` → intended AddTransition between clipId/targetClipId.
+        const kindRaw = String(rc.type);
+        const kind = TRANSITION_ALIASES[kindRaw.toLowerCase()] ?? (["CUT", "CROSS_DISSOLVE", "FADE_TO_BLACK", "FADE_FROM_BLACK", "ZOOM_IN"].includes(kindRaw) ? kindRaw : null);
+        if (kind && (rc.clipId || rc.targetClipId)) {
+          const clipId = resolveClip(rc.clipId ?? rc.targetClipId);
+          if (clipId) {
+            const track = videoTracks[0] ?? ctxHint.tracks[0];
+            const src = clipById(clipId)!;
+            const dur = Math.max(1, Number(rc.durationFrames ?? 12));
+            canonical.push({ type: "AddTransition", transitionId: `tr-${step.id ?? "s"}-k-${canonical.length}-${src.startFrame}`, trackId: track.id, kind, startFrame: Math.max(0, src.startFrame - Math.round(dur / 2)), durationFrames: dur, params: {} });
+            continue;
+          }
+        }
+        if (!CANONICAL_COMMANDS.has(String(rc.command ?? ""))) {
+          warnings.push(`Command "${typeName}" dropped — not a canonical editor command and not mappable`);
+          continue;
+        }
       }
       const clipId = resolveClip(rc.clipId ?? rc.clip_id);
       if (typeName === "TrimClip") {
@@ -390,8 +413,12 @@ export function normalizePlanCommands(
         canonical.push({ type: "AddTransition", transitionId: `tr-${step.id ?? "s"}-${canonical.length}-${start}`, trackId: track.id, kind, startFrame: start, durationFrames: dur, params: {} });
       } else if (typeName === "AddEffect") {
         if (!clipId) { warnings.push(`AddEffect dropped: clip reference ${String(rc.clipId)} not resolvable`); continue; }
-        const params = (rc.parameters ?? rc.params ?? {}) as Record<string, unknown>;
-        const effectTypeRaw = String(rc.effectType ?? rc.effect_type ?? "");
+        // Two LLM spellings: flat (effectType + parameters) or nested
+        // (effect: { type: "ColorGrade", params: {...} }) — both normalized
+        // into one canonical AddEffect per REAL EffectType member.
+        const nested = (rc.effect ?? null) as Record<string, unknown> | null;
+        const params = (nested ? (nested.params ?? {}) : (rc.parameters ?? rc.params ?? {})) as Record<string, unknown>;
+        const effectTypeRaw = nested ? String(nested.type ?? "") : String(rc.effectType ?? rc.effect_type ?? "");
         // One canonical effect per REAL EffectType member.
         const entries: Array<[string, number]> = [];
         const effective = EFFECT_ALIASES[effectTypeRaw.toLowerCase()] ?? effectTypeRaw.toLowerCase();
