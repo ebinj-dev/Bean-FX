@@ -74,6 +74,12 @@ describe("M42-F intent routing", () => {
   test("build", () => {
     expect(classifyIntent("Turn all these clips into a 45-second cinematic trailer.")).toBe("build");
     expect(classifyIntent("Create a professional product advertisement.")).toBe("build");
+    // M42-H regression: analyze + create in ONE prompt is a build (the live
+    // demo exposed the analysis branch swallowing it).
+    expect(classifyIntent("Analyze the selected footage and create a 30-second cinematic promotional montage. Select the strongest shots, establish a compelling opening, arrange the footage into a coherent progression, apply suitable transitions and cinematic color adjustments, preserve intelligible original audio, and create a professional ending. Show me the editing plan before applying it.")).toBe("build");
+    // Pure inspection stays analysis.
+    expect(classifyIntent("Analyze every clip in this project.")).toBe("analysis");
+    expect(classifyIntent("Analyze the clips and tell me what is in them.")).toBe("analysis");
   });
   test("question fallback", () => {
     expect(classifyIntent("What can you do here?")).toBe("question");
