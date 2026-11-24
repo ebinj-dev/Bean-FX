@@ -370,6 +370,17 @@ export function normalizePlanCommands(
       // must be rebuilt as an AddTransition, never passed raw.
       const CANONICAL_COMMANDS = new Set(["AddTrack", "RemoveTrack", "UpdateTrack", "AddClip", "RemoveClip", "SplitClip", "TrimClip", "MoveClip", "RippleDelete", "InsertClip", "ReplaceClip", "RelinkAssets", "AddTransition", "RemoveTransition", "AddEffect", "RemoveEffect", "AddCaption", "AddGraphic", "SetKeyframe", "RemoveKeyframe", "ChangeVolume", "ChangePlaybackSpeed", "UpdateClipProperties", "AddMarker"]);
       if (rc.type && !rc.command && CANONICAL_COMMANDS.has(String(rc.type))) {
+        // Canonical command name — still map known LLM field aliases (observed:
+        // MoveClip with startFrame instead of newTimelineStartFrame).
+        const t = String(rc.type);
+        if (t === "MoveClip") {
+          const cid = resolveClip(rc.clipId ?? rc.clip_id);
+          if (!cid) { warnings.push(`MoveClip dropped: clip reference ${String(rc.clipId)} not resolvable`); continue; }
+          const nsf = Number(rc.newTimelineStartFrame ?? rc.startFrame ?? NaN);
+          if (!Number.isFinite(nsf)) { warnings.push("MoveClip dropped: no timeline start frame"); continue; }
+          canonical.push({ type: "MoveClip", clipId: cid, newTimelineStartFrame: Math.max(0, Math.round(nsf)), newTrackId: typeof rc.trackId === "string" ? rc.trackId : undefined });
+          continue;
+        }
         canonical.push(rc);
         continue;
       }
