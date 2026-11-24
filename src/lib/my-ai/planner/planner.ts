@@ -108,6 +108,13 @@ export async function createPlan(userId: string, projectId: string, request: str
     );
     // Cross-check against the REAL context: reject plans inventing state.
     const validated = validateAgainstContext(data, ctx);
+    // The server owns the context version — the model must never supply it
+    // (live-demo defect: the model echoed the project id as contextVersion,
+    // which then failed the executor's staleness check). Same rule as the
+    // deterministic path below.
+    validated.contextVersion = contextVersion;
+    validated.idempotencyKey = idempotencyKey;
+    validated.planId = planId;
     const persisted = await persistPlan(validated, userId, projectId, conversationId ?? null, "llm", model);
     return { plan: validated, mode: "llm", note: `Plan proposed by ${model} and validated against project context; approval required before any step runs.` };
   } catch (err) {
