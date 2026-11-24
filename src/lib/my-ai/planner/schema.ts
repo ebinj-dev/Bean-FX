@@ -1,3 +1,4 @@
+import { CommandSchema } from "@/lib/editor/commands";
 /**
  * MY AI — plan schema, version 1 (M8 §6).
  *
@@ -373,6 +374,27 @@ export function normalizePlanCommands(
         // Canonical command name — still map known LLM field aliases (observed:
         // MoveClip with startFrame instead of newTimelineStartFrame).
         const t = String(rc.type);
+        if (t === "AddClip") {
+          // LLM flat AddClip {trackId, assetId, startFrame, durationFrames, label}
+          // → canonical {type, clip: ClipCore} with a REAL track and honest bounds.
+          const track = ctxHint.tracks.some((tr) => tr.id === rc.trackId) ? rc.trackId : (videoTracks[0] ?? ctxHint.tracks[0])?.id;
+          const dur = Math.max(1, Math.round(Number(rc.durationFrames ?? 90)));
+          const start = Math.max(0, Math.round(Number(rc.startFrame ?? 0)));
+          canonical.push({
+            type: "AddClip",
+            clip: {
+              id: `cl-${step.id ?? "s"}-${canonical.length}-${start}`,
+              trackId: track,
+              sourceAssetId: String(rc.assetId ?? rc.sourceAssetId ?? ""),
+              sourceInFrame: 0,
+              sourceOutFrame: dur,
+              sourceFps: { num: Math.max(1, Math.round(ctxHint.fps ?? 30)), den: 1 },
+              timelineStartFrame: start,
+              label: typeof rc.label === "string" ? rc.label.slice(0, 120) : null,
+            },
+          });
+          continue;
+        }
         if (t === "MoveClip") {
           const cid = resolveClip(rc.clipId ?? rc.clip_id);
           if (!cid) { warnings.push(`MoveClip dropped: clip reference ${String(rc.clipId)} not resolvable`); continue; }
@@ -465,7 +487,17 @@ export function normalizePlanCommands(
         warnings.push(`Command "${typeName}" dropped — not a canonical editor command`);
       }
     }
-    args.commands = canonical;
+    // FINAL SWEEP — every command leaving the planner must validate against
+    // the REAL CommandSchema; anything invalid is dropped with a warning so
+    // the executor can never receive poison (observed: one malformed AddClip
+    // made the whole stored plan unparseable → "invalid stored plan").
+    const valid: Array<Record<string, unknown>> = [];
+    for (const c of canonical) {
+      const check = CommandSchema.safeParse(c);
+      if (check.success) valid.push(c);
+      else warnings.push(`Command dropped — fails the editor command schema (${String((check.error as { issues?: Array<{ message?: string }> }).issues?.[0]?.message ?? "invalid")})`);
+    }
+    args.commands = valid;
     step.args = args;
     return step;
   });
