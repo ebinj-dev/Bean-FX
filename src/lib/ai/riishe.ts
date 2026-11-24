@@ -139,7 +139,11 @@ export async function riisheChat(
     const request = intent === "scoped-revision"
       ? `Revise the current edit: ${message}`
       : `${message}${style ? ` (style: ${style.id})` : ""}`;
-    const plan = await createPlan(userId, projectId, request, conversation);
+    // createPlan persists conversationId with a REAL FK to the Conversation
+    // table — only pass through ids the client actually owns (rows created by
+    // the conversations API). The chat's own continuity is UI-level
+    // (localStorage key), so a synthetic id here would violate the FK.
+    const plan = await createPlan(userId, projectId, request, conversationId);
     return {
       reply: [
         intent === "scoped-revision" ? "Revision planned against the CURRENT timeline (your manual edits are preserved — the plan re-validates against the latest revision)." : "Here is my editing plan for your approval.",
