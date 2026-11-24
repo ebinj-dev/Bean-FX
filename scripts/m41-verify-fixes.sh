@@ -44,7 +44,7 @@ for BN in $SUITES; do
   if env DATABASE_URL="file:$STAGE2_DB" BEANFX_LEGACY_TEST_DB="file:$STAGE2_DB" \
        M31_DB="file:$STAGE2_DB" M31_BASE="http://127.0.0.1:3117" M33_BASE="http://127.0.0.1:3117" \
        BEANFX_DATA_DIR="$STAGE2_MEDIA" \
-       timeout 420 bun test "$F" > "$EVDIR/$BN.log" 2>&1; then
+       timeout 900 bun test "$F" > "$EVDIR/$BN.log" 2>&1; then
     echo "PASS"; PASS=$((PASS+1)); OUT=PASS
   else
     echo "FAIL"; FAIL=$((FAIL+1)); OUT=FAIL

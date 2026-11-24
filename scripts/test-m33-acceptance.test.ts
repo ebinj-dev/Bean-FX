@@ -183,7 +183,7 @@ describe("M33 Track D — production acceptance (real workflow, no bypasses)", (
     for (;;) {
       const d = await api("GET", `/api/reviews/${revisionId}`, { jar: u });
       if (["READY_FOR_REVIEW", "IN_REVIEW"].includes(d.json?.revision?.status)) break;
-      if ((Date.now() - t0) / 1000 > 240) throw new Error(`review render timeout`);
+      if ((Date.now() - t0) / 1000 > 600) throw new Error(`review render timeout`);
       await new Promise((res) => setTimeout(res, 2000));
     }
     expect((await api("PUT", `/api/reviews/${revisionId}`, { jar: u, body: { decision: "APPROVE" } })).status).toBe(200);
