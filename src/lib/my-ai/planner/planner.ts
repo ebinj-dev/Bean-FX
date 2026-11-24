@@ -13,7 +13,7 @@
  * gates (§8). The planner NEVER executes anything.
  */
 import { db } from "@/lib/db";
-import { AIPlanSchema, normalizeLLMPlan, PLAN_SCHEMA_VERSION, type AIPlan, type PlanStep } from "./schema";
+import { AIPlanSchema, normalizeLLMPlan, normalizePlanCommands, PLAN_SCHEMA_VERSION, type AIPlan, type PlanStep } from "./schema";
 import { resolveProjectContext, type ProjectContext } from "@/lib/my-ai/context/resolver";
 import { chatValidated } from "@/lib/my-ai/gateway/structured";
 import { llmHealth, LLMError } from "@/lib/my-ai/gateway/provider";
@@ -115,6 +115,17 @@ export async function createPlan(userId: string, projectId: string, request: str
     validated.contextVersion = contextVersion;
     validated.idempotencyKey = idempotencyKey;
     validated.planId = planId;
+    // M42-H — normalize LLM command shapes into the canonical vocabulary with
+    // REAL clip/track ids before the plan is offered for approval. Commands
+    // that cannot be mapped honestly are dropped WITH a warning (visible in
+    // the plan card), never guessed into existence.
+    const norm = normalizePlanCommands(validated.steps as unknown as Array<Record<string, unknown>>, {
+      clips: ctx.sequence.clips.map((c) => ({ id: c.id, startFrame: c.startFrame, durationFrames: c.durationFrames, trackKind: c.trackKind })),
+      tracks: ctx.sequence.tracks.map((t) => ({ id: t.id, kind: t.kind })),
+      fps: ctx.sequence.fps,
+    });
+    validated.steps = norm.steps as unknown as PlanStep[];
+    for (const w of norm.warnings) validated.warnings.push(w);
     const persisted = await persistPlan(validated, userId, projectId, conversationId ?? null, "llm", model);
     return { plan: validated, mode: "llm", note: `Plan proposed by ${model} and validated against project context; approval required before any step runs.` };
   } catch (err) {

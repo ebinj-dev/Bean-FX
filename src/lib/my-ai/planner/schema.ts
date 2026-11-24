@@ -284,3 +284,152 @@ export function normalizeLLMPlan(raw: unknown): unknown {
 
 export type AIPlan = z.infer<typeof AIPlanSchema>;
 export type PlanStep = z.infer<typeof PlanStepSchema>;
+
+/**
+ * M42-H — LLM command normalization (defect fix from the live demo).
+ *
+ * glm-4-plus plans can emit commands in an LLM-ish shape instead of the
+ * canonical discriminated union, e.g.
+ *   {"command":"TrimClip","clipId":"d1","startFrame":0,"durationFrames":90}
+ *   {"command":"AddTransition","clipId":"d1","transitionType":"CROSSFADE",...}
+ *   {"command":"AddEffect","clipId":"d1","effectType":"COLORGRADE","parameters":{...}}
+ * The executor's strict schema correctly rejects these (fail-closed). Rather
+ * than weakening the executor, the PLANNER normalizes: aliases → canonical
+ * fields, positional/synthetic clip references ("d1") → REAL clip ids from
+ * the project context, transition kinds → real TransitionKind members, and
+ * effect blocks → one canonical AddEffect per real EffectType member.
+ * Commands that cannot be mapped honestly are DROPPED with a plan warning —
+ * never guessed into existence.
+ */
+export interface PlanContextHint {
+  clips: Array<{ id: string; startFrame: number; durationFrames: number; trackKind?: string | null }>;
+  tracks: Array<{ id: string; kind: string }>;
+  fps?: number;
+}
+
+const TRANSITION_ALIASES: Record<string, string> = {
+  crossfade: "CROSS_DISSOLVE",
+  dissolve: "CROSS_DISSOLVE",
+  fade: "FADE_TO_BLACK",
+  fadetoblack: "FADE_TO_BLACK",
+  fadein: "FADE_FROM_BLACK",
+  fadefromblack: "FADE_FROM_BLACK",
+  cut: "CUT",
+  zoom: "ZOOM_IN",
+  zoomin: "ZOOM_IN",
+  fade_through_black: "FADE_TO_BLACK",
+  throughblack: "FADE_TO_BLACK",
+};
+
+const EFFECT_ALIASES: Record<string, string> = {
+  colorgrade: "contrast",
+  colourgrade: "contrast",
+  grade: "contrast",
+  cinematic: "contrast",
+  saturationboost: "saturation",
+  contrastboost: "contrast",
+  warmth: "temperature",
+  warm: "temperature",
+  vignette_darkening: "vignette",
+};
+
+export function normalizePlanCommands(
+  steps: Array<Record<string, unknown>>,
+  ctxHint: PlanContextHint,
+): { steps: Array<Record<string, unknown>>; warnings: string[] } {
+  const warnings: string[] = [];
+  const videoTracks = ctxHint.tracks.filter((t) => t.kind === "VIDEO");
+  // Positional mapping: synthetic ids ("d1","clip1","clip_2",…) resolve to
+  // REAL clips in first-appearance order.
+  const syntheticMap = new Map<string, string>();
+  let nextClip = 0;
+  const resolveClip = (ref: unknown): string | null => {
+    if (typeof ref !== "string" || ref.length === 0) return null;
+    if (ctxHint.clips.some((c) => c.id === ref)) return ref; // already real
+    if (!syntheticMap.has(ref)) {
+      if (nextClip >= ctxHint.clips.length) return null;
+      syntheticMap.set(ref, ctxHint.clips[nextClip].id);
+      nextClip += 1;
+    }
+    return syntheticMap.get(ref) ?? null;
+  };
+  const clipById = (id: string) => ctxHint.clips.find((c) => c.id === id);
+
+  const out: Array<Record<string, unknown>> = steps.map((rawStep) => {
+    const step = { ...rawStep };
+    if (step.operation !== "APPLY_COMMANDS") return step;
+    const args = { ...((step.args as Record<string, unknown>) ?? {}) };
+    const rawCommands = Array.isArray(args.commands) ? (args.commands as Array<Record<string, unknown>>) : [];
+    const canonical: Array<Record<string, unknown>> = [];
+    for (const rc of rawCommands) {
+      const typeName = String(rc.command ?? rc.type ?? "").trim();
+      if (!typeName) continue;
+      // Already-canonical command (discriminated on `type`) passes through.
+      if (rc.type && !rc.command) {
+        canonical.push(rc);
+        continue;
+      }
+      const clipId = resolveClip(rc.clipId ?? rc.clip_id);
+      if (typeName === "TrimClip") {
+        if (!clipId) { warnings.push(`TrimClip dropped: clip reference ${String(rc.clipId)} not resolvable to project media`); continue; }
+        const inF = Number(rc.startFrame ?? rc.sourceInFrame ?? 0);
+        const dur = Number(rc.durationFrames ?? 0);
+        const src = clipById(clipId)!;
+        const clampedIn = Math.max(0, Math.min(inF, Math.max(0, src.durationFrames - 1)));
+        const clampedOut = dur > 0 ? Math.min(clampedIn + dur, src.durationFrames) : src.durationFrames;
+        canonical.push({ type: "TrimClip", clipId, newSourceInFrame: clampedIn, newSourceOutFrame: clampedOut });
+      } else if (typeName === "AddTransition") {
+        if (!clipId) { warnings.push(`AddTransition dropped: clip reference ${String(rc.clipId)} not resolvable`); continue; }
+        const kindRaw = String(rc.transitionType ?? rc.kind ?? "CROSS_DISSOLVE");
+        const kind = TRANSITION_ALIASES[kindRaw.toLowerCase()] ?? (["CUT", "CROSS_DISSOLVE", "FADE_TO_BLACK", "FADE_FROM_BLACK", "ZOOM_IN"].includes(kindRaw) ? kindRaw : null);
+        if (!kind) { warnings.push(`AddTransition dropped: unknown transition kind "${kindRaw}"`); continue; }
+        const track = videoTracks[0] ?? ctxHint.tracks[0];
+        const src = clipById(clipId)!;
+        const dur = Math.max(1, Number(rc.durationFrames ?? 12));
+        const start = Math.max(0, src.startFrame - Math.round(dur / 2));
+        canonical.push({ type: "AddTransition", transitionId: `tr-${step.id ?? "s"}-${canonical.length}-${start}`, trackId: track.id, kind, startFrame: start, durationFrames: dur, params: {} });
+      } else if (typeName === "AddEffect") {
+        if (!clipId) { warnings.push(`AddEffect dropped: clip reference ${String(rc.clipId)} not resolvable`); continue; }
+        const params = (rc.parameters ?? rc.params ?? {}) as Record<string, unknown>;
+        const effectTypeRaw = String(rc.effectType ?? rc.effect_type ?? "");
+        // One canonical effect per REAL EffectType member.
+        const entries: Array<[string, number]> = [];
+        const effective = EFFECT_ALIASES[effectTypeRaw.toLowerCase()] ?? effectTypeRaw.toLowerCase();
+        if (["contrast", "saturation", "brightness", "exposure", "temperature", "tint", "highlights", "shadows", "vignette", "sharpen"].includes(effective)) {
+          const v = Number(params[effective] ?? params.amount ?? NaN);
+          if (Number.isFinite(v)) entries.push([effective, v]);
+        }
+        for (const [k, v] of Object.entries(params)) {
+          if (!Number.isFinite(Number(v))) continue;
+          const t = EFFECT_ALIASES[k.toLowerCase()] ?? k.toLowerCase();
+          if (["contrast", "saturation", "brightness", "exposure", "temperature", "tint", "highlights", "shadows", "vignette", "sharpen", "whites", "blacks"].includes(t) && !entries.some(([e]) => e === t)) {
+            entries.push([t, Number(v)]);
+          }
+        }
+        if (entries.length === 0) { warnings.push(`AddEffect dropped: no parameter maps to a real EffectType member (got "${effectTypeRaw}")`); continue; }
+        for (const [t, v] of entries) {
+          // LLMs often emit multiplicative values (contrast 1.2) — the editor's
+          // amounts are additive deltas; convert and clamp honestly.
+          const amount = Math.max(-1, Math.min(1, v > 1.01 ? v - 1 : v));
+          canonical.push({ type: "AddEffect", clipId, effect: { id: `ef-${step.id ?? "s"}-${canonical.length}-${t}`, type: t, enabled: true, params: { amount }, keyframes: [] } });
+        }
+      } else if (["AddClip", "RemoveClip", "SplitClip", "MoveClip", "RippleDelete", "InsertClip", "ChangeVolume", "ChangePlaybackSpeed", "SetKeyframe"].includes(typeName)) {
+        // Pass through with clip-id resolution where applicable.
+        const fixed: Record<string, unknown> = { ...rc, type: typeName };
+        delete fixed.command;
+        if ("clipId" in fixed) {
+          const resolved = resolveClip(fixed.clipId);
+          if (!resolved) { warnings.push(`${typeName} dropped: clip reference ${String(fixed.clipId)} not resolvable`); continue; }
+          fixed.clipId = resolved;
+        }
+        canonical.push(fixed);
+      } else {
+        warnings.push(`Command "${typeName}" dropped — not a canonical editor command`);
+      }
+    }
+    args.commands = canonical;
+    step.args = args;
+    return step;
+  });
+  return { steps: out, warnings };
+}

@@ -95,3 +95,50 @@ describe("M42-F intent routing", () => {
     expect(info.version).toBe(loadStyleRecipes().version);
   });
 });
+
+describe("M42-H LLM command normalization (live-demo defect regression)", () => {
+  const { normalizePlanCommands } = require("../src/lib/my-ai/planner/schema") as typeof import("../src/lib/my-ai/planner/schema");
+  const ctxHint = {
+    clips: [{ id: "real-clip-a", startFrame: 0, durationFrames: 360 }, { id: "real-clip-b", startFrame: 120, durationFrames: 240 }],
+    tracks: [{ id: "track-v1", kind: "VIDEO" }, { id: "track-a1", kind: "AUDIO" }],
+    fps: 30,
+  };
+
+  test("LLM-shaped commands map to the canonical union with REAL ids", () => {
+    const steps = [{
+      id: "s2", operation: "APPLY_COMMANDS",
+      args: { commands: [
+        { command: "TrimClip", clipId: "d1", startFrame: 30, durationFrames: 90 },
+        { command: "AddTransition", clipId: "d2", transitionType: "CROSSFADE", durationFrames: 15 },
+        { command: "AddEffect", clipId: "d1", effectType: "COLORGRADE", parameters: { contrast: 1.2, saturation: 1.1, shadows: -0.1 } },
+      ] },
+    }];
+    const { steps: out, warnings } = normalizePlanCommands(steps as never, ctxHint as never);
+    const cmds = ((out[0].args as { commands: Array<Record<string, unknown>> }).commands);
+    expect(cmds.some((c) => c.type === "TrimClip" && c.clipId === "real-clip-a" && c.newSourceInFrame === 30 && c.newSourceOutFrame === 120)).toBe(true);
+    const tr = cmds.find((c) => c.type === "AddTransition");
+    expect(tr).toBeDefined();
+    expect(tr!.kind).toBe("CROSS_DISSOLVE"); // alias normalized to a real TransitionKind
+    expect(tr!.trackId).toBe("track-v1");
+    const eff = cmds.filter((c) => c.type === "AddEffect");
+    expect(eff.length).toBe(3); // contrast, saturation, shadows — each a REAL EffectType
+    expect(eff.every((c) => (c.effect as { type: string }).type !== "COLORGRADE")).toBe(true);
+    expect(warnings.length).toBe(0);
+  });
+
+  test("unresolvable clip references are dropped WITH warnings — never guessed", () => {
+    const steps = [{ id: "s1", operation: "APPLY_COMMANDS", args: { commands: [{ command: "TrimClip", clipId: "d1", startFrame: 0, durationFrames: 30 }, { command: "TrimClip", clipId: "d3", startFrame: 0, durationFrames: 30 }] } }];
+    const { steps: out, warnings } = normalizePlanCommands(steps as never, { ...ctxHint, clips: [ctxHint.clips[0]] } as never);
+    const cmds = ((out[0].args as { commands: Array<Record<string, unknown>> }).commands);
+    expect(cmds.length).toBe(1);
+    expect(warnings.some((w) => w.includes("d3"))).toBe(true);
+  });
+
+  test("already-canonical commands pass through untouched", () => {
+    const steps = [{ id: "s1", operation: "APPLY_COMMANDS", args: { commands: [{ type: "RippleDelete", clipId: "real-clip-a" }] } }];
+    const { steps: out, warnings } = normalizePlanCommands(steps as never, ctxHint as never);
+    const cmds = ((out[0].args as { commands: Array<Record<string, unknown>> }).commands);
+    expect(cmds).toEqual([{ type: "RippleDelete", clipId: "real-clip-a" }]);
+    expect(warnings.length).toBe(0);
+  });
+});
