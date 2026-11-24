@@ -28,6 +28,11 @@ describe("M42-G style engine", () => {
     expect(reel[0].recipe.id).toBe("instagram-reel");
     const wedding = matchStyles("Edit this wedding footage into a beautiful emotional highlight film.");
     expect(wedding[0].recipe.id).toBe("wedding-highlight");
+    // M42-H regressions (live-demo defects): whole-word matching — "ad" inside
+    // "adjustments" must NOT route to product-ad; the acceptance prompt's
+    // "cinematic promotional montage" routes to the trailer family.
+    expect(matchStyles("apply suitable transitions and cinematic color adjustments, and create a professional ending")[0].recipe.id).not.toBe("product-ad");
+    expect(matchStyles("Analyze the selected footage and create a 30-second cinematic promotional montage. Show me the editing plan before applying it.")[0].recipe.id).toBe("cinematic-trailer");
   });
 
   test("no prompt → no fabricated match", () => {

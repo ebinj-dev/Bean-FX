@@ -131,28 +131,48 @@ async function persistPlan(
   mode: "llm" | "deterministic-fallback",
   model?: string,
 ): Promise<string> {
-  const row = await db.aIPlan.create({
-    data: {
-      id: plan.planId,
-      userId,
-      projectId,
-      conversationId,
-      schemaVersion: PLAN_SCHEMA_VERSION,
-      status: "AWAITING_APPROVAL",
-      requestSummary: plan.requestSummary,
-      stepsJson: JSON.stringify(plan.steps),
-      contextVersion: plan.contextVersion,
-      plannerMode: mode === "llm" ? `llm:${model ?? "unknown"}` : "deterministic-fallback",
-      engines: JSON.stringify(plan.engines),
-      warningsJson: JSON.stringify(plan.warnings),
-      idempotencyKey: plan.idempotencyKey,
-      expiresAt: new Date(Date.now() + Number(process.env.BEANFX_MYAI_PLAN_TTL_MS ?? 30 * 60_000)),
-    },
-  });
-  await db.automationAudit.create({
-    data: { userId, projectId, action: "PLAN_CREATED", detailJson: JSON.stringify({ planId: plan.planId, mode, steps: plan.steps.length }) },
-  });
-  return row.id;
+  try {
+    const row = await db.aIPlan.create({
+      data: {
+        id: plan.planId,
+        userId,
+        projectId,
+        conversationId,
+        schemaVersion: PLAN_SCHEMA_VERSION,
+        status: "AWAITING_APPROVAL",
+        requestSummary: plan.requestSummary,
+        stepsJson: JSON.stringify(plan.steps),
+        contextVersion: plan.contextVersion,
+        plannerMode: mode === "llm" ? `llm:${model ?? "unknown"}` : "deterministic-fallback",
+        engines: JSON.stringify(plan.engines),
+        warningsJson: JSON.stringify(plan.warnings),
+        idempotencyKey: plan.idempotencyKey,
+        expiresAt: new Date(Date.now() + Number(process.env.BEANFX_MYAI_PLAN_TTL_MS ?? 30 * 60_000)),
+      },
+    });
+    await db.automationAudit.create({
+      data: { userId, projectId, action: "PLAN_CREATED", detailJson: JSON.stringify({ planId: plan.planId, mode, steps: plan.steps.length }) },
+    });
+    return row.id;
+  } catch (err) {
+    // Idempotency: the same (userId, idempotencyKey) plan already exists —
+    // return it instead of failing (the key's whole purpose; the live demo
+    // exposed duplicate requests surfacing as planner errors).
+    const code = (err as { code?: string }).code;
+    if (code === "P2002") {
+      const existing = await db.aIPlan.findFirst({
+        where: { userId, idempotencyKey: plan.idempotencyKey, projectId },
+        orderBy: { createdAt: "desc" },
+      });
+      if (existing) {
+        await db.automationAudit.create({
+          data: { userId, projectId, action: "PLAN_IDEMPOTENT_HIT", detailJson: JSON.stringify({ planId: existing.id, requestedPlanId: plan.planId }) },
+        });
+        return existing.id;
+      }
+    }
+    throw err;
+  }
 }
 
 /** Deterministic cross-check: context refs must be REAL (no invented ids). */
