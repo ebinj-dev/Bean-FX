@@ -66,7 +66,7 @@ beforeAll(async () => {
   token = (await createIntegrationToken(user.id, "m22-e2e", ["projects:read", "jobs:submit", "jobs:read", "jobs:cancel", "media:upload", "mcp:invoke"])).raw;
   // 4. Desktop Bridge as a REAL child process.
   bridgeProc = spawn("bun", ["scripts/desktop-bridge.ts"], {
-    cwd: "/home/z/my-project",
+    cwd: new URL("..", import.meta.url).pathname,
     env: { ...process.env, BEANFX_BASE_URL: LIVE, BEANFX_BRIDGE_STATE_DIR: STATE_DIR, BEANFX_BRIDGE_HOST: "127.0.0.1" },
     stdio: ["ignore", "pipe", "pipe"],
   });
@@ -194,7 +194,7 @@ describe("M22 E2E — the full M21 architecture in one workflow", () => {
     bridgeProc?.kill("SIGKILL");
     await new Promise((r) => setTimeout(r, 400));
     bridgeProc = spawn("bun", ["scripts/desktop-bridge.ts"], {
-      cwd: "/home/z/my-project",
+      cwd: new URL("..", import.meta.url).pathname,
       env: { ...process.env, BEANFX_BASE_URL: LIVE, BEANFX_BRIDGE_STATE_DIR: STATE_DIR, BEANFX_BRIDGE_HOST: "127.0.0.1" },
       stdio: ["ignore", "pipe", "pipe"],
     });

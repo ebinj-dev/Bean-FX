@@ -81,7 +81,8 @@ describe("M28 — media pipeline E2E", () => {
     expect(v.codec_name).toBe("h264");
     // Duration from the ffprobe output tracks the 3 s source.
     expect(Number(v.duration ?? raw.format?.duration)).toBeGreaterThan(2.5);
-  });
+  }, 120_000); // M41-A: real 1080p ffmpeg proxy exceeds bun's default 5 s on
+               // slower environments — the pipeline assertions are unchanged.
 
   test("proxy regeneration: duplicate request 409, wrong kind 400, stale READY repaired", async () => {
     // READY proxy + explicit regen → a new queued job (202); an immediate

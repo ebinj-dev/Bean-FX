@@ -103,8 +103,24 @@ done
 curl -fsS http://127.0.0.1:3117/api/health >/dev/null 2>&1 || fail "stage-2 server never became healthy"
 
 FAILED_SUITES=""
+# M41-A: suite-loop environment contract for the stage-2 server. The server
+# owns ONE scratch DB (:3117). Hybrid suites (direct PrismaClient + HTTP :3117)
+# must see the SAME file or their direct reads/writes target a different DB
+# than the server (observed: 21 of 96 suites failing on exactly this split:
+# record-not-found on rows the server created, and :3118/:hardcoded-path
+# defaults from the pre-M39 workspace layout). Suites that set their own
+# scratch DATABASE_URL override these; pure-HTTP suites are unaffected.
+#   DATABASE_URL           — default-PrismaClient suites (m28-pipeline sweep…)
+#   BEANFX_LEGACY_TEST_DB  — scratchLegacyDb hybrid suites (documented contract
+#                            in scripts/legacy-fixture.ts: "direct DB + HTTP
+#                            :3117 against the same file")
+#   M31_DB / M31_BASE / M33_BASE — suite overrides replacing the hardcoded
+#                            pre-M39 /home/z/my-project workspace paths and the
+#                            never-provided :3118 second server
 for f in $SUITES; do
-  if ! bun test "$f" > "/tmp/m40-stage2-$(basename "$f").log" 2>&1; then
+  if ! env DATABASE_URL="file:$STAGE2_DB" BEANFX_LEGACY_TEST_DB="file:$STAGE2_DB" \
+       M31_DB="file:$STAGE2_DB" M31_BASE="http://127.0.0.1:3117" M33_BASE="http://127.0.0.1:3117" \
+       bun test "$f" > "/tmp/m40-stage2-$(basename "$f").log" 2>&1; then
     FAILED_SUITES="$FAILED_SUITES $(basename "$f")"
     echo "[release] suite FAILED: $(basename "$f") (log: /tmp/m40-stage2-$(basename "$f").log)"
   fi

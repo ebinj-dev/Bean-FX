@@ -11,6 +11,15 @@ import { scratchLegacyDb } from "./legacy-fixture";
 const LIVE = "http://localhost:3117";
 process.env.NODE_ENV = "production";
 process.env.DATABASE_URL = scratchLegacyDb("m23-security-release"); // M34 Track B: isolated fixture, never db/custom.db
+// R5 asserts the DOCUMENTED in-process limits ({ limit: 10, windowSec: 300 }).
+// The limiter reads RATE_LIMIT_SCALE at import; ambient suite environments may
+// raise it (suite SERVERS run scale=50 by design, in their own process). Pin
+// scale=1 here so the unit assertion holds regardless of the runner's env.
+process.env.RATE_LIMIT_SCALE = "1";
+
+// M41-A: repo-relative source paths — the pre-M39 workspace-root layout
+// (/home/z/my-project/...) is not guaranteed and must not be load-bearing.
+const REPO_ROOT = new URL("..", import.meta.url).pathname;
 
 let db: typeof import("../src/lib/db").db;
 
@@ -20,7 +29,7 @@ beforeAll(async () => {
 
 describe("R1 — session management", () => {
   test("session TTL is 14 days (cookie Max-Age) and expired sessions are deleted on access (auth source)", async () => {
-    const src = require("node:fs").readFileSync("/home/z/my-project/src/lib/auth.ts", "utf8");
+    const src = require("node:fs").readFileSync(`${REPO_ROOT}src/lib/auth.ts`, "utf8");
     expect(src).toContain("SESSION_TTL_MS = 1000 * 60 * 60 * 24 * 14");
     // getCurrentUser deletes expired rows on access (fail-closed with cleanup):
     expect(src).toMatch(/expiresAt\.getTime\(\) < Date\.now\(\)[\s\S]{0,120}session\.delete/);
@@ -102,16 +111,16 @@ describe("R5 — rate limiting & privacy posture", () => {
     expect(limited).toBe(true);
   });
   test("privacy: no consent/payment/SMTP settings changed by M23 (git diff scope)", () => {
-    const diff = spawnSync("bash", ["-c", "git -C /home/z/my-project diff --stat HEAD 2>/dev/null | tail -1"], { encoding: "utf8" });
+    const diff = spawnSync("bash", ["-c", `git -C ${REPO_ROOT} diff --stat HEAD 2>/dev/null | tail -1`], { encoding: "utf8" });
     void diff; // scope assertion lives in the milestone docs; payment/SMTP/legal files untouched
-    const src = require("node:fs").readFileSync("/home/z/my-project/docs/M23_PACKAGING.md", "utf8");
+    const src = require("node:fs").readFileSync(`${REPO_ROOT}docs/M23_PACKAGING.md`, "utf8");
     expect(src).toContain("no payment/SMTP/legal changes");
   });
 });
 
 describe("R6 — dependency vulnerabilities (release gate)", () => {
   test("OSV scan: zero known vulnerabilities", () => {
-    const res = spawnSync("python3", ["-I", "scripts/m20-osv-scan.py"], { cwd: "/home/z/my-project", encoding: "utf8" });
+    const res = spawnSync("python3", ["-I", "scripts/m20-osv-scan.py"], { cwd: new URL("..", import.meta.url).pathname, encoding: "utf8" });
     expect(res.status).toBe(0);
     expect(res.stdout).toContain("saved");
   });

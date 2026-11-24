@@ -41,7 +41,7 @@ beforeAll(async () => {
   deviceToken = created.raw;
   // Spawn the bridge on an ephemeral loopback port.
   bridgeProc = spawn("bun", ["scripts/desktop-bridge.ts"], {
-    cwd: "/home/z/my-project",
+    cwd: new URL("..", import.meta.url).pathname,
     env: { ...process.env, BEANFX_BASE_URL: LIVE, BEANFX_BRIDGE_STATE_DIR: STATE_DIR, BEANFX_BRIDGE_HOST: "127.0.0.1" },
     stdio: ["ignore", "pipe", "pipe"],
   });
