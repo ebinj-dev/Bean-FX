@@ -311,12 +311,12 @@ T4=$(printf '%s' "$L4" | jqpy "print(d.get('token') or (d.get('link') or {}).get
 # Guest flow: capability-token GET shows the gate payload (revision summary
 # only), the guest-session POST sets beanfx_review=<linkId>.<guestToken>, and
 # the cookie-authenticated GET returns the full view (can.comment, preview).
-GGATE=$(curl -s "$BASE/api/reviews/link/$T4" | jqpy "import json; d=json.load(sys.stdin); print('gate ok, revision visible:', bool(d.get('revision')))" 2>/dev/null)
+GGATE=$(curl -s "$BASE/api/reviews/link/$T4" | jqpy "print('gate ok, revision visible:', bool(d.get('revision')))" 2>/dev/null)
 ev J4 guest-gate 1 "capability-token view: $GGATE (token $T4 acts as the credential)"
 GSET=$(curl -s -D - -o /dev/null -X POST -H 'Content-Type: application/json' -d '{"displayName":"M41 QA Guest"}' "$BASE/api/reviews/link/$T4" | tr -d '\r' | grep -i '^set-cookie: beanfx_review=' | cut -d' ' -f2 | cut -d';' -f1)
-G=$(curl -s -H "Cookie: beanfx_review=$GSET" "$BASE/api/reviews/link/$T4" | jqpy "import json; d=json.load(sys.stdin); print(json.dumps({'range': (d.get('preview') or {}).get('range'), 'title': (d.get('revision') or {}).get('title'), 'canComment': (d.get('can') or {}).get('comment')}))" 2>/dev/null)
-printf '%s' "$G" | grep -q '"canComment": true' && ev J4 guest-capability 1 "guest-session view (COMMENT permission): $G" || ev J4 guest-capability 0 "guest view: $G"
-GC=$(curl -s -H "Cookie: beanfx_review=$GSET" -H 'Content-Type: application/json' -d '{"body":"M41 E2E guest comment via capability token"}' "$BASE/api/reviews/$REV4/comments")
+G=$(curl -s -H "Cookie: $GSET" "$BASE/api/reviews/link/$T4" | jqpy "print(json.dumps({'permission': d.get('permission'), 'range': d.get('previewRange'), 'title': (d.get('revision') or {}).get('title')}))" 2>/dev/null)
+printf '%s' "$G" | grep -q '"permission": "COMMENT"' && printf '%s' "$G" | grep -q '"startFrame"' && ev J4 guest-capability 1 "guest-session view (COMMENT permission + previewRange): $G" || ev J4 guest-capability 0 "guest view: $G"
+GC=$(curl -s -H "Cookie: $GSET" -H 'Content-Type: application/json' -d '{"body":"M41 E2E guest comment via capability token"}' "$BASE/api/reviews/$REV4/comments")
 ev J4 guest-comment 1 "guest comment posted: $(printf '%s' "$GC" | head -c 120)"
 
 echo "═══ J5 STORAGE VISIBILITY + GC PROTECTION ═══"

@@ -170,6 +170,20 @@ export const MCP_TOOLS: McpToolDef[] = [
   },
 ];
 
+// M42-D — model capability registry tool (read-only; secrets never leave
+// the registry — readiness/cost/config-state only).
+MCP_TOOLS.push({
+  name: "ai.models.list",
+  description: "The deployment's probed AI model capability registry (provider, capabilities, readiness with reasons, cost strings — 'COST UNKNOWN' where unknown). Read-only.",
+  scope: "projects:read",
+  mutates: false,
+  input: z.object({}),
+  handler: async () => {
+    const { probeModelRegistry } = await import("@/lib/ai/models");
+    return { ...probeModelRegistry() } as unknown as Record<string, unknown>;
+  },
+});
+
 export function toolByName(name: string): McpToolDef | undefined {
   return MCP_TOOLS.find((t) => t.name === name);
 }
