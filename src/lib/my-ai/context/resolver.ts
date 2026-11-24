@@ -43,6 +43,8 @@ export interface ProjectContext {
       /** M42-H — real source bounds so trims are planned against the asset. */
       sourceInFrame: number;
       sourceOutFrame: number;
+      /** M42-I — asset linkage for real media analysis (silencedetect etc.). */
+      sourceAssetId: string;
     }[];
     gaps: { trackId: string; startFrame: number; endFrame: number }[];
     overlaps: number;
@@ -95,6 +97,7 @@ export async function resolveProjectContext(projectId: string, userId: string): 
       durationFrames: c.timelineDurationFrames,
       sourceInFrame: c.sourceInFrame,
       sourceOutFrame: c.sourceOutFrame,
+      sourceAssetId: c.sourceAssetId,
       label: c.label ?? null,
       caption: c.captionText ?? null,
       hasKeyframes: (c.keyframes?.length ?? 0) > 0,
