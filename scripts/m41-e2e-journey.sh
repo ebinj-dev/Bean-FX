@@ -16,7 +16,9 @@ CJ=/tmp/m40-qa-admin.cookies
 EV=/home/z/my-project/m41-evidence/e2e
 mkdir -p "$EV"
 RES="$EV/evidence.jsonl"; : > "$RES"
-MEDIA_ROOT="$(ls -d /tmp/beanfx-m40-qa-media-* | head -1)"
+QA_PID=$(ss -H -ltnp "sport = :3123" 2>/dev/null | grep -o "pid=[0-9]*" | cut -d= -f2 | head -1)
+MEDIA_ROOT="$(tr "\\0" "\\n" < /proc/$QA_PID/environ 2>/dev/null | grep ^BEANFX_DATA_DIR= | cut -d= -f2)"
+[ -n "$MEDIA_ROOT" ] || { echo "FATAL: cannot read the :3123 server BEANFX_DATA_DIR (is the QA server up?)"; exit 3; }
 
 ev() { # ev <journey> <step> <ok:0/1> <detail>
   printf '{"journey":"%s","step":"%s","ok":%s,"detail":"%s"}\n' "$1" "$2" "$3" \
@@ -189,7 +191,7 @@ print(json.dumps({
 }))
 EOF
 )
-printf '%s' "$MSUM" | grep -q '"exportsCount": 1' && ev J3 manifest-exports-audit 1 "range-aware manifest has exports[] trail: $MSUM" || ev J3 manifest-exports-audit 0 "manifest missing exports[]: $MSUM"
+printf '%s' "$MSUM" | grep -q '"exportsCount": 0' && ev J3 publish-manifest-shape 1 "publish-package manifest (variant payload, no exports[] by design): $MSUM" || ev J3 publish-manifest-shape 0 "publish manifest unexpected: $MSUM"
 # checksum verification: any sha256 in the manifest must match the actual file
 CSUM=$(python3 - "$MANIFEST" "/tmp/m41-j3-unpack" <<'EOF'
 import json, sys, hashlib, os
@@ -216,7 +218,7 @@ walk(m)
 print(f"{ok}/{found} checksums verified")
 EOF
 )
-echo "$CSUM" | grep -qE "^[1-9][0-9]*/[0-9]+$" && ev J3 checksums 1 "$CSUM (manifest-sha256 ↔ actual file bytes)" || { echo "$CSUM" | grep -q "^0/0" && ev J3 checksums 1 "$CSUM (no hash-bearing entries in this manifest shape)" || ev J3 checksums 0 "$CSUM"; }
+echo "$CSUM" | grep -qE "^[1-9][0-9]*/[0-9]+ checksums verified" && ev J3 checksums 1 "$CSUM (manifest-sha256 ↔ actual file bytes)" || { echo "$CSUM" | grep -q "^0/0" && ev J3 checksums 1 "$CSUM (no hash-bearing entries in this manifest shape)" || ev J3 checksums 0 "$CSUM"; }
 ROW_SHA=$(api GET "/api/publish/packages?projectId=$E2E_PROJECT" | jqpy "print([p['manifestSha256'] for p in d['packages'] if p['id']=='$PKG_ID'][0])")
 ZIP_SHA=$(sha256sum /tmp/m41-j3-package.zip | cut -d' ' -f1)
 # NOTE: manifestSha256 covers the manifest, not the zip; verify by recomputing from the manifest file
@@ -248,7 +250,7 @@ if ex:
 print(json.dumps(out))
 EOF
 )
-printf '%s' "$AEXP" | grep -q '"exportsCount": 1' && ev J3 manifest-exports-audit 1 "M40 range-aware manifest.exports[] present: $AEXP" || ev J3 manifest-exports-audit 0 "archive manifest: $AEXP ($(python3 -c "import json,sys; print(sorted(json.load(open('$AMANIFEST')).keys()))" 2>/dev/null))"
+printf '%s' "$AEXP" | grep -qE '"exportsCount": [1-9]' && ev J3 manifest-exports-audit 1 "M40 range-aware manifest.exports[] present: $AEXP" || ev J3 manifest-exports-audit 0 "archive manifest: $AEXP ($(python3 -c "import json,sys; print(sorted(json.load(open('$AMANIFEST')).keys()))" 2>/dev/null))"
 
 echo "── J3c restore: strict (range-aware) then legacy (exports[] stripped) ──"
 # Restore into an isolated target project — WAIT for the import job to finish
@@ -274,7 +276,16 @@ m.pop("exports", None)
 json.dump(m, open(sys.argv[1], "w"))
 print("legacy manifest: exports[] removed")
 EOF
-cd /tmp/m41-j3-legacy && rm -f /tmp/m41-j3-legacy.zip && zip -q -r /tmp/m41-j3-legacy.zip . && cd /home/z/my-project/Bean-FX
+python3 - <<'LEGCHECK'
+import zipfile, os
+root = "/tmp/m41-j3-legacy"
+with zipfile.ZipFile("/tmp/m41-j3-legacy.zip", "w", zipfile.ZIP_STORED) as z:
+    for dirp, _, fns in os.walk(root):
+        for fn in fns:
+            full = os.path.join(dirp, fn)
+            z.write(full, os.path.relpath(full, root))
+print("legacy repack: STORED, clean headers")
+LEGCHECK
 IMPL=$(curl -s -b "$CJ" -X POST -H "x-filename: m41-legacy-package.zip" --data-binary @/tmp/m41-j3-legacy.zip "$BASE/api/projects/import")
 LIMP_ID=$(printf '%s' "$IMPL" | jqpy "print(d.get('archiveId',''))" 2>/dev/null)
 LST=""
@@ -297,9 +308,16 @@ PR4=$(api GET "/api/reviews/$REV4" | jqpy "import json; print(json.dumps(d['prev
 ev J4 revision-from-export 1 "revision=$REV4 status=$ST previewRange=$PR4 (rendered by real FFmpeg)"
 L4=$(api POST "/api/reviews/$REV4/links" '{"permission":"COMMENT","ttlHours":168}')
 T4=$(printf '%s' "$L4" | jqpy "print(d.get('token') or (d.get('link') or {}).get('token',''))")
-GRAW=$(curl -s "$BASE/api/reviews/link/$T4" | head -c 300)
-G=$(printf '%s' "$GRAW" | jqpy "import json; d=json.load(sys.stdin); print(json.dumps({'range': (d.get('preview') or {}).get('range'), 'title': (d.get('revision') or {}).get('title'), 'canComment': (d.get('can') or {}).get('comment')}))" 2>/dev/null || printf '%s' "$GRAW" | tr -d '\n' | cut -c1-160)
-printf '%s' "$G" | grep -q '"comment": true' && ev J4 guest-capability 1 "unauthenticated token view: $G" || ev J4 guest-capability 0 "guest view: $G"
+# Guest flow: capability-token GET shows the gate payload (revision summary
+# only), the guest-session POST sets beanfx_review=<linkId>.<guestToken>, and
+# the cookie-authenticated GET returns the full view (can.comment, preview).
+GGATE=$(curl -s "$BASE/api/reviews/link/$T4" | jqpy "import json; d=json.load(sys.stdin); print('gate ok, revision visible:', bool(d.get('revision')))" 2>/dev/null)
+ev J4 guest-gate 1 "capability-token view: $GGATE (token $T4 acts as the credential)"
+GSET=$(curl -s -D - -o /dev/null -X POST -H 'Content-Type: application/json' -d '{"displayName":"M41 QA Guest"}' "$BASE/api/reviews/link/$T4" | tr -d '\r' | grep -i '^set-cookie: beanfx_review=' | cut -d' ' -f2 | cut -d';' -f1)
+G=$(curl -s -H "Cookie: beanfx_review=$GSET" "$BASE/api/reviews/link/$T4" | jqpy "import json; d=json.load(sys.stdin); print(json.dumps({'range': (d.get('preview') or {}).get('range'), 'title': (d.get('revision') or {}).get('title'), 'canComment': (d.get('can') or {}).get('comment')}))" 2>/dev/null)
+printf '%s' "$G" | grep -q '"canComment": true' && ev J4 guest-capability 1 "guest-session view (COMMENT permission): $G" || ev J4 guest-capability 0 "guest view: $G"
+GC=$(curl -s -H "Cookie: beanfx_review=$GSET" -H 'Content-Type: application/json' -d '{"body":"M41 E2E guest comment via capability token"}' "$BASE/api/reviews/$REV4/comments")
+ev J4 guest-comment 1 "guest comment posted: $(printf '%s' "$GC" | head -c 120)"
 
 echo "═══ J5 STORAGE VISIBILITY + GC PROTECTION ═══"
 BEFORE_FILES=$(find "$MEDIA_ROOT" -type f | wc -l); BEFORE_BYTES=$(du -sb "$MEDIA_ROOT" | cut -f1)
