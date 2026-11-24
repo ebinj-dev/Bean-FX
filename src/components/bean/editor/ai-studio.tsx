@@ -16,6 +16,7 @@ import { Bot, Mic2, AudioLines, Sparkles, Clapperboard, Image as ImageIcon, Laye
 import type { Sequence } from "@/lib/editor/model";
 import { sequenceEndFrame } from "@/lib/editor/preview";
 import type { EditorSession } from "@/hooks/use-editor-session";
+import { AiEditChat } from "@/components/bean/editor/ai-edit-chat";
 import { MyAiPanel } from "@/components/bean/editor/my-ai-panel";
 import { GangziiPanel } from "@/components/bean/editor/gangzii-panel";
 import { NikkiPanel } from "@/components/bean/editor/nikki-panel";
@@ -23,9 +24,10 @@ import { JazmiiPanel } from "@/components/bean/editor/jazmii-panel";
 import { LaxiiPanel } from "@/components/bean/editor/laxii-panel";
 import { CreativeDirectorPanel } from "@/components/bean/editor/creative-panel";
 
-type StudioTab = "myai" | "riishe" | "gangzii" | "nikki" | "jazmii" | "laxii" | "compose";
+type StudioTab = "aichat" | "myai" | "riishe" | "gangzii" | "nikki" | "jazmii" | "laxii" | "compose";
 
 const TABS: { id: StudioTab; label: string; icon: React.ComponentType<{ className?: string }> }[] = [
+  { id: "aichat", label: "AI EDIT CHAT", icon: Sparkles },
   { id: "myai", label: "MY AI", icon: Bot },
   { id: "riishe", label: "RIISHE", icon: Mic2 },
   { id: "gangzii", label: "GANGZII", icon: AudioLines },
@@ -101,6 +103,7 @@ export function AiStudio({
           })}
         </div>
         <div className="min-h-0 flex-1 overflow-y-auto p-2">
+          {tab === "aichat" && <AiEditChat sequence={sequence} session={session} projectId={projectId} selectionContext={context} />}
           {tab === "myai" && <MyAiPanel sequence={sequence} session={session} projectId={projectId} selectionContext={context} />}
           {tab === "riishe" && (
             <div className="space-y-2">

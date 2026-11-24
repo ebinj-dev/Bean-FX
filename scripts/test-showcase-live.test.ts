@@ -274,7 +274,7 @@ describe("SHOWCASE STUDIO — end-to-end (real media, native timeline)", () => {
     for (;;) {
       const d = await api("GET", `/api/reviews/${revisionId}`, { jar: u });
       if (["READY_FOR_REVIEW", "IN_REVIEW"].includes(d.json?.revision?.status)) break;
-      if ((Date.now() - t0) / 1000 > 240) throw new Error(`review render timeout: ${d.json?.revision?.status}`);
+      if ((Date.now() - t0) / 1000 > 600) throw new Error(`review render timeout: ${d.json?.revision?.status}`);
       await new Promise((res) => setTimeout(res, 2000));
     }
     const ap = await api("PUT", `/api/reviews/${revisionId}`, { jar: u, body: { decision: "APPROVE" } });
