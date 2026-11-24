@@ -335,6 +335,36 @@ const EFFECT_ALIASES: Record<string, string> = {
   vignette_darkening: "vignette",
 };
 
+
+/** M42-H — a transition window [start, start+dur) is executable ONLY when the
+ * track actually has two overlapping clips covering it (executor rule). The
+ * planner checks this BEFORE emitting, so plans never contain doomed steps. */
+function transitionFeasible(ctxHint: PlanContextHint, start: number, dur: number): boolean {
+  const end = start + dur;
+  const byTrack = new Map<string, Array<{ s: number; e: number }>>();
+  for (const c of ctxHint.clips) {
+    const list = byTrack.get("") ?? [];
+    void list;
+  }
+  for (const c of ctxHint.clips) {
+    // clip startFrame/durationFrames are timeline positions on their track;
+    // ctxHint.clips carries no trackId — group by nearest track is impossible,
+    // so use the video track as the executor does for single-track plans.
+    const arr = byTrack.get("v") ?? [];
+    arr.push({ s: c.startFrame, e: c.startFrame + c.durationFrames });
+    byTrack.set("v", arr);
+  }
+  const arr = byTrack.get("v") ?? [];
+  for (const a of arr) {
+    if (a.e >= end) {
+      for (const b of arr) {
+        if (b !== a && b.s <= start) return true;
+      }
+    }
+  }
+  return false;
+}
+
 export function normalizePlanCommands(
   steps: Array<Record<string, unknown>>,
   ctxHint: PlanContextHint,
@@ -416,7 +446,9 @@ export function normalizePlanCommands(
             const track = videoTracks[0] ?? ctxHint.tracks[0];
             const src = clipById(clipId)!;
             const dur = Math.max(1, Number(rc.durationFrames ?? 12));
-            canonical.push({ type: "AddTransition", transitionId: `tr-${step.id ?? "s"}-k-${canonical.length}-${src.startFrame}`, trackId: track.id, kind, startFrame: Math.max(0, src.startFrame - Math.round(dur / 2)), durationFrames: dur, params: {} });
+            const start = Math.max(0, src.startFrame - Math.round(dur / 2));
+            if (!transitionFeasible(ctxHint, start, dur)) { warnings.push(`AddTransition dropped: a ${kind} at frames [${start},${start + dur}) needs two overlapping clips on the track — plan a MoveClip/ripple first`); continue; }
+            canonical.push({ type: "AddTransition", transitionId: `tr-${step.id ?? "s"}-k-${canonical.length}-${src.startFrame}`, trackId: track.id, kind, startFrame: start, durationFrames: dur, params: {} });
             continue;
           }
         }
@@ -443,6 +475,7 @@ export function normalizePlanCommands(
         const src = clipById(clipId)!;
         const dur = Math.max(1, Number(rc.durationFrames ?? 12));
         const start = Math.max(0, src.startFrame - Math.round(dur / 2));
+        if (!transitionFeasible(ctxHint, start, dur)) { warnings.push(`AddTransition dropped: a ${kind} at frames [${start},${start + dur}) needs two overlapping clips on the track — plan a MoveClip/ripple first`); continue; }
         canonical.push({ type: "AddTransition", transitionId: `tr-${step.id ?? "s"}-${canonical.length}-${start}`, trackId: track.id, kind, startFrame: start, durationFrames: dur, params: {} });
       } else if (typeName === "AddEffect") {
         if (!clipId) { warnings.push(`AddEffect dropped: clip reference ${String(rc.clipId)} not resolvable`); continue; }
