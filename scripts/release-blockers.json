@@ -1,0 +1,12 @@
+{
+  "$comment": "BEAN FX release-qualification blocked-suite registry (M41 Phase F / M42-A). A suite listed here is a REQUIRED suite that cannot run in the current environment for an evidence-classified infrastructure or owner-dependency reason. Blocked suites are NEVER counted as passes: any blocked entry forces the release verdict to BLOCKED BY OWNER / INFRASTRUCTURE (or QUALIFIED WITH DOCUMENTED LIMITATIONS only when ownerApproved=true AND zero product failures). Keep this list minimal — every entry needs an evidence pointer in 'evidence'. An empty list means the stage-2 suite set must be fully green for a QUALIFIED verdict.",
+  "schema": {
+    "suite": "test file basename, exactly as release-qualify records it",
+    "reason": "one-line evidence-classified reason (PRODUCT DEFECT | TEST HARNESS DEFECT | ENVIRONMENT/INFRASTRUCTURE BLOCKED | FLAKY/NON-DETERMINISTIC)",
+    "requiredInfrastructure": "what must be available for the suite to run",
+    "ownerAction": "what the owner must do/approve",
+    "evidence": "path to logs/classification that justifies the entry",
+    "ownerApproved": "true only after explicit owner sign-off; never defaulted"
+  },
+  "blocked": []
+}
