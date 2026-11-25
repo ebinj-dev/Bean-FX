@@ -51,11 +51,11 @@ describe("raw (independent) MCP client — full compatibility matrix (M23 P3)", 
     await c.close?.();
   });
 
-  test("tool discovery = exactly the shared nine-tool registry", async () => {
+  test("tool discovery = exactly the shared registry (nine core + M43-B commands surface)", async () => {
     const c = new RawMcpClient(LIVE, token);
     await c.initialize();
     const tools = await c.listTools();
-    expect(tools.map((t) => t.name).sort()).toEqual(["ai.models.list", "jobs.cancel", "jobs.status", "jobs.submit", "myai.execute", "myai.status", "project.canonical", "projects.list", "server.capabilities"]);
+    expect(tools.map((t) => t.name).sort()).toEqual(["ai.models.list", "commands.batch", "commands.describe", "commands.list", "commands.preview", "commands.run", "commands.validate", "jobs.cancel", "jobs.status", "jobs.submit", "myai.execute", "myai.status", "project.canonical", "projects.list", "server.capabilities"]);
   });
 
   test("tool invocation + project authorization", async () => {
