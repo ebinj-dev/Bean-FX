@@ -45,7 +45,14 @@ export interface ProjectContext {
       sourceOutFrame: number;
       /** M42-I — asset linkage for real media analysis (silencedetect etc.). */
       sourceAssetId: string;
+      /** M42-I Unit 2 — exact timebase fields so split/ripple math matches
+       *  the executor (clipTimelineDuration) frame-for-frame. */
+      sourceFps: { num: number; den: number };
+      playbackSpeed: number;
     }[];
+    /** M42-I Unit 2 — the sequence clock's EXACT rational fps (the rounded
+     *  `fps` number is for display; split math needs the rational). */
+    fpsRational: { num: number; den: number };
     gaps: { trackId: string; startFrame: number; endFrame: number }[];
     overlaps: number;
     playheadNote?: string;
@@ -98,6 +105,8 @@ export async function resolveProjectContext(projectId: string, userId: string): 
       sourceInFrame: c.sourceInFrame,
       sourceOutFrame: c.sourceOutFrame,
       sourceAssetId: c.sourceAssetId,
+      sourceFps: { num: c.sourceFps.num, den: c.sourceFps.den },
+      playbackSpeed: c.playbackSpeed,
       label: c.label ?? null,
       caption: c.captionText ?? null,
       hasKeyframes: (c.keyframes?.length ?? 0) > 0,
@@ -151,6 +160,7 @@ export async function resolveProjectContext(projectId: string, userId: string): 
     projectName: project.name,
     sequence: {
       fps: Number(fps.toFixed(3)),
+      fpsRational: { num: seq.fps.num, den: seq.fps.den },
       width: seq.width,
       height: seq.height,
       durationFrames,

@@ -90,7 +90,9 @@ describe("M42-I head/tail trim mapping", () => {
     expect(trim.newSourceOutFrame).toBeLessThan(300);
     expect(trim.newSourceOutFrame).toBeGreaterThanOrEqual(288); // 9.6s ≈ frame 288
     expect(trim.newSourceOutFrame - trim.newSourceInFrame).toBeGreaterThanOrEqual(1);
-    expect(trim.notes.some((n) => n.includes("interior silence") && n.includes("KEPT"))).toBe(true);
+    // M42-I Unit 2: interior disclosure moved to plan level — headTailTrim
+    // notes cover only the head/tail trims.
+    expect(trim.notes.every((n) => !n.includes("interior silence"))).toBe(true);
   });
 
   test("never collapses below one frame and never leaves the real bounds", () => {
@@ -112,5 +114,128 @@ describe("M42-I head/tail trim mapping", () => {
   test("secToSourceFrames is integer and clamped ≥ 0", () => {
     expect(secToSourceFrames(2.5, 30)).toBe(75);
     expect(secToSourceFrames(-1, 30)).toBe(0);
+  });
+});
+
+// ── M42-I Unit 2: interior silence → SplitClip + RippleDelete ──────────────
+import { interiorSplitPlan } from "../src/lib/my-ai/tools/audio-analysis";
+import { applyCommand } from "../src/lib/editor/commands";
+import { SequenceSchema, type Sequence } from "../src/lib/editor/model";
+
+describe("M42-I Unit 2 interiorSplitPlan", () => {
+  const fps = 30;
+  test("picks the LONGEST interior range and maps to clamped source frames", () => {
+    // Window 150..300 (5s..10s at 30fps); interior candidates 6.5-8.2s (1.7s)
+    // and 8.5-9.4s (0.9s) → longest is [6.5, 8.2] → frames [195, 246].
+    const win = { sourceInFrame: 150, sourceOutFrame: 300 };
+    const ranges = [
+      { startSec: 0, endSec: 5.4, durationSec: 5.4 },   // head-touching
+      { startSec: 6.5, endSec: 8.2, durationSec: 1.7 }, // interior A (longest)
+      { startSec: 8.5, endSec: 9.4, durationSec: 0.9 }, // interior B
+    ];
+    const plan = interiorSplitPlan(win, ranges, fps);
+    expect(plan).not.toBeNull();
+    expect(plan!.sFrame).toBe(195);
+    expect(plan!.eFrame).toBe(246);
+    expect(plan!.range.durationSec).toBeCloseTo(1.7, 6);
+  });
+
+  test("sub-frame silence after clamping → null", () => {
+    // Interior range that collapses: window 150..151 (1 frame).
+    const plan = interiorSplitPlan({ sourceInFrame: 150, sourceOutFrame: 151 },
+      [{ startSec: 5.3, endSec: 5.4, durationSec: 0.1 }], fps);
+    expect(plan).toBeNull();
+  });
+
+  test("no interior range → null", () => {
+    const plan = interiorSplitPlan({ sourceInFrame: 0, sourceOutFrame: 90 },
+      [{ startSec: 0, endSec: 2.9, durationSec: 2.9 }], fps);
+    expect(plan).toBeNull();
+  });
+});
+
+describe("M42-I Unit 2 executor integration (planner math ↔ executor math)", () => {
+  function buildSeq(): Sequence {
+    const seq = {
+      id: "seq-m42i2",
+      name: "Unit 2 fixture",
+      fps: { num: 30, den: 1 },
+      width: 320,
+      height: 180,
+      sampleRate: 48000,
+      tracks: [{ id: "t1", kind: "VIDEO", name: "V1" }],
+      clips: [{
+        id: "clip-c",
+        trackId: "t1",
+        sourceAssetId: "asset-1",
+        sourceInFrame: 0,
+        sourceOutFrame: 180, // 6s at 30fps
+        sourceFps: { num: 30, den: 1 },
+        timelineStartFrame: 0,
+        timelineDurationFrames: 180,
+        playbackSpeed: 1,
+      }],
+      transitions: [],
+      markers: [],
+    };
+    return SequenceSchema.parse(seq);
+  }
+
+  test("SplitClip → SplitClip → RippleDelete removes the silent middle exactly", () => {
+    // Planner math for interior silence [2s, 4s) on clip-c: sFrame=60,
+    // eFrame=120; tlForS=60, tlForE=120 (30/30fps, speed 1).
+    let seq = buildSeq();
+    const cmds = [
+      { type: "SplitClip", clipId: "clip-c", atTimelineFrame: 60, newLeftId: "l1", newRightId: "r1" },
+      { type: "SplitClip", clipId: "r1", atTimelineFrame: 120, newLeftId: "mid", newRightId: "r2" },
+      { type: "RippleDelete", clipId: "mid" },
+    ];
+    for (const c of cmds) {
+      const res = applyCommand(seq, c);
+      expect(res.ok !== false).toBe(true);
+      seq = res.sequence;
+    }
+    expect(seq.clips.length).toBe(2);
+    // SplitClip RENAMES the left piece to newLeftId ("l1") — clip-c is gone.
+    const c = seq.clips.find((x) => x.id === "l1")!;
+    const r2 = seq.clips.find((x) => x.id === "r2")!;
+    // Left keeps [0,60) at timeline [0,60); silent middle gone; right [120,180)
+    // rippled to timeline [60,120). Track closes up: total duration 120.
+    expect(c.sourceInFrame).toBe(0);
+    expect(c.sourceOutFrame).toBe(60);
+    expect(c.timelineStartFrame).toBe(0);
+    expect(c.timelineDurationFrames).toBe(60);
+    expect(r2.sourceInFrame).toBe(120);
+    expect(r2.sourceOutFrame).toBe(180);
+    expect(r2.timelineStartFrame).toBe(60);
+    expect(r2.timelineDurationFrames).toBe(60);
+    expect(seq.clips.every((x) => x.timelineStartFrame + x.timelineDurationFrames <= 120)).toBe(true);
+  });
+
+  test("uneven timebases: 24fps source in a 30fps sequence splits exactly", () => {
+    // Source [0,144) @24fps = 6s → timeline 180 @30fps. Interior [2s,4s) →
+    // sFrame=48, eFrame=96 (24fps), tlForS=60, tlForE=120.
+    const seqData = buildSeq();
+    seqData.clips[0].sourceOutFrame = 144;
+    seqData.clips[0].sourceFps = { num: 24, den: 1 };
+    seqData.clips[0].timelineDurationFrames = 180;
+    let seq = SequenceSchema.parse(seqData);
+    const cmds = [
+      { type: "SplitClip", clipId: "clip-c", atTimelineFrame: 60, newLeftId: "l1", newRightId: "r1" },
+      { type: "SplitClip", clipId: "r1", atTimelineFrame: 120, newLeftId: "mid", newRightId: "r2" },
+      { type: "RippleDelete", clipId: "mid" },
+    ];
+    for (const c of cmds) {
+      const res = applyCommand(seq, c);
+      expect(res.ok !== false).toBe(true);
+      seq = res.sequence;
+    }
+    const c = seq.clips.find((x) => x.id === "l1")!;
+    const r2 = seq.clips.find((x) => x.id === "r2")!;
+    expect(c.sourceOutFrame).toBe(48);
+    expect(c.timelineDurationFrames).toBe(60);
+    expect(r2.sourceInFrame).toBe(96);
+    expect(r2.timelineStartFrame).toBe(60);
+    expect(r2.timelineDurationFrames).toBe(60);
   });
 });

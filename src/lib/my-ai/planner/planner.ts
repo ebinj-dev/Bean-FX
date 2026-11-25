@@ -17,7 +17,8 @@ import { AIPlanSchema, normalizeLLMPlan, normalizePlanCommands, PLAN_SCHEMA_VERS
 import { resolveProjectContext, type ProjectContext } from "@/lib/my-ai/context/resolver";
 import { chatValidated } from "@/lib/my-ai/gateway/structured";
 import { llmHealth, LLMError } from "@/lib/my-ai/gateway/provider";
-import { detectSilenceRanges, headTailTrim, secToSourceFrames, type SilenceAnalysis } from "@/lib/my-ai/tools/audio-analysis";
+import { detectSilenceRanges, headTailTrim, interiorSplitPlan, secToSourceFrames, type SilenceAnalysis } from "@/lib/my-ai/tools/audio-analysis";
+import { clipTimelineDuration } from "@/lib/editor/model";
 import { recordUsage } from "@/lib/my-ai/gateway/usage";
 import { newId } from "@/lib/my-ai/ids";
 
@@ -297,11 +298,54 @@ function deterministicPlan(ctx: ProjectContext, request: string, planId: string,
     for (const a of silenceAnalyses) {
       const clip = ctx.sequence.clips.find((c) => c.id === a.clipId);
       if (!clip) continue;
-      const fps = a.fps || ctx.sequence.fps || 30;
-      const trim = headTailTrim({ sourceInFrame: clip.sourceInFrame, sourceOutFrame: clip.sourceOutFrame }, a.analysis.ranges, fps);
+      // Frame mapping uses the CLIP's source fps (the executor's timebase);
+      // silence seconds are real media time, mapped into source frames.
+      const srcFpsNum = clip.sourceFps.den > 0 ? clip.sourceFps.num / clip.sourceFps.den : (a.fps || ctx.sequence.fps || 30);
+      const fps = srcFpsNum > 0 ? srcFpsNum : 30;
+      const win = { sourceInFrame: clip.sourceInFrame, sourceOutFrame: clip.sourceOutFrame };
+      const trim = headTailTrim(win, a.analysis.ranges, fps);
       for (const note of trim.notes) warnings.push(`clip ${a.clipId}: ${note}`);
       if (trim.changed) {
         commands.push({ type: "TrimClip", clipId: a.clipId, newSourceInFrame: trim.newSourceInFrame, newSourceOutFrame: trim.newSourceOutFrame });
+      }
+      // M42-I Unit 2 — longest INTERIOR silence becomes a split+ripple cut,
+      // computed on the POST-TRIM geometry with the executor's exact
+      // clipTimelineDuration math (fail-closed: any mismatch is disclosed,
+      // never guessed). Remaining interior ranges stay KEPT and disclosed.
+      const postTrimIn = trim.changed ? trim.newSourceInFrame : win.sourceInFrame;
+      const postTrimOut = trim.changed ? trim.newSourceOutFrame : win.sourceOutFrame;
+      const interior = interiorSplitPlan({ sourceInFrame: postTrimIn, sourceOutFrame: postTrimOut }, a.analysis.ranges, fps);
+      if (interior) {
+        const kept = a.analysis.ranges.filter(
+          (rg) => rg !== interior.range && rg.startSec > postTrimIn / fps + 0.25 && rg.endSec < postTrimOut / fps - 0.25,
+        );
+        try {
+          const seqFps = (ctx.sequence as unknown as { fpsRational?: { num: number; den: number } }).fpsRational
+            ?? { num: Math.round((ctx.sequence.fps || 30) * 1000), den: 1000 };
+          const headCut = trim.changed && trim.newSourceInFrame > win.sourceInFrame
+            ? clipTimelineDuration(trim.newSourceInFrame, win.sourceInFrame, clip.sourceFps, seqFps, clip.playbackSpeed)
+            : 0;
+          const tlStart = clip.startFrame + headCut;
+          const tlForS = tlStart + clipTimelineDuration(interior.sFrame, postTrimIn, clip.sourceFps, seqFps, clip.playbackSpeed);
+          const tlForE = tlForS + clipTimelineDuration(interior.eFrame, interior.sFrame, clip.sourceFps, seqFps, clip.playbackSpeed);
+          // SplitClip renames the LEFT piece to newLeftId (the right takes
+          // newRightId), so the silent middle after split 2 is leftId2.
+          const leftId1 = newId("clip");
+          const rightId1 = newId("clip");
+          const midId = newId("clip");
+          const rightId2 = newId("clip");
+          warnings.push(`clip ${a.clipId}: ${interior.note} (timeline frames [${tlForS}, ${tlForE}))`);
+          for (const rg of kept) {
+            warnings.push(`clip ${a.clipId}: interior silence [${rg.startSec.toFixed(2)}-${rg.endSec.toFixed(2)}s] KEPT — run again to cut the next longest range`);
+          }
+          commands.push(
+            { type: "SplitClip", clipId: a.clipId, atTimelineFrame: tlForS, newLeftId: leftId1, newRightId: rightId1 },
+            { type: "SplitClip", clipId: rightId1, atTimelineFrame: tlForE, newLeftId: midId, newRightId: rightId2 },
+            { type: "RippleDelete", clipId: midId },
+          );
+        } catch (err) {
+          warnings.push(`clip ${a.clipId}: interior silence [${interior.range.startSec.toFixed(2)}-${interior.range.endSec.toFixed(2)}s] NOT planned — exact split impossible with these timebases/speed (${err instanceof Error ? err.message : "unknown"}); kept as-is`);
+        }
       }
     }
     if (commands.length > 0) {

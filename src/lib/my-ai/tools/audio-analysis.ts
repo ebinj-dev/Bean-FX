@@ -182,10 +182,42 @@ export function headTailTrim(win: ClipSourceWindow, ranges: SilenceRange[], fps:
     newOut = Math.max(newIn + 1, Math.min(secToSourceFrames(tailSilence.startSec, fps), win.sourceOutFrame));
     notes.push(`tail silence [${tailSilence.startSec.toFixed(2)}-${tailSilence.endSec.toFixed(2)}s] → source out ${win.sourceOutFrame}→${newOut}`);
   }
-  for (const r of ranges) {
-    if (r.startSec > inSec + 0.25 && r.endSec < outSec - 0.25) {
-      notes.push(`interior silence [${r.startSec.toFixed(2)}-${r.endSec.toFixed(2)}s] KEPT — needs a split+ripple proposal`);
-    }
-  }
+  // Interior silence is NOT disclosed here — the planner owns it (Unit 2:
+  // the longest interior range becomes a split+ripple cut; the rest are
+  // disclosed as KEPT at plan level).
   return { newSourceInFrame: newIn, newSourceOutFrame: newOut, notes, changed: Boolean(headSilence || tailSilence) && newOut - newIn >= 1 };
+}
+
+export interface InteriorSplitPlan {
+  /** Source frames (asset timebase) of the silent middle to remove. */
+  sFrame: number;
+  eFrame: number;
+  range: SilenceRange;
+  note: string;
+}
+
+/**
+ * M42-I Unit 2 (pure, unit-tested) — pick the LONGEST interior silence in a
+ * clip's source window and map it to source frames for a split+ripple cut.
+ * Interior = strictly inside the window (0.25 s tolerance matches
+ * headTailTrim). Returns null when there is no trimmable interior silence.
+ * The caller clamps further against post-trim geometry.
+ */
+export function interiorSplitPlan(win: ClipSourceWindow, ranges: SilenceRange[], fps: number): InteriorSplitPlan | null {
+  const inSec = win.sourceInFrame / fps;
+  const outSec = win.sourceOutFrame / fps;
+  const interior = ranges
+    .filter((r) => r.startSec > inSec + 0.25 && r.endSec < outSec - 0.25)
+    .sort((a, b) => b.durationSec - a.durationSec);
+  const range = interior[0];
+  if (!range) return null;
+  let sFrame = Math.max(win.sourceInFrame + 1, Math.min(secToSourceFrames(range.startSec, fps), win.sourceOutFrame - 2));
+  let eFrame = Math.max(sFrame + 1, Math.min(secToSourceFrames(range.endSec, fps), win.sourceOutFrame - 1));
+  if (eFrame - sFrame < 1) return null; // sub-frame silence — nothing to cut
+  return {
+    sFrame,
+    eFrame,
+    range,
+    note: `interior silence [${range.startSec.toFixed(2)}-${range.endSec.toFixed(2)}s] → split+ripple cut at source frames [${sFrame}, ${eFrame})`,
+  };
 }
