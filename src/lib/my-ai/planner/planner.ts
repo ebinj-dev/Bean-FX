@@ -18,6 +18,7 @@ import { resolveProjectContext, type ProjectContext } from "@/lib/my-ai/context/
 import { chatValidated } from "@/lib/my-ai/gateway/structured";
 import { llmHealth, LLMError } from "@/lib/my-ai/gateway/provider";
 import { detectSilenceRanges, headTailTrim, interiorSplitPlan, secToSourceFrames, type SilenceAnalysis } from "@/lib/my-ai/tools/audio-analysis";
+import { detectSceneChanges, type SceneAnalysis } from "@/lib/my-ai/tools/video-analysis";
 import { clipTimelineDuration } from "@/lib/editor/model";
 import { recordUsage } from "@/lib/my-ai/gateway/usage";
 import { newId } from "@/lib/my-ai/ids";
@@ -79,6 +80,53 @@ export async function analyzeSilenceForRequest(
   return out.length > 0 ? out : null;
 }
 
+/** M43-A Unit 1 — REAL scene-change detection (RIISHE sees the timeline).
+ *  Chapter/marker/montage requests run genuine ffmpeg scene detection on the
+ *  actual video assets; the evidence feeds the LLM prompt AND the
+ *  deterministic fallback (real AddMarker commands). Null = not applicable
+ *  or not possible — callers disclose, never invent cut points. */
+export interface ClipSceneAnalysis {
+  clipId: string;
+  assetId: string;
+  analysis: SceneAnalysis;
+}
+
+const SCENE_INTENT_RE = /scene (change|cut|detect)|chapters?|markers? at|montage|cut points?/;
+
+export async function analyzeScenesForRequest(
+  ctx: ProjectContext,
+  request: string,
+): Promise<ClipSceneAnalysis[] | null> {
+  if (!SCENE_INTENT_RE.test(request.toLowerCase())) return null;
+  const videoClips = ctx.sequence.clips
+    .filter((c) => typeof c.sourceAssetId === "string" && c.sourceAssetId.length > 0)
+    .slice(0, 2);
+  if (videoClips.length === 0) return null;
+  const out: ClipSceneAnalysis[] = [];
+  for (const clip of videoClips) {
+    const asset = await db.mediaAsset.findUnique({ where: { id: clip.sourceAssetId } });
+    if (!asset || asset.kind !== "VIDEO") continue;
+    const analysis = await detectSceneChanges(asset.storagePath, { threshold: 0.4 });
+    if (!analysis) continue; // disclosed as unavailable by the caller
+    out.push({ clipId: clip.id, assetId: asset.id, analysis });
+  }
+  return out.length > 0 ? out : null;
+}
+
+function sceneAnalysisPromptAppendix(analyses: ClipSceneAnalysis[] | null): string {
+  if (!analyses || analyses.length === 0) return "";
+  const lines = analyses.map((a) => {
+    const cuts = a.analysis.cutSecs.length > 0
+      ? a.analysis.cutSecs.slice(0, 30).map((t) => `${t.toFixed(2)}s`).join(", ")
+      : "none detected";
+    return `clip ${a.clipId} (asset ${a.assetId}, ${a.analysis.durationSec?.toFixed(2)}s): scene cuts at threshold ${a.analysis.threshold}: ${cuts}`;
+  });
+  return `
+
+REAL scene analysis (ffmpeg scene detection on the actual files — EVIDENCE, not suggestions; markers must map cuts into each clip's real timeline span):
+${lines.join("\n")}`;
+}
+
 function silenceAnalysisPromptAppendix(analyses: ClipSilenceAnalysis[] | null): string {
   if (!analyses || analyses.length === 0) return "";
   const lines = analyses.map((a) => {
@@ -135,10 +183,14 @@ export async function createPlan(userId: string, projectId: string, request: str
   try {
     silenceAnalyses = await analyzeSilenceForRequest(ctx, request);
   } catch { silenceAnalyses = null; }
+  let sceneAnalyses: ClipSceneAnalysis[] | null = null;
+  try {
+    sceneAnalyses = await analyzeScenesForRequest(ctx, request);
+  } catch { sceneAnalyses = null; }
 
   const health = await llmHealth();
   if (!health.ok) {
-    const fallback = deterministicPlan(ctx, request, planId, contextVersion, idempotencyKey, silenceAnalyses);
+    const fallback = deterministicPlan(ctx, request, planId, contextVersion, idempotencyKey, silenceAnalyses, sceneAnalyses);
     await persistPlan(fallback, userId, projectId, conversationId ?? null, "deterministic-fallback");
     return {
       plan: fallback,
@@ -156,7 +208,7 @@ export async function createPlan(userId: string, projectId: string, request: str
       
       [
         { role: "system", content: PLANNER_SYSTEM },
-        { role: "user", content: contextPrompt(ctx, request, silenceAnalysisPromptAppendix(silenceAnalyses)) },
+        { role: "user", content: contextPrompt(ctx, request, silenceAnalysisPromptAppendix(silenceAnalyses) + sceneAnalysisPromptAppendix(sceneAnalyses)) },
       ],
       {
         purpose: "planner",
@@ -202,7 +254,7 @@ export async function createPlan(userId: string, projectId: string, request: str
     return { plan: validated, mode: "llm", note: `Plan proposed by ${model} and validated against project context; approval required before any step runs.` };
   } catch (err) {
     const detail = err instanceof LLMError ? `${err.code}: ${err.message}` : err instanceof Error ? err.message.slice(0, 160) : "unknown error";
-    const fallback = deterministicPlan(ctx, request, planId, contextVersion, idempotencyKey);
+    const fallback = deterministicPlan(ctx, request, planId, contextVersion, idempotencyKey, silenceAnalyses, sceneAnalyses);
     await persistPlan(fallback, userId, projectId, conversationId ?? null, "deterministic-fallback");
     return {
       plan: fallback,
@@ -283,7 +335,7 @@ function validateAgainstContext(plan: AIPlan, ctx: ProjectContext): AIPlan {
 }
 
 // ── deterministic fallback planner (labeled; same schema) ───────────────────
-function deterministicPlan(ctx: ProjectContext, request: string, planId: string, contextVersion: string, idempotencyKey: string, silenceAnalyses?: ClipSilenceAnalysis[] | null): AIPlan {
+function deterministicPlan(ctx: ProjectContext, request: string, planId: string, contextVersion: string, idempotencyKey: string, silenceAnalyses?: ClipSilenceAnalysis[] | null, sceneAnalyses?: ClipSceneAnalysis[] | null): AIPlan {
   const steps: PlanStep[] = [];
   const warnings: string[] = [];
   const r = request.toLowerCase();
@@ -397,6 +449,73 @@ function deterministicPlan(ctx: ProjectContext, request: string, planId: string,
       affectedRange: null,
       risk: "timeline",
     });
+  }
+  // M43-A Unit 1 — scene/chapter/marker requests emit REAL AddMarker
+  // commands from REAL ffmpeg scene detection: every detected cut inside a
+  // clip's source window maps to its exact timeline frame via the
+  // executor's clipTimelineDuration math. Fail-closed: timebase-impossible
+  // cuts are skipped and DISCLOSED, never guessed.
+  if (SCENE_INTENT_RE.test(r) && sceneAnalyses && sceneAnalyses.length > 0) {
+    const markerCommands: Array<Record<string, unknown>> = [];
+    try {
+      const seqFps = (ctx.sequence as unknown as { fpsRational?: { num: number; den: number } }).fpsRational
+        ?? { num: Math.round((ctx.sequence.fps || 30) * 1000), den: 1000 };
+      for (const a of sceneAnalyses) {
+        const clip = ctx.sequence.clips.find((c) => c.id === a.clipId);
+        if (!clip) continue;
+        const srcFpsNum = clip.sourceFps.den > 0 ? clip.sourceFps.num / clip.sourceFps.den : 30;
+        const clipEndTl = clip.startFrame + clip.durationFrames;
+        const cuts = a.analysis.cutSecs.filter((t) => {
+          const sFrame = Math.round(t * srcFpsNum);
+          return sFrame > clip.sourceInFrame && sFrame < clip.sourceOutFrame;
+        });
+        let added = 0;
+        for (const t of cuts.slice(0, 20)) {
+          try {
+            const sFrame = Math.round(t * srcFpsNum);
+            const tl = clip.startFrame + clipTimelineDuration(sFrame, clip.sourceInFrame, clip.sourceFps, seqFps, clip.playbackSpeed);
+            if (tl <= clip.startFrame || tl >= clipEndTl) continue;
+            markerCommands.push({ type: "AddMarker", marker: { id: newId("marker"), frame: tl, label: `Scene change @ ${t.toFixed(2)}s` } });
+            added++;
+          } catch { /* clipTimelineDuration threw (<1 timeline frame) — skip this cut */ }
+        }
+        if (cuts.length > 20) warnings.push(`clip ${a.clipId}: ${cuts.length - 20} scene cuts beyond the 20-marker cap were not planned`);
+        if (added === 0 && cuts.length > 0) warnings.push(`clip ${a.clipId}: scene cuts detected but none mapped inside the clip's timeline span (timebase mismatch — disclosed, none planned)`);
+        warnings.push(`evidence: ffmpeg ${a.analysis.toolBanner ? a.analysis.toolBanner.slice(0, 40) : "scene detect"} on asset ${a.assetId} (${a.analysis.cutSecs.length} cut(s) at threshold ${a.analysis.threshold})`);
+      }
+    } catch (err) {
+      warnings.push(`scene marker planning disclosed a failure: ${err instanceof Error ? err.message : "unknown"} — no markers planned`);
+    }
+    if (markerCommands.length > 0) {
+      steps.push({
+        id: nextId(),
+        operation: "APPLY_COMMANDS",
+        engine: "MYAI",
+        dependsOn: [],
+        args: { commands: markerCommands },
+        title: `Add ${markerCommands.length} scene-change marker(s)`,
+        description: "Real ffmpeg scene-cut evidence → canonical AddMarker commands (exact executor timeline math, fail-closed re-validation).",
+        readsAssetIds: sceneAnalyses.map((x) => x.assetId),
+        writesAssetIds: [],
+        affectedRange: null,
+        risk: "timeline",
+      });
+    } else {
+      steps.push({
+        id: nextId(),
+        operation: "RIISHE_AUTOCUT",
+        engine: "RIISHE",
+        dependsOn: [],
+        args: { guidance: "Review scene-cut proposals in the RIISHE panel — real analysis found no mappable cuts." },
+        title: "No mappable scene cuts found by real analysis",
+        description: "The real ffmpeg scene run found no cuts mappable into the timeline; evidence is disclosed in the plan warnings.",
+        readsAssetIds: [],
+        writesAssetIds: [],
+        affectedRange: null,
+        risk: "analysis",
+      });
+      warnings.push("scene analysis found no mappable cuts (none detected, or all outside clip spans)");
+    }
   }
   if (/captions?|subtitle|animate captions/.test(r)) {
     steps.push({
