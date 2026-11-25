@@ -5,11 +5,13 @@
  */
 import { registerTools } from "./tools";
 import { MYAI_TOOLS } from "@/lib/my-ai/orchestration/mcp-bridge";
+import { COMMANDS_MCP_TOOLS } from "@/lib/my-ai/orchestration/mcp-commands-tools";
 
 let done = false;
 export function ensureMcpTools(): void {
   if (!done) {
     registerTools(MYAI_TOOLS);
+    registerTools(COMMANDS_MCP_TOOLS);
     done = true;
   }
 }

@@ -53,12 +53,12 @@ afterAll(async () => {
 });
 
 describe("external MCP client — HTTPS transport (real out-of-process)", () => {
-  test("initialize handshake + tools/list exposes the NINE-tool shared registry", async () => {
+  test("initialize handshake + tools/list exposes the shared registry (nine core + M43-B commands surface)", async () => {
     const { client, summary } = await connectHttp(LIVE, token);
     expect(summary.serverVersion?.name).toBe("beanfx-mcp"); // real initialize handshake
     expect(summary.serverInfo?.name).toBe("beanfx-mcp");
     const names = summary.tools.map((t) => t.name);
-    expect(names).toEqual(["server.capabilities", "projects.list", "project.canonical", "jobs.status", "jobs.submit", "jobs.cancel", "ai.models.list", "myai.status", "myai.execute"]);
+    expect(names).toEqual(["server.capabilities", "projects.list", "project.canonical", "jobs.status", "jobs.submit", "jobs.cancel", "ai.models.list", "myai.status", "myai.execute", "commands.list", "commands.describe", "commands.validate", "commands.preview", "commands.run", "commands.batch"]);
     expect(summary.tools.find((t) => t.name === "jobs.submit")?.mutates).toBe(true);
     const caps = summary.capabilitiesRead as { capabilities: { api: string; formatVersions: string[] } };
     expect(caps.capabilities.api).toBe("v1");

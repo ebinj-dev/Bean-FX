@@ -9,7 +9,7 @@ rm -rf "$EVDIR"; mkdir -p "$EVDIR"
 RES="$EVDIR/results.jsonl"; : > "$RES"
 
 SUITES="$*"
-[ -z "$SUITES" ] && SUITES="test-m21-bridge test-m22-bridge-deep test-m22-e2e test-m22-mcp-client test-m22-security test-m23-mcp-raw-client test-m23-security-release test-m25-billing test-m28-api test-m28-pipeline test-m30-collab test-m31-security test-m31-media-qual test-m31-studio-live test-m33-acceptance test-m33-three-format test-showcase-live"
+[ -z "$SUITES" ] && SUITES="test-m43-command-registry test-m43-commands test-m21-bridge test-m22-bridge-deep test-m22-e2e test-m22-mcp-client test-m22-security test-m23-mcp-raw-client test-m23-security-release test-m25-billing test-m28-api test-m28-pipeline test-m30-collab test-m31-security test-m31-media-qual test-m31-studio-live test-m33-acceptance test-m33-three-format test-showcase-live"
 
 STAGE2_DB="$(mktemp /tmp/beanfx-m41verify-XXXXXX.db)"
 STAGE2_MEDIA="$(mktemp -d /tmp/beanfx-m41verify-media-XXXXXX)"
