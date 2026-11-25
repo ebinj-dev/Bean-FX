@@ -17,6 +17,9 @@ import { AIPlanSchema, normalizeLLMPlan, normalizePlanCommands, PLAN_SCHEMA_VERS
 import { resolveProjectContext, type ProjectContext } from "@/lib/my-ai/context/resolver";
 import { chatValidated } from "@/lib/my-ai/gateway/structured";
 import { llmHealth, LLMError } from "@/lib/my-ai/gateway/provider";
+import { detectSilenceRanges, headTailTrim, interiorSplitPlan, secToSourceFrames, type SilenceAnalysis } from "@/lib/my-ai/tools/audio-analysis";
+import { detectSceneChanges, type SceneAnalysis } from "@/lib/my-ai/tools/video-analysis";
+import { clipTimelineDuration } from "@/lib/editor/model";
 import { recordUsage } from "@/lib/my-ai/gateway/usage";
 import { newId } from "@/lib/my-ai/ids";
 
@@ -45,7 +48,104 @@ Example plan shape (exact enums; engines WITHOUT "MYAI"; affectedRange is an OBJ
 {"schemaVersion":1,"planId":"myai_plan_example1","projectId":"<from context>","requestSummary":"Add animated captions","engines":["NIIKI"],"steps":[{"id":"s1","operation":"NIIKI_GRAPHIC","engine":"NIIKI","dependsOn":[],"args":{"instruction":"Create animated captions word by word"},"title":"Animated captions","description":"NIIKI word-by-word caption proposal","readsAssetIds":[],"writesAssetIds":[],"affectedRange":null,"risk":"timeline"}],"expectedChanges":["Caption clips appear on the caption track"],"warnings":["Every step re-validates at execution time"],"estimatedUsage":{"llmCalls":1,"generationCalls":0,"note":"Metered by provider accounts; token counts recorded per call."},"contextVersion":"<from context>","idempotencyKey":"myai-planner-example-0001"}`;
 
 /** Build the bounded user prompt: request + compact context. */
-function contextPrompt(ctx: ProjectContext, request: string): string {
+/** M42-I Unit 1 — REAL silence analysis (RIISHE hears the timeline).
+ *  Returns per-clip analyses for clips whose request implies silence work.
+ *  Every result is evidence from a real ffmpeg run — the caller must disclose
+ *  when analysis is NOT possible instead of inventing ranges. */
+export interface ClipSilenceAnalysis {
+  clipId: string;
+  assetId: string;
+  analysis: SilenceAnalysis;
+  fps: number;
+}
+
+export async function analyzeSilenceForRequest(
+  ctx: ProjectContext,
+  request: string,
+): Promise<ClipSilenceAnalysis[] | null> {
+  if (!/silenc|dead air|quiet|dead.?space/.test(request.toLowerCase())) return null;
+  const audioClips = ctx.sequence.clips
+    .filter((c) => c.trackKind !== "AUDIO" || c.trackKind === "AUDIO" || true)
+    .filter((c) => typeof c.sourceAssetId === "string" && c.sourceAssetId.length > 0)
+    .slice(0, 3);
+  if (audioClips.length === 0) return null;
+  const out: ClipSilenceAnalysis[] = [];
+  for (const clip of audioClips) {
+    const asset = await db.mediaAsset.findUnique({ where: { id: clip.sourceAssetId } });
+    if (!asset || asset.kind === "SUBTITLE") continue;
+    const analysis = await detectSilenceRanges(asset.storagePath, { noiseDb: -30, minSilenceSec: 0.5 });
+    if (!analysis) continue; // disclosed as unavailable by the caller
+    out.push({ clipId: clip.id, assetId: asset.id, analysis, fps: asset.fps ?? ctx.sequence.fps });
+  }
+  return out.length > 0 ? out : null;
+}
+
+/** M43-A Unit 1 — REAL scene-change detection (RIISHE sees the timeline).
+ *  Chapter/marker/montage requests run genuine ffmpeg scene detection on the
+ *  actual video assets; the evidence feeds the LLM prompt AND the
+ *  deterministic fallback (real AddMarker commands). Null = not applicable
+ *  or not possible — callers disclose, never invent cut points. */
+export interface ClipSceneAnalysis {
+  clipId: string;
+  assetId: string;
+  analysis: SceneAnalysis;
+}
+
+const SCENE_INTENT_RE = /scene (change|cut|detect)|chapters?|markers? at|montage|cut points?/;
+
+export async function analyzeScenesForRequest(
+  ctx: ProjectContext,
+  request: string,
+): Promise<ClipSceneAnalysis[] | null> {
+  if (!SCENE_INTENT_RE.test(request.toLowerCase())) return null;
+  const videoClips = ctx.sequence.clips
+    .filter((c) => typeof c.sourceAssetId === "string" && c.sourceAssetId.length > 0)
+    .slice(0, 2);
+  if (videoClips.length === 0) return null;
+  const out: ClipSceneAnalysis[] = [];
+  for (const clip of videoClips) {
+    const asset = await db.mediaAsset.findUnique({ where: { id: clip.sourceAssetId } });
+    if (!asset || asset.kind !== "VIDEO") continue;
+    const analysis = await detectSceneChanges(asset.storagePath, { threshold: 0.4 });
+    if (!analysis) continue; // disclosed as unavailable by the caller
+    out.push({ clipId: clip.id, assetId: asset.id, analysis });
+  }
+  return out.length > 0 ? out : null;
+}
+
+function sceneAnalysisPromptAppendix(analyses: ClipSceneAnalysis[] | null): string {
+  if (!analyses || analyses.length === 0) return "";
+  const lines = analyses.map((a) => {
+    const cuts = a.analysis.cutSecs.length > 0
+      ? a.analysis.cutSecs.slice(0, 30).map((t) => `${t.toFixed(2)}s`).join(", ")
+      : "none detected";
+    return `clip ${a.clipId} (asset ${a.assetId}, ${a.analysis.durationSec?.toFixed(2)}s): scene cuts at threshold ${a.analysis.threshold}: ${cuts}`;
+  });
+  return `
+
+REAL scene analysis (ffmpeg scene detection on the actual files — EVIDENCE, not suggestions; markers must map cuts into each clip's real timeline span):
+${lines.join("\n")}`;
+}
+
+function silenceAnalysisPromptAppendix(analyses: ClipSilenceAnalysis[] | null): string {
+  if (!analyses || analyses.length === 0) return "";
+  const lines = analyses.map((a) => {
+    const ranges = a.analysis.ranges.length > 0
+      ? a.analysis.ranges.map((r) => `[${r.startSec.toFixed(2)}s - ${r.endSec.toFixed(2)}s (${r.durationSec.toFixed(2)}s)]`).join(", ")
+      : "none detected";
+    return `clip ${a.clipId} (asset ${a.assetId}, ${a.analysis.durationSec?.toFixed(2)}s, fps ${a.fps}): silence ≥${a.analysis.minSilenceSec}s at ${noiseDbLabel(a.analysis)}: ${ranges}`;
+  });
+  return `
+
+REAL audio analysis (ffmpeg silencedetect on the actual files — EVIDENCE, not suggestions; trims must stay inside each clip's real source range ${"["}sourceInFrame, sourceOutFrame${"]"} and leave ≥ 1 frame):
+${lines.join("\n")}`;
+}
+
+function noiseDbLabel(a: SilenceAnalysis): string {
+  return `${a.noiseDb}dB`;
+}
+
+function contextPrompt(ctx: ProjectContext, request: string, extraContext = ""): string {
   const compact = {
     project: { id: ctx.projectId, name: ctx.projectName, fps: ctx.sequence.fps, resolution: `${ctx.sequence.width}x${ctx.sequence.height}`, durationSec: ctx.sequence.durationSec },
     tracks: ctx.sequence.tracks,
@@ -59,7 +159,7 @@ function contextPrompt(ctx: ProjectContext, request: string): string {
   return `User request: ${request}
 
 Project context (bounded, JSON):
-${JSON.stringify(compact, null, 1)}
+${JSON.stringify(compact, null, 1)}${extraContext}
 
 Produce the editing plan JSON now.`;
 }
@@ -75,9 +175,22 @@ export async function createPlan(userId: string, projectId: string, request: str
   const idempotencyKey = `plan-${userId.slice(0, 8)}-${projectId.slice(0, 8)}-${Buffer.from(request).toString("base64url").slice(0, 30)}-${contextVersion}`;
   const planId = newId("plan");
 
+  // M42-I Unit 1 — REAL media analysis BEFORE planning. Silence requests run
+  // genuine ffmpeg silencedetect on the asset files; the evidence feeds the
+  // LLM prompt AND the deterministic fallback (which can then emit REAL
+  // TrimClip commands). Analysis failure is disclosed, never invented.
+  let silenceAnalyses: ClipSilenceAnalysis[] | null = null;
+  try {
+    silenceAnalyses = await analyzeSilenceForRequest(ctx, request);
+  } catch { silenceAnalyses = null; }
+  let sceneAnalyses: ClipSceneAnalysis[] | null = null;
+  try {
+    sceneAnalyses = await analyzeScenesForRequest(ctx, request);
+  } catch { sceneAnalyses = null; }
+
   const health = await llmHealth();
   if (!health.ok) {
-    const fallback = deterministicPlan(ctx, request, planId, contextVersion, idempotencyKey);
+    const fallback = deterministicPlan(ctx, request, planId, contextVersion, idempotencyKey, silenceAnalyses, sceneAnalyses);
     await persistPlan(fallback, userId, projectId, conversationId ?? null, "deterministic-fallback");
     return {
       plan: fallback,
@@ -95,7 +208,7 @@ export async function createPlan(userId: string, projectId: string, request: str
       
       [
         { role: "system", content: PLANNER_SYSTEM },
-        { role: "user", content: contextPrompt(ctx, request) },
+        { role: "user", content: contextPrompt(ctx, request, silenceAnalysisPromptAppendix(silenceAnalyses) + sceneAnalysisPromptAppendix(sceneAnalyses)) },
       ],
       {
         purpose: "planner",
@@ -141,7 +254,7 @@ export async function createPlan(userId: string, projectId: string, request: str
     return { plan: validated, mode: "llm", note: `Plan proposed by ${model} and validated against project context; approval required before any step runs.` };
   } catch (err) {
     const detail = err instanceof LLMError ? `${err.code}: ${err.message}` : err instanceof Error ? err.message.slice(0, 160) : "unknown error";
-    const fallback = deterministicPlan(ctx, request, planId, contextVersion, idempotencyKey);
+    const fallback = deterministicPlan(ctx, request, planId, contextVersion, idempotencyKey, silenceAnalyses, sceneAnalyses);
     await persistPlan(fallback, userId, projectId, conversationId ?? null, "deterministic-fallback");
     return {
       plan: fallback,
@@ -222,11 +335,105 @@ function validateAgainstContext(plan: AIPlan, ctx: ProjectContext): AIPlan {
 }
 
 // ── deterministic fallback planner (labeled; same schema) ───────────────────
-function deterministicPlan(ctx: ProjectContext, request: string, planId: string, contextVersion: string, idempotencyKey: string): AIPlan {
+function deterministicPlan(ctx: ProjectContext, request: string, planId: string, contextVersion: string, idempotencyKey: string, silenceAnalyses?: ClipSilenceAnalysis[] | null, sceneAnalyses?: ClipSceneAnalysis[] | null): AIPlan {
   const steps: PlanStep[] = [];
+  const warnings: string[] = [];
   const r = request.toLowerCase();
   let n = 0;
   const nextId = () => `s${++n}`;
+
+  // M42-I Unit 1 — silence requests emit REAL commands from the REAL ffmpeg
+  // analysis: head/tail silence is trimmed per clip (interior silence is kept
+  // and disclosed — removing it needs split+ripple, offered as guidance).
+  if (/silenc|dead air|quiet|dead.?space/.test(r) && silenceAnalyses && silenceAnalyses.length > 0) {
+    const commands: Array<Record<string, unknown>> = [];
+    for (const a of silenceAnalyses) {
+      const clip = ctx.sequence.clips.find((c) => c.id === a.clipId);
+      if (!clip) continue;
+      // Frame mapping uses the CLIP's source fps (the executor's timebase);
+      // silence seconds are real media time, mapped into source frames.
+      const srcFpsNum = clip.sourceFps.den > 0 ? clip.sourceFps.num / clip.sourceFps.den : (a.fps || ctx.sequence.fps || 30);
+      const fps = srcFpsNum > 0 ? srcFpsNum : 30;
+      const win = { sourceInFrame: clip.sourceInFrame, sourceOutFrame: clip.sourceOutFrame };
+      const trim = headTailTrim(win, a.analysis.ranges, fps);
+      for (const note of trim.notes) warnings.push(`clip ${a.clipId}: ${note}`);
+      if (trim.changed) {
+        commands.push({ type: "TrimClip", clipId: a.clipId, newSourceInFrame: trim.newSourceInFrame, newSourceOutFrame: trim.newSourceOutFrame });
+      }
+      // M42-I Unit 2 — longest INTERIOR silence becomes a split+ripple cut,
+      // computed on the POST-TRIM geometry with the executor's exact
+      // clipTimelineDuration math (fail-closed: any mismatch is disclosed,
+      // never guessed). Remaining interior ranges stay KEPT and disclosed.
+      const postTrimIn = trim.changed ? trim.newSourceInFrame : win.sourceInFrame;
+      const postTrimOut = trim.changed ? trim.newSourceOutFrame : win.sourceOutFrame;
+      const interior = interiorSplitPlan({ sourceInFrame: postTrimIn, sourceOutFrame: postTrimOut }, a.analysis.ranges, fps);
+      if (interior) {
+        const kept = a.analysis.ranges.filter(
+          (rg) => rg !== interior.range && rg.startSec > postTrimIn / fps + 0.25 && rg.endSec < postTrimOut / fps - 0.25,
+        );
+        try {
+          const seqFps = (ctx.sequence as unknown as { fpsRational?: { num: number; den: number } }).fpsRational
+            ?? { num: Math.round((ctx.sequence.fps || 30) * 1000), den: 1000 };
+          const headCut = trim.changed && trim.newSourceInFrame > win.sourceInFrame
+            ? clipTimelineDuration(trim.newSourceInFrame, win.sourceInFrame, clip.sourceFps, seqFps, clip.playbackSpeed)
+            : 0;
+          const tlStart = clip.startFrame + headCut;
+          const tlForS = tlStart + clipTimelineDuration(interior.sFrame, postTrimIn, clip.sourceFps, seqFps, clip.playbackSpeed);
+          const tlForE = tlForS + clipTimelineDuration(interior.eFrame, interior.sFrame, clip.sourceFps, seqFps, clip.playbackSpeed);
+          // SplitClip renames the LEFT piece to newLeftId (the right takes
+          // newRightId), so the silent middle after split 2 is leftId2.
+          const leftId1 = newId("clip");
+          const rightId1 = newId("clip");
+          const midId = newId("clip");
+          const rightId2 = newId("clip");
+          warnings.push(`clip ${a.clipId}: ${interior.note} (timeline frames [${tlForS}, ${tlForE}))`);
+          for (const rg of kept) {
+            warnings.push(`clip ${a.clipId}: interior silence [${rg.startSec.toFixed(2)}-${rg.endSec.toFixed(2)}s] KEPT — run again to cut the next longest range`);
+          }
+          commands.push(
+            { type: "SplitClip", clipId: a.clipId, atTimelineFrame: tlForS, newLeftId: leftId1, newRightId: rightId1 },
+            { type: "SplitClip", clipId: rightId1, atTimelineFrame: tlForE, newLeftId: midId, newRightId: rightId2 },
+            { type: "RippleDelete", clipId: midId },
+          );
+        } catch (err) {
+          warnings.push(`clip ${a.clipId}: interior silence [${interior.range.startSec.toFixed(2)}-${interior.range.endSec.toFixed(2)}s] NOT planned — exact split impossible with these timebases/speed (${err instanceof Error ? err.message : "unknown"}); kept as-is`);
+        }
+      }
+    }
+    if (commands.length > 0) {
+      steps.push({
+        id: nextId(),
+        operation: "APPLY_COMMANDS",
+        engine: "MYAI",
+        dependsOn: [],
+        args: { commands },
+        title: `Trim detected silence (${commands.length} clip${commands.length > 1 ? "s" : ""})`,
+        description: "Real ffmpeg silencedetect evidence → canonical TrimClip commands (fail-closed executor re-validates).",
+        readsAssetIds: silenceAnalyses.map((a) => a.assetId),
+        writesAssetIds: [],
+        affectedRange: null,
+        risk: "timeline",
+      });
+    } else {
+      warnings.push("silence analysis found no trimmable head/tail silence (interior ranges are disclosed above)");
+      steps.push({
+        id: nextId(),
+        operation: "RIISHE_AUTOCUT",
+        engine: "RIISHE",
+        dependsOn: [],
+        args: { guidance: "Review silence proposals in the RIISHE panel — analysis found no trimmable head/tail silence." },
+        title: "No trimmable silence found by real analysis",
+        description: "The real ffmpeg silencedetect run found no head/tail silence to trim; interior ranges are disclosed in the plan warnings.",
+        readsAssetIds: [],
+        writesAssetIds: [],
+        affectedRange: null,
+        risk: "analysis",
+      });
+    }
+    for (const a of silenceAnalyses) {
+      warnings.push(`evidence: ffmpeg ${a.analysis.toolBanner ? a.analysis.toolBanner.slice(0, 40) : "silencedetect"} on asset ${a.assetId} (${a.analysis.ranges.length} range(s), ≥${a.analysis.minSilenceSec}s at ${a.analysis.noiseDb}dB)`);
+    }
+  }
 
   if (/paus|gap|pacing|tight|faster/.test(r) && ctx.sequence.gaps.length > 0) {
     steps.push({
@@ -242,6 +449,73 @@ function deterministicPlan(ctx: ProjectContext, request: string, planId: string,
       affectedRange: null,
       risk: "timeline",
     });
+  }
+  // M43-A Unit 1 — scene/chapter/marker requests emit REAL AddMarker
+  // commands from REAL ffmpeg scene detection: every detected cut inside a
+  // clip's source window maps to its exact timeline frame via the
+  // executor's clipTimelineDuration math. Fail-closed: timebase-impossible
+  // cuts are skipped and DISCLOSED, never guessed.
+  if (SCENE_INTENT_RE.test(r) && sceneAnalyses && sceneAnalyses.length > 0) {
+    const markerCommands: Array<Record<string, unknown>> = [];
+    try {
+      const seqFps = (ctx.sequence as unknown as { fpsRational?: { num: number; den: number } }).fpsRational
+        ?? { num: Math.round((ctx.sequence.fps || 30) * 1000), den: 1000 };
+      for (const a of sceneAnalyses) {
+        const clip = ctx.sequence.clips.find((c) => c.id === a.clipId);
+        if (!clip) continue;
+        const srcFpsNum = clip.sourceFps.den > 0 ? clip.sourceFps.num / clip.sourceFps.den : 30;
+        const clipEndTl = clip.startFrame + clip.durationFrames;
+        const cuts = a.analysis.cutSecs.filter((t) => {
+          const sFrame = Math.round(t * srcFpsNum);
+          return sFrame > clip.sourceInFrame && sFrame < clip.sourceOutFrame;
+        });
+        let added = 0;
+        for (const t of cuts.slice(0, 20)) {
+          try {
+            const sFrame = Math.round(t * srcFpsNum);
+            const tl = clip.startFrame + clipTimelineDuration(sFrame, clip.sourceInFrame, clip.sourceFps, seqFps, clip.playbackSpeed);
+            if (tl <= clip.startFrame || tl >= clipEndTl) continue;
+            markerCommands.push({ type: "AddMarker", marker: { id: newId("marker"), frame: tl, label: `Scene change @ ${t.toFixed(2)}s` } });
+            added++;
+          } catch { /* clipTimelineDuration threw (<1 timeline frame) — skip this cut */ }
+        }
+        if (cuts.length > 20) warnings.push(`clip ${a.clipId}: ${cuts.length - 20} scene cuts beyond the 20-marker cap were not planned`);
+        if (added === 0 && cuts.length > 0) warnings.push(`clip ${a.clipId}: scene cuts detected but none mapped inside the clip's timeline span (timebase mismatch — disclosed, none planned)`);
+        warnings.push(`evidence: ffmpeg ${a.analysis.toolBanner ? a.analysis.toolBanner.slice(0, 40) : "scene detect"} on asset ${a.assetId} (${a.analysis.cutSecs.length} cut(s) at threshold ${a.analysis.threshold})`);
+      }
+    } catch (err) {
+      warnings.push(`scene marker planning disclosed a failure: ${err instanceof Error ? err.message : "unknown"} — no markers planned`);
+    }
+    if (markerCommands.length > 0) {
+      steps.push({
+        id: nextId(),
+        operation: "APPLY_COMMANDS",
+        engine: "MYAI",
+        dependsOn: [],
+        args: { commands: markerCommands },
+        title: `Add ${markerCommands.length} scene-change marker(s)`,
+        description: "Real ffmpeg scene-cut evidence → canonical AddMarker commands (exact executor timeline math, fail-closed re-validation).",
+        readsAssetIds: sceneAnalyses.map((x) => x.assetId),
+        writesAssetIds: [],
+        affectedRange: null,
+        risk: "timeline",
+      });
+    } else {
+      steps.push({
+        id: nextId(),
+        operation: "RIISHE_AUTOCUT",
+        engine: "RIISHE",
+        dependsOn: [],
+        args: { guidance: "Review scene-cut proposals in the RIISHE panel — real analysis found no mappable cuts." },
+        title: "No mappable scene cuts found by real analysis",
+        description: "The real ffmpeg scene run found no cuts mappable into the timeline; evidence is disclosed in the plan warnings.",
+        readsAssetIds: [],
+        writesAssetIds: [],
+        affectedRange: null,
+        risk: "analysis",
+      });
+      warnings.push("scene analysis found no mappable cuts (none detected, or all outside clip spans)");
+    }
   }
   if (/captions?|subtitle|animate captions/.test(r)) {
     steps.push({
@@ -362,6 +636,7 @@ function deterministicPlan(ctx: ProjectContext, request: string, planId: string,
     warnings: [
       "Rule-based plan (deterministic fallback) — NOT LLM reasoning.",
       "Every step re-validates against live state at execution time.",
+      ...warnings,
     ],
     estimatedUsage: { llmCalls: 0, generationCalls: steps.filter((s) => s.risk === "generation").length, note: "Metered by provider accounts; token counts recorded per call." },
     contextVersion,
