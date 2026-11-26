@@ -116,7 +116,9 @@ export async function POST(req: NextRequest) {
       projectId,
       conversationId,
       templateId,
-      title,
+      // M47 — a studio product needs real titles: derive from the brief topic
+      // instead of a generic "Untitled production".
+      title: (brief as { topic?: string }).topic?.slice(0, 60) || title,
       briefJson: JSON.stringify(briefWithSources),
       status: "PLANNED",
       stages: { create: template.stages.map((s, i) => ({ key: s.key, order: i, state: i === 0 ? "READY" : "NOT_STARTED" })) },

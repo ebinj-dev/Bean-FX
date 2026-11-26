@@ -5,12 +5,15 @@ import { ArrowRight, Menu, X } from "lucide-react";
 import { BeanLogo } from "@/components/bean/logo";
 import { cn } from "@/lib/utils";
 
+// M47.1 §C — public navigation: product story first; tool deep links remain
+// reachable on the homepage sections; Creative Tools and Open Source are real
+// pages; Documentation stays on /help.
 const NAV_ITEMS = [
-  { label: "AUTO CUT", href: "#/autocut" },
-  { label: "CAPTIONS", href: "#/captions" },
-  { label: "WATERMARK", href: "#/watermark" },
-  { label: "AUDIO", href: "#/audio" },
-  { label: "B-ROLL", href: "#/broll" },
+  { label: "PRODUCT", href: "#product" },
+  { label: "FEATURES", href: "#workflow" },
+  { label: "CREATIVE TOOLS", href: "/studio/tools" },
+  { label: "OPEN SOURCE", href: "/open-source" },
+  { label: "DOCUMENTATION", href: "/help" },
 ];
 
 interface SiteHeaderProps {

@@ -18,7 +18,10 @@ import {
   Music, Paperclip, Play, RefreshCw, Search, Send, Settings, Sparkles, Users, X, CheckCircle2, AlertCircle,
 } from "lucide-react";
 import { BeanLogo } from "@/components/bean/logo";
+import { validateAudioBase64 } from "@/lib/audio-format";
 import { ProductionCrewPanel, useProductionPolling, type ProductionLite, type StageLite, type StageAction, type TaskLite, type EventLite, type AssetLite as CrewAssetLite, type MediaLite as CrewMediaLite } from "@/components/bean/production-crew";
+import { StudioNav, useStudioShortcuts } from "@/components/bean/studio-nav";
+import { VoiceCapture } from "@/components/bean/voice-capture";
 import {
   connectAndCreate, reconnect, disconnect, status as folderStatus, verifyFiles, saveDeliverable,
   saveAssetFile, isSupported, type LocalFolderStatus,
@@ -67,6 +70,59 @@ export function ProductionHome({ user, onLogout }: { user: { name: string | null
   const [draft, setDraft] = useState("");
   const [sending, setSending] = useState(false);
   const [chatError, setChatError] = useState<string | null>(null);
+  const [speaking, setSpeaking] = useState(false);
+  const speakAudioRef = useRef<HTMLAudioElement | null>(null);
+
+  /** M47 voice addendum — speak RIISHE's latest reply through the configured provider. */
+  const speakReply = useCallback(async () => {
+    if (speaking) {
+      speakAudioRef.current?.pause();
+      speakAudioRef.current = null;
+      setSpeaking(false);
+      return;
+    }
+    const last = [...messages].reverse().find((m) => m.role === "assistant");
+    const text = last?.content ?? "";
+    if (!text.trim()) return;
+    setSpeaking(true);
+    try {
+      const res = await fetch("/api/my-ai/voice/speak", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ text: text.slice(0, 1100) }),
+      });
+      const d = await res.json().catch(() => null);
+      if (res.ok && d?.supported && d?.audioBase64) {
+        // M47.1 §A1 — validate the bytes BEFORE playback and label the data
+        // URL with the MIME the bytes actually carry (never a hardcoded
+        // `audio/mpeg`): the route may return real WAV, MP3 or PCM-wrapped
+        // audio depending on what the provider produced.
+        const v = validateAudioBase64(String(d.audioBase64), d.mimeType);
+        if (!v.ok || !v.mime) {
+          setChatError(v.detail);
+          setSpeaking(false);
+          return;
+        }
+        const audio = new Audio(`data:${v.mime};base64,${d.audioBase64}`);
+        audio.onerror = () => {
+          setChatError(`The returned ${v.format} audio could not be played by this browser — the transcript remains authoritative.`);
+          setSpeaking(false);
+        };
+        speakAudioRef.current = audio;
+        audio.onended = () => setSpeaking(false);
+        void audio.play().catch(() => {
+          setChatError("Browser playback refused the returned audio — the transcript remains authoritative.");
+          setSpeaking(false);
+        });
+      } else {
+        setChatError(d?.reason ?? "Voice output is not available — the transcript remains authoritative.");
+        setSpeaking(false);
+      }
+    } catch {
+      setChatError("Voice output network error — the transcript remains authoritative.");
+      setSpeaking(false);
+    }
+  }, [speaking, messages]);
   const [providerMode, setProviderMode] = useState<string | null>(null);
 
   // Projects
@@ -186,6 +242,7 @@ export function ProductionHome({ user, onLogout }: { user: { name: string | null
   const [productionData, setProductionData] = useState<ProductionLite | null>(null);
   const [busyAction, setBusyAction] = useState<string | null>(null);
   const [modelRegistry, setModelRegistry] = useState<Array<{ id?: string; model?: string; provider?: string; ready?: boolean; detail?: string }> | null>(null);
+  useStudioShortcuts("chat");
   const [registryOpen, setRegistryOpen] = useState(false);
   const [libraryOpen, setLibraryOpen] = useState(false);
   const [libraryItems, setLibraryItems] = useState<Array<{ id: string; originalName: string; kind: string; role?: string | null; thumbnailUrl?: string | null }>>([]);
@@ -670,8 +727,10 @@ export function ProductionHome({ user, onLogout }: { user: { name: string | null
   const filteredConversations = conversations.filter((c) => c.title.toLowerCase().includes(search.toLowerCase()));
 
   return (
-    <div className="flex h-screen overflow-hidden bg-[#050505] text-white">
-      {/* ── Sidebar ─────────────────────────────────────────────────────── */}
+    <div className="flex h-screen overflow-hidden bg-[var(--m47-bg)] text-white">
+      {/* M47 — the persistent six-destination rail; Studio Chat stays the home. */}
+      <StudioNav user={user} active="chat" onLogout={onLogout} />
+      {/* ── Conversation drawer (chat history stays inside Studio Chat) ─── */}
       <aside className={`${sidebarOpen ? "fixed inset-0 z-40 flex bg-[#050505]/97" : "hidden"} w-[280px] shrink-0 flex-col border-r border-[#161616] bg-[#080807] md:flex`}>
         <div className="flex items-center justify-between border-b border-[#161616] px-4 py-3">
           <a href="#/" aria-label="BEAN FX home"><BeanLogo /></a>
@@ -1064,7 +1123,8 @@ export function ProductionHome({ user, onLogout }: { user: { name: string | null
                   onDragOver={(e) => e.preventDefault()}
                   onDrop={(e) => { e.preventDefault(); if (e.dataTransfer.files.length) void attachFiles(e.dataTransfer.files); }}
                 >
-                  <textarea
+                  <VoiceCapture compact onTranscript={(t) => setDraft((prev) => (prev ? `${prev} ${t}` : t))} />
+<textarea
                     value={draft}
                     onChange={(e) => setDraft(e.target.value)}
                     onKeyDown={(e) => {
@@ -1083,6 +1143,14 @@ export function ProductionHome({ user, onLogout }: { user: { name: string | null
                       Attach
                       <input type="file" multiple className="hidden" onChange={(e) => { if (e.target.files) void attachFiles(e.target.files); e.target.value = ""; }} />
                     </label>
+                    <button
+                      onClick={() => void speakReply()}
+                      disabled={sending || speaking}
+                      title="Speak RIISHE's latest reply (uses the configured voice provider; falls back to text honestly)"
+                      className="rounded-md px-2 py-1 text-[11px] text-[#8f8f8a] hover:text-[#d4a017] disabled:opacity-40"
+                    >
+                      {speaking ? "◼ Stop" : "🔊"}
+                    </button>
                     <button
                       onClick={() => void send()}
                       disabled={sending || !draft.trim()}

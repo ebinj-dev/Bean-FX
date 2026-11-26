@@ -184,6 +184,28 @@ export function createZaiSdkProvider(model: string): LLMProvider {
   };
 }
 
+/**
+ * M47 voice addendum — server-side ASR through the configured gateway SDK.
+ * Returns the raw transcript (plus provider-reported language/confidence when
+ * present). No translation, no interpretation — that happens downstream in the
+ * normal chat/plan flow. Throws on provider failure; the route discloses it.
+ */
+export async function transcribeAudio(
+  base64: string,
+  mime: string
+): Promise<{ text?: string; transcript?: string; language?: string; confidence?: number }> {
+  type AsrSdk = {
+    audio: { asr: { create: (body: { file_base64?: string; file?: string; model?: string }) => Promise<unknown> } };
+  };
+  const mod = (await import("z-ai-web-dev-sdk")) as unknown as { default?: { create: () => Promise<AsrSdk> } };
+  if (!mod?.default?.create) throw new Error("z-ai gateway SDK is not installed in this runtime");
+  const sdk = await mod.default.create();
+  const out = (await sdk.audio.asr.create({ file_base64: base64 })) as {
+    text?: string; transcript?: string; language?: string; confidence?: number;
+  };
+  return out ?? {};
+}
+
 // ── registry ────────────────────────────────────────────────────────────────
 const REGISTRY: Record<string, (model: string) => LLMProvider> = {
   zai: createZaiSdkProvider,
