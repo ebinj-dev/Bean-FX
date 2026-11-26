@@ -1489,6 +1489,7 @@ model Production {
   decisions           ProductionDecision[]
   assets              ProductionAsset[]
   events              ProductionEvent[]
+  tasks               ProductionTask[]
   variants            ProductionVariant[] @relation("Variants")
   @@index([userId, status])
   @@index([projectId])
@@ -1639,6 +1640,31 @@ model ProductionVariant {
 
 /// Append-only real production log. Only actual events are recorded — the
 /// board renders this log verbatim and never fabricates activity.
+/// M45-P1 — one real unit of crew work: who does it, with which actual tool,
+/// from which inputs, to which artifact, with dependencies and criteria.
+model ProductionTask {
+  id           String    @id @default(cuid())
+  productionId String
+  stageKey     String
+  seq          Int       @default(0)
+  agent        String
+  roleLabel    String
+  tool         String
+  inputJson    String?
+  outputJson   String?
+  depsJson     String?
+  criteria     String?
+  status       String    @default("PENDING")
+  error        String?
+  jobId        String?
+  startedAt    DateTime?
+  completedAt  DateTime?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+  production   Production @relation(fields: [productionId], references: [id], onDelete: Cascade)
+  @@index([productionId, stageKey])
+}
+
 model ProductionEvent {
   id           String   @id @default(cuid())
   productionId String

@@ -18,7 +18,7 @@ import {
   Music, Paperclip, Play, RefreshCw, Search, Send, Settings, Sparkles, Users, X, CheckCircle2, AlertCircle,
 } from "lucide-react";
 import { BeanLogo } from "@/components/bean/logo";
-import { ProductionCrewPanel, useProductionPolling, type ProductionLite, type StageLite } from "@/components/bean/production-crew";
+import { ProductionCrewPanel, useProductionPolling, type ProductionLite, type StageLite, type TaskLite, type EventLite } from "@/components/bean/production-crew";
 import {
   connectAndCreate, reconnect, disconnect, status as folderStatus, verifyFiles, saveDeliverable,
   saveAssetFile, isSupported, type LocalFolderStatus,
@@ -27,7 +27,7 @@ import {
 type Section = "chat" | "projects" | "assets" | "crew" | "settings";
 
 interface ConversationLite { id: string; title: string; projectId: string | null; updatedAt: string }
-interface ChatMessage { id: string; role: string; content: string; plan?: PlanSummary | null; createdAt?: string }
+interface ChatMessage { id: string; role: string; content: string; plan?: PlanSummary | null; assetRefs?: Array<{ mediaAssetId: string; name: string; kind: string; role: string | null }> | null; createdAt?: string }
 interface PlanSummary { planId?: string; requestSummary?: string; status?: string; stepCount?: number }
 interface ProjectLite { id: string; name: string; mediaAssets?: number }
 interface AssetLite {
@@ -79,15 +79,19 @@ export function ProductionHome({ user, onLogout }: { user: { name: string | null
   const [renders, setRenders] = useState<RenderCard[]>([]);
 
   // Attachments
-  const [attachments, setAttachments] = useState<Array<{ id: string; name: string; state: "uploading" | "ready" | "failed"; kind?: string; progress?: number; previewUrl?: string | null }>>([]);
+  const [attachments, setAttachments] = useState<Array<{ id: string; name: string; state: "uploading" | "ready" | "failed"; kind?: string; role?: string | null; progress?: number; previewUrl?: string | null }>>([]);
 
   // M45-D — production crew (existing durable pipeline) + honest model registry + version compare
   const [productionId, setProductionId] = useState<string | null>(null);
   const [productionStages, setProductionStages] = useState<StageLite[]>([]);
+  const [productionTasks, setProductionTasks] = useState<TaskLite[]>([]);
+  const [productionEvents, setProductionEvents] = useState<EventLite[]>([]);
   const [productionData, setProductionData] = useState<ProductionLite | null>(null);
   const [busyAction, setBusyAction] = useState<string | null>(null);
   const [modelRegistry, setModelRegistry] = useState<Array<{ id?: string; model?: string; provider?: string; ready?: boolean; detail?: string }> | null>(null);
   const [registryOpen, setRegistryOpen] = useState(false);
+  const [libraryOpen, setLibraryOpen] = useState(false);
+  const [libraryItems, setLibraryItems] = useState<Array<{ id: string; originalName: string; kind: string; role?: string | null; thumbnailUrl?: string | null }>>([]);
   const [compareIds, setCompareIds] = useState<string[]>([]);
 
   // Local folder
@@ -142,6 +146,9 @@ export function ProductionHome({ user, onLogout }: { user: { name: string | null
   // M45-C — the honest model registry (GET /api/ai/models): real providers,
   // real readiness. The chat provider is configured server-side; the registry
   // is shown as availability status, never as a fake selector.
+  const activeProjectIdRef = useRef<string | null>(null);
+  useEffect(() => { activeProjectIdRef.current = activeProjectId; }, [activeProjectId]);
+
   const loadModels = useCallback(async () => {
     const res = await fetch("/api/ai/models");
     if (res.ok) {
@@ -184,15 +191,22 @@ export function ProductionHome({ user, onLogout }: { user: { name: string | null
     const res = await fetch(`/api/my-ai/conversations/${id}/messages`);
     if (res.ok) {
       const d = await res.json();
-      const restored: ChatMessage[] = (d.messages ?? []).map((m: { id: string; role: string; content: string; meta: { planId?: string } | null; createdAt: string }) => ({
+      const restored: ChatMessage[] = (d.messages ?? []).map((m: { id: string; role: string; content: string; meta: { planId?: string; assetRefs?: Array<{ mediaAssetId: string; name: string; kind: string; role: string | null }> } | null; createdAt: string }) => ({
         id: m.id,
         role: m.role,
         content: m.content,
         plan: m.meta?.planId ? { planId: m.meta.planId } : null,
+        assetRefs: m.meta?.assetRefs ?? null,
         createdAt: m.createdAt,
       }));
       setMessages(restored);
       const conv = (d.conversation ?? {}) as { projectId?: string | null };
+      // M45-P2 — restore the conversation's persisted asset references as
+      // ready attachment chips (real ids, ownership re-validated on send).
+      const lastRefs = [...restored].reverse().find((m) => m.assetRefs && m.assetRefs.length > 0)?.assetRefs ?? null;
+      if (lastRefs) {
+        setAttachments(lastRefs.map((r) => ({ id: r.mediaAssetId, name: r.name, state: "ready" as const, kind: r.kind, role: r.role })));
+      }
       if (conv.projectId) {
         setActiveProjectId(conv.projectId);
         void restoreProduction(conv.projectId);
@@ -239,6 +253,25 @@ export function ProductionHome({ user, onLogout }: { user: { name: string | null
     await loadProjects();
   }, [newProjectName, loadProjects]);
 
+  /** M45-P2 — attach an EXISTING project asset from the library (no re-upload,
+   *  no duplicate storage; the same asset id flows to agents and the crew). */
+  const openLibraryPicker = useCallback(async () => {
+    const pid = activeProjectIdRef.current;
+    if (!pid) {
+      setChatError("Create a production project first, then pick assets from its library.");
+      return;
+    }
+    const res = await fetch(`/api/media?projectId=${pid}`);
+    if (!res.ok) {
+      setChatError("The project library could not be loaded.");
+      return;
+    }
+    const d = await res.json();
+    const items: Array<{ id: string; originalName: string; kind: string; role?: string | null; thumbnailUrl?: string | null }> = d.media ?? d.assets ?? [];
+    setLibraryItems(items);
+    setLibraryOpen(true);
+  }, []);
+
   /** Attach files through the EXISTING media pipeline — XHR so the chip
    *  shows REAL byte progress, plus a local object-URL preview. */
   const attachFiles = useCallback(async (files: FileList | File[]) => {
@@ -252,6 +285,11 @@ export function ProductionHome({ user, onLogout }: { user: { name: string | null
         xhr.open("POST", "/api/media");
         xhr.setRequestHeader("x-filename", encodeURIComponent(file.name));
         xhr.setRequestHeader("Content-Type", file.type || "application/octet-stream");
+        // M45-P2 — bind the upload to the ACTIVE project (server validates
+        // ownership) and classify its production role. Originals untouched.
+        if (activeProjectIdRef.current) xhr.setRequestHeader("x-project-id", activeProjectIdRef.current);
+        const role = /^(video)\//.test(file.type) ? "SOURCE_FOOTAGE" : /^(audio)\//.test(file.type) ? "AUDIO_MUSIC" : /^(image)\//.test(file.type) ? "REFERENCE_IMAGE" : "REFERENCE";
+        xhr.setRequestHeader("x-asset-role", role);
         xhr.upload.onprogress = (e) => {
           if (e.lengthComputable) {
             const pct = Math.round((e.loaded / e.total) * 100);
@@ -262,7 +300,7 @@ export function ProductionHome({ user, onLogout }: { user: { name: string | null
           try {
             const d = JSON.parse(xhr.responseText);
             if (xhr.status >= 200 && xhr.status < 300 && d?.media?.id) {
-              setAttachments((a) => a.map((x) => (x.id === tempId ? { ...x, id: d.media.id, state: "ready", kind: d.media.kind, progress: 100 } : x)));
+              setAttachments((a) => a.map((x) => (x.id === tempId ? { ...x, id: d.media.id, state: "ready", kind: d.media.kind, role, progress: 100 } : x)));
               void loadAssets();
             } else {
               throw new Error(d?.error ?? `Upload failed (${xhr.status})`);
@@ -289,8 +327,9 @@ export function ProductionHome({ user, onLogout }: { user: { name: string | null
     if (!text || sending) return;
     setSending(true);
     setChatError(null);
-    const attachmentNote = attachments.filter((a) => a.state === "ready").map((a) => a.name).join(", ");
-    const fullMessage = attachmentNote ? `${text}\n\n[Attached to this production: ${attachmentNote}]` : text;
+    // M45-P2 — attachments are REAL asset references now (ids validated and
+    // persisted server-side); no filename prose is appended to the message.
+    const fullMessage = text;
     const optimistic: ChatMessage = { id: `local-${Date.now()}`, role: "user", content: text };
     setMessages((m) => [...m, optimistic]);
     setDraft("");
@@ -298,7 +337,12 @@ export function ProductionHome({ user, onLogout }: { user: { name: string | null
       const res = await fetch("/api/my-ai/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ projectId: activeProjectId, conversationId: activeConversationId, message: fullMessage }),
+        body: JSON.stringify({
+          projectId: activeProjectId,
+          conversationId: activeConversationId,
+          message: fullMessage,
+          attachments: attachments.filter((x) => x.state === "ready").map((x) => ({ mediaAssetId: x.id, role: x.role ?? undefined })),
+        }),
       });
       const d = await res.json().catch(() => null);
       if (!res.ok) {
@@ -320,7 +364,14 @@ export function ProductionHome({ user, onLogout }: { user: { name: string | null
           const pres = await fetch("/api/productions", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ templateId: "brand-commercial", briefText: text.slice(0, 4000), projectId: activeProjectId }),
+            body: JSON.stringify({
+              templateId: "brand-commercial",
+              briefText: text.slice(0, 4000),
+              projectId: activeProjectId,
+              // M45-P2 — footage/references attached to THIS conversation become
+              // the crew's authorized sources (ownership re-validated server-side).
+              sourceMediaIds: attachments.filter((x) => x.state === "ready").map((x) => x.id),
+            }),
           });
           const pd = await pres.json().catch(() => null);
           if (pres.ok && pd?.production?.id) {
@@ -341,6 +392,8 @@ export function ProductionHome({ user, onLogout }: { user: { name: string | null
   // render stage produces a new export.
   useProductionPolling(productionId, (p) => {
     setProductionStages(p.stages);
+    setProductionTasks(p.tasks);
+    setProductionEvents(p.events);
     setProductionData(p.production);
     if (activeProjectId) void loadRenders(activeProjectId);
   });
@@ -599,11 +652,41 @@ export function ProductionHome({ user, onLogout }: { user: { name: string | null
                     <AlertCircle className="mt-0.5 h-3.5 w-3.5 shrink-0" /> {chatError}
                   </p>
                 )}
+                {libraryOpen && (
+                  <div className="ml-2 max-w-[92%] rounded-2xl border border-[#d4a017]/40 bg-[#0d0d0c] p-3">
+                    <p className="bean-label mb-2 text-[9px] text-[#d4a017]">PROJECT LIBRARY · SELECT AUTHORIZED ASSETS</p>
+                    {libraryItems.length === 0 && <p className="text-[11px] text-[#8f8f8a]">No assets in this project yet — upload footage, audio or references first.</p>}
+                    <div className="grid grid-cols-1 gap-1.5 sm:grid-cols-2">
+                      {libraryItems.map((it) => (
+                        <button
+                          key={it.id}
+                          onClick={() => {
+                            setAttachments((a) => [...a.filter((x) => x.id !== it.id), { id: it.id, name: it.originalName, state: "ready", kind: it.kind, role: it.role ?? null }]);
+                            setLibraryItems((items) => items.filter((x) => x.id !== it.id));
+                            if (libraryItems.length <= 1) setLibraryOpen(false);
+                          }}
+                          className="flex items-center gap-2 rounded-lg border border-[#22221f] bg-[#111110] px-2 py-1.5 text-left hover:border-[#d4a017]/60"
+                        >
+                          {it.thumbnailUrl ? <img src={it.thumbnailUrl} alt="" className="h-8 w-12 rounded object-cover" /> : (
+                            <span className="flex h-8 w-12 items-center justify-center rounded bg-[#1a1a18] text-[9px] text-[#8f8f8a]">{it.kind.slice(0, 3)}</span>
+                          )}
+                          <span className="min-w-0">
+                            <span className="block truncate text-[11px] text-[#e6e6e0]">{it.originalName}</span>
+                            <span className="block text-[9px] text-[#6a6a64]">{it.kind}{it.role ? ` · ${it.role.replaceAll("_", " ")}` : ""}</span>
+                          </span>
+                        </button>
+                      ))}
+                    </div>
+                    <button onClick={() => setLibraryOpen(false)} className="mt-2 rounded border border-[#2a2a2a] px-2 py-0.5 text-[10px] text-[#8f8f8a] hover:border-[#d4a017]">Close</button>
+                  </div>
+                )}
                 {/* M45-D — the REAL crew pipeline panel (existing durable production system) */}
                 {productionId && productionData && (
                   <ProductionCrewPanel
                     production={productionData}
                     stages={productionStages}
+                    tasks={productionTasks}
+                    events={productionEvents}
                     busyAction={busyAction}
                     onAction={(k, a) => void stageAction(k, a)}
                     onOpenEditor={() => { if (activeProjectId) window.location.hash = `#/editor?project=${activeProjectId}`; }}
@@ -631,6 +714,26 @@ export function ProductionHome({ user, onLogout }: { user: { name: string | null
                     </p>
                   </div>
                 )}
+                {/* M45-P3 — the result of THIS production run: linked to the
+                    workflow, render job, timeline revision and export id. */}
+                {productionData && productionData.status === "COMPLETED" && productionData.delivery?.artifacts?.length ? (
+                  <div className="rounded-2xl border border-[#d4a017] bg-gradient-to-b from-[#1a1508] to-[#0d0d0c] p-3.5">
+                    <p className="bean-label text-[9px] text-[#d4a017]">RESULT OF THIS PRODUCTION · VERSION {productionData.delivery.artifacts[0].versionNumber ?? 1}</p>
+                    <p className="mt-1 text-[10px] text-[#8f8f8a]">
+                      workflow {productionData.id.slice(-6)} · render job {String(productionData.delivery.artifacts[0].jobId ?? "").slice(-8) || "durable queue"} · timeline v{String((productionTasks.find((t) => t.stageKey === "TIMELINE_ASSEMBLY")?.output as { newVersion?: number } | null)?.newVersion ?? "?")}
+                    </p>
+                    {productionData.delivery.artifacts.slice(0, 1).map((a, i) => (
+                      a.exportFileId ? (
+                        <div key={i}>
+                          <video controls preload="metadata" src={`/api/exports/${a.exportFileId}/file`} className="mt-2 max-h-[300px] w-full bg-black" />
+                          <p className="mt-1 text-[10px] text-[#6a6a64]">
+                            {a.durationSec ? `${a.durationSec.toFixed(1)}s` : "—"} · {a.sizeBytes ? fmtBytes(a.sizeBytes) : "—"} · export {a.exportFileId.slice(-8)}
+                          </p>
+                        </div>
+                      ) : null
+                    ))}
+                  </div>
+                ) : null}
                 {/* Real rendered outputs for this production (M45-D) */}
                 {compareIds.length === 2 && (
                   <div className="rounded-2xl border border-[#d4a017]/40 bg-[#0d0d0c] p-3">
@@ -718,6 +821,13 @@ export function ProductionHome({ user, onLogout }: { user: { name: string | null
               <div className="mx-auto max-w-3xl">
                 {attachments.length > 0 && (
                   <div className="mb-2 flex flex-wrap gap-1.5">
+                    <button
+                      onClick={() => void openLibraryPicker()}
+                      className="shrink-0 rounded-full border border-[#2a2a2a] px-2.5 py-1 text-[10px] text-[#d4a017] hover:border-[#d4a017]"
+                      title="Attach an existing project asset (reference / footage / audio)"
+                    >
+                      ＋ Library
+                    </button>
                     {attachments.map((a) => (
                       <span key={a.id} className={`flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[10px] ${a.state === "ready" ? "border-[#1e3a26] bg-[#0d1a10] text-[#4cc47f]" : a.state === "failed" ? "border-[#3b1515] bg-[#1a0d0d] text-[#f87171]" : "border-[#2a2a2a] bg-[#111110] text-[#a8a8a0]"}`}>
                         {a.previewUrl ? (

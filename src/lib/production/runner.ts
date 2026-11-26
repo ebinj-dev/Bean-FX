@@ -136,7 +136,25 @@ export async function syncJobBackedStages(productionId: string): Promise<void> {
         // the newest render artifact created no earlier than the job started.
         output = await db.exportFile.findFirst({ where: { userId: job.userId, kind: "TIMELINE_RENDER", createdAt: { gte: job.createdAt } }, orderBy: { createdAt: "desc" } });
       }
-      await setStage(productionId, s.id, "SUCCEEDED", { completedAt: new Date(), outputJson: JSON.stringify({ jobId: job.id, exportFileId: output?.id ?? null, storagePath: output?.storagePath ?? null }) });
+      // M45-P3 — the render result carries its FULL lineage: production,
+      // project, job, export, timeline revision and version number.
+      const prodRow = await db.production.findUnique({ where: { id: productionId }, select: { projectId: true, title: true } });
+      const headRow = prodRow?.projectId ? await getTimelineHead(prodRow.projectId, job.userId).catch(() => null) : null;
+      const priorCount = await db.productionTask.count({ where: { productionId, stageKey: "FINAL_RENDER", status: "SUCCEEDED" } }).catch(() => 0);
+      // M45-P1 — job-backed completion also closes the crew task row.
+      const renderTask = await db.productionTask.findFirst({ where: { productionId, stageKey: s.key, jobId: job.id, status: "RUNNING" }, orderBy: { seq: "desc" } });
+      if (renderTask) await finishStageTask(renderTask.id, "SUCCEEDED", { jobId: job.id, exportFileId: output?.id ?? null }).catch(() => undefined);
+      await setStage(productionId, s.id, "SUCCEEDED", { completedAt: new Date(), outputJson: JSON.stringify({
+        jobId: job.id,
+        exportFileId: output?.id ?? null,
+        storagePath: output?.storagePath ?? null,
+        sizeBytes: output?.sizeBytes ?? null,
+        durationSec: output?.durationSec ?? null,
+        projectId: prodRow?.projectId ?? null,
+        productionId,
+        timelineVersion: headRow?.version ?? null,
+        versionNumber: priorCount + 1,
+      }) });
     } else if (job.status === "FAILED" || job.status === "CANCELLED") {
       await setStage(productionId, s.id, "FAILED", { error: job.message ?? job.status, completedAt: new Date() });
       await db.production.update({ where: { id: productionId }, data: { status: "FAILED" } });
@@ -388,12 +406,30 @@ async function runStageKind(production: { id: string; userId: string; projectId:
           }
         }
       }
+      // M45-P2 — AUTO-BIND: user_media rows bind straight to the caller's
+      // validated sourceMediaIds from the brief (footage from the chat goes to
+      // work immediately; originals are never modified or moved).
+      const briefSources: string[] = Array.isArray(brief2.sourceMediaIds) ? brief2.sourceMediaIds.filter((x: unknown): x is string => typeof x === "string") : [];
+      const boundNames: string[] = [];
+      let srcCursor = 0;
       for (const p of plan) {
-        await db.productionAsset.create({ data: { productionId: pid, sceneKey: p.sceneKey, category: p.category, description: p.description, sourceType: p.sourceType, licenseState: p.licenseState, costUnknown: p.costUnknown, status: p.status, provenanceJson: JSON.stringify({ plannedAt: new Date().toISOString(), deterministic: true }) } });
+        let mediaAssetId: string | null = null;
+        let status = p.status;
+        if (p.category === "video" && briefSources.length > 0) {
+          // One source clip legitimately covers several scenes (the assembler
+          // trims a different section per shot) — cycle, never strand a scene.
+          const owned = await db.mediaAsset.findFirst({ where: { id: briefSources[srcCursor % briefSources.length], userId } });
+          if (owned) { mediaAssetId = owned.id; status = "READY"; boundNames.push(`${p.sceneKey ?? "scene"} ← ${owned.originalName}`); }
+          srcCursor += 1;
+        } else if (p.category === "music") {
+          const ownedAudio = await db.mediaAsset.findFirst({ where: { userId, kind: "AUDIO" }, orderBy: { createdAt: "asc" } });
+          if (ownedAudio) { mediaAssetId = ownedAudio.id; status = "READY"; boundNames.push(`music ← ${ownedAudio.originalName}`); }
+        }
+        await db.productionAsset.create({ data: { productionId: pid, sceneKey: p.sceneKey, category: p.category, description: p.description, sourceType: p.sourceType, licenseState: p.licenseState, costUnknown: p.costUnknown, status, mediaAssetId, provenanceJson: JSON.stringify({ plannedAt: new Date().toISOString(), deterministic: true, autoBoundFrom: mediaAssetId ? "brief.sourceMediaIds" : null }) } });
       }
       await logEvent(pid, "assets.planned", stage.key, { planned: plan.length, demonstrationNotes: demoNotes });
       await setStage(pid, stageId, "AWAITING_APPROVAL", { outputJson: JSON.stringify({ planned: plan.length, demonstrationNotes: demoNotes }) });
-      return { state: "AWAITING_APPROVAL", message: `Asset plan drafted (${plan.length} items${demoNotes.length ? `; ${demoNotes.length} demonstration note(s)` : ""}). Attach/approve assets to continue.` };
+      return { state: "AWAITING_APPROVAL", message: `Asset plan drafted (${plan.length} items${boundNames.length ? `; auto-bound: ${boundNames.join(", ")}` : ""}${demoNotes.length ? `; ${demoNotes.length} demonstration note(s)` : ""}).${plan.some((x) => x.category !== "video" || true) ? " Review and approve." : ""}` };
     }
     case "asset_generation": {
       // Pull finished provider jobs into their asset rows first (idempotent).

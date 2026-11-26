@@ -91,13 +91,24 @@ export async function POST(req: NextRequest) {
       }
     }
   }
+  // M45-P2 — optional pre-bound source media (each id ownership-validated;
+  // the runner binds user_media scenes from brief.sourceMediaIds at
+  // ASSET_PLANNING, so footage flows straight from the chat into the crew).
+  const rawSourceIds = Array.isArray(body.sourceMediaIds) ? body.sourceMediaIds : [];
+  const sourceMediaIds: string[] = [];
+  for (const sid of rawSourceIds.slice(0, 16)) {
+    if (typeof sid !== "string") continue;
+    const owned = await db.mediaAsset.findFirst({ where: { id: sid, userId: user.id } });
+    if (owned) sourceMediaIds.push(owned.id);
+  }
+  const briefWithSources = { ...brief, ...(sourceMediaIds.length > 0 ? { sourceMediaIds } : {}) };
   const production = await db.production.create({
     data: {
       userId: user.id,
       projectId,
       templateId,
       title,
-      briefJson: JSON.stringify(brief),
+      briefJson: JSON.stringify(briefWithSources),
       status: "PLANNED",
       stages: { create: template.stages.map((s, i) => ({ key: s.key, order: i, state: i === 0 ? "READY" : "NOT_STARTED" })) },
     },
