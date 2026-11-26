@@ -1,9 +1,12 @@
 "use client";
 
 /**
- * M47 — compact studio navigation for the six product destinations.
- * Keyboard: 1-6 jumps between destinations. Rendered on every workspace page
- * so the product reads as one environment, not a set of disconnected tools.
+ * M47 — compact studio navigation for the product destinations.
+ * M47.1 §B — adds the dedicated Creative Tools Hub as destination 7 (a real
+ * page route); the original six destinations and their keyboard numbers are
+ * unchanged. Keyboard: 1-7 jumps between destinations. Rendered on every
+ * workspace page so the product reads as one environment, not a set of
+ * disconnected tools.
  */
 import { AgentDot, Kbd } from "@/components/bean/ui";
 export type StudioNavUser = { name?: string | null; email?: string };
@@ -17,11 +20,14 @@ export const STUDIO_DESTINATIONS = [
   { id: "library", num: "4", label: "Media Library", href: "#/library", glyph: "▥" },
   { id: "intelligence", num: "5", label: "Intelligence", href: "#/intelligence", glyph: "◈" },
   { id: "settings", num: "6", label: "Settings", href: "#/settings", glyph: "◉" },
+  // M47.1 §B — the dedicated Creative Tools Hub (a real page route, not a hash
+  // route). Numbered 7 so the existing six keyboard shortcuts stay stable.
+  { id: "tools", num: "7", label: "Creative Tools", href: "/studio/tools", glyph: "▣" },
 ] as const;
 
 export type DestinationId = (typeof STUDIO_DESTINATIONS)[number]["id"];
 
-/** Global keyboard shortcuts — digits 1-6 navigate; ignored while typing. */
+/** Global keyboard shortcuts — digits 1-7 navigate; ignored while typing. */
 export function useStudioShortcuts(active: DestinationId | null) {
   if (typeof window === "undefined") return;
   const handler = (e: KeyboardEvent) => {
@@ -31,7 +37,9 @@ export function useStudioShortcuts(active: DestinationId | null) {
     const hit = STUDIO_DESTINATIONS.find((d) => d.num === e.key);
     if (hit && active !== hit.id) {
       e.preventDefault();
-      window.location.hash = hit.href;
+      // M47.1 — assign() handles both fragment navigation (hashchange fires,
+      // same document) and real page routes (Creative Tools).
+      window.location.assign(hit.href);
     }
   };
   window.addEventListener("keydown", handler);
@@ -51,7 +59,9 @@ export function StudioNav({
 }) {
   const go = (e: MouseEvent, href: string) => {
     e.preventDefault();
-    window.location.hash = href;
+    // M47.1 — assign() covers both: fragment navigation into the SPA shell
+    // (hashchange fires, same document) and real page routes (Creative Tools).
+    window.location.assign(href);
   };
   return (
     <nav className="m47-nav" aria-label="Studio destinations">
