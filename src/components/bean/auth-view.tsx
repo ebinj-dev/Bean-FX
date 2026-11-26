@@ -31,6 +31,12 @@ export function AuthView({
   const [error, setError] = useState<string | null>(null);
   const [info, setInfo] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  // M47.1 §E — mandatory account acceptance is an EXPLICIT act (unchecked box),
+  // separate from any optional consent. BEAN FX sends no marketing
+  // communications, so no marketing consent is requested at all — the
+  // distinction is documented in the Legal Center. Formal acceptance tracking
+  // (who accepted which version) starts only after owner-approved final terms.
+  const [acceptedDraftTerms, setAcceptedDraftTerms] = useState(false);
   // Password recovery: token + new password (the token arrives by email when
   // SMTP is configured; the deployment discloses honestly when it is not).
   const [resetToken, setResetToken] = useState("");
@@ -238,6 +244,27 @@ export function AuthView({
                   )}
                 </Field>
 
+                {mode === "register" && (
+                  <label className="flex items-start gap-2.5 text-[11.5px] leading-relaxed text-[#8f8f8a]">
+                    <input
+                      type="checkbox"
+                      required
+                      checked={acceptedDraftTerms}
+                      onChange={(e) => setAcceptedDraftTerms(e.target.checked)}
+                      className="mt-0.5 h-4 w-4 flex-shrink-0 accent-[#d4a017]"
+                    />
+                    <span>
+                      I accept the{" "}
+                      <a href="/terms" target="_blank" className="text-[#d4a017] underline hover:text-[#e9b52a]">Terms of Service</a>{" "}
+                      and the{" "}
+                      <a href="/legal/ai-processing" target="_blank" className="text-[#d4a017] underline hover:text-[#e9b52a]">AI Processing &amp; Data Usage Policy</a>{" "}
+                      in their current <strong className="text-[#c9c9c2]">draft status</strong> (owner-approved final
+                      terms will be published before they bind). This acceptance is for the account only — BEAN FX sends
+                      no marketing communications and asks no marketing consent.
+                    </span>
+                  </label>
+                )}
+
                 {error && (
                   <p className="flex items-start gap-2 rounded-lg border border-[#3b1515] bg-[#1a0d0d] px-3 py-2 text-xs leading-relaxed text-[#f87171]">
                     <AlertCircle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
@@ -253,7 +280,7 @@ export function AuthView({
 
                 <button
                   type="submit"
-                  disabled={busy || (mode === "login" && (!emailValid || password.length === 0)) || (mode === "register" && (!emailValid || !passwordValid))}
+                  disabled={busy || (mode === "login" && (!emailValid || password.length === 0)) || (mode === "register" && (!emailValid || !passwordValid || !acceptedDraftTerms))}
                   className="bean-glow inline-flex h-11 items-center justify-center gap-2 rounded-lg bg-[#d4a017] text-[12px] font-extrabold uppercase tracking-[0.14em] text-[#0c0c0c] transition-colors hover:bg-[#e9b52a] disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
