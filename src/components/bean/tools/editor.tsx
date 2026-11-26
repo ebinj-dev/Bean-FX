@@ -43,6 +43,7 @@ import { PresetsPanel } from "@/components/bean/editor/presets-panel";
 import { BatchExportPanel } from "@/components/bean/editor/batch-export-panel";
 import { WorkflowsPanel } from "@/components/bean/editor/workflows-panel";
 import { StudioPanel } from "@/components/bean/editor/studio-panel";
+import { EditorAiDock } from "@/components/bean/editor-ai-dock";
 import type { EditToolId } from "@/lib/editor/tools";
 import { subscribeFrame } from "@/lib/editor/playback";
 
@@ -588,6 +589,21 @@ export function EditorTool({ user }: { user: { id: string }; onLogout: () => voi
         <div className="w-1 cursor-col-resize bg-transparent transition-colors hover:bg-[#d4a017]/30" onPointerDown={onDockDown("right")} onPointerMove={onDockMove} onPointerUp={onDockUp} />
         {/* Right dock: inspector */}
         <div className="flex shrink-0 flex-col overflow-y-auto border-l border-[#2a2a2a] bg-[#0b0b0a]" style={{ width: rightWidth }}>
+          {/* M47 — persistent AI dock: knows the project + live timeline context;
+              every proposal goes through the canonical approval-gated planner. */}
+          {projectId && (
+            <div className="flex h-[300px] flex-shrink-0 flex-col border-b border-[#2a2a2a]">
+              <EditorAiDock
+                projectId={projectId}
+                timelineContext={() => ({
+                  playheadSec: sequence ? session.playheadFrame / (fpsRational.num / fpsRational.den) : undefined,
+                  selectedClipLabel: selectedClip ? selectedClip.id.slice(-6) : null,
+                  clipCount: sequence?.clips.length,
+                  durationSec: sequence ? Math.max(...sequence.clips.map((c) => c.timelineStartFrame + c.timelineDurationFrames), 0) / (fpsRational.num / fpsRational.den) : undefined,
+                })}
+              />
+            </div>
+          )}
           <div className="border-b border-[#2a2a2a] px-3 py-1.5 bean-label text-[10px] text-[#8f8f8a]">PROPERTIES INSPECTOR</div>
           {sequence && <ClipInspector sequence={sequence} session={session} notice={setNotice} />}
           {sequence && selectedClip && selectedClip.keyframes.length > 0 && (

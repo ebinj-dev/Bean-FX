@@ -104,7 +104,17 @@ export function probeModelRegistry(): ProbeResult {
   const models: ModelEntry[] = [];
 
   const zai = probeBinary("z-ai", ["--help"]);
-  const zaiSdk = existsSync("node_modules/z-ai-web-dev-sdk") || process.env.BEANFX_MYAI_PROVIDER === "zai";
+  // M47 — the standalone server runs with cwd = .next/standalone, so a bare
+  // cwd-relative check fails there. Probe the real locations; report WHICH
+  // cause is active instead of a blanket "unset" message.
+  const sdkPaths = [
+    "node_modules/z-ai-web-dev-sdk",
+    "../node_modules/z-ai-web-dev-sdk",
+    "../../node_modules/z-ai-web-dev-sdk",
+    "../../../node_modules/z-ai-web-dev-sdk",
+  ];
+  const zaiSdkPath = sdkPaths.find((p) => existsSync(p)) ?? null;
+  const zaiSdk = Boolean(zaiSdkPath) || process.env.BEANFX_MYAI_PROVIDER === "zai";
   const gatewayConfigured = zaiSdk || zai.ok;
   models.push({
     provider: "zai-gateway",
@@ -273,7 +283,11 @@ export function probeModelRegistry(): ProbeResult {
     hardware: { cpu: true, gpu: null, memoryNote: null },
     cost: "COST UNKNOWN",
     ready: asrEnv && zaiSdk,
-    readyReason: asrEnv && zaiSdk ? "BEANFX_ASR_ENABLED + gateway SDK present" : "ASR not enabled (BEANFX_ASR_ENABLED unset) — caption generation from audio is disclosed until enabled",
+    readyReason: asrEnv && zaiSdk
+      ? `BEANFX_ASR_ENABLED + gateway SDK present (${zaiSdkPath ?? "BEANFX_MYAI_PROVIDER=zai"})`
+      : !asrEnv
+        ? "ASR not enabled (BEANFX_ASR_ENABLED unset) — speech transcription is disclosed until enabled"
+        : "gateway SDK not found in the runtime locations — transcription is disclosed until the gateway is available",
     lastCheckAt: null,
   });
 

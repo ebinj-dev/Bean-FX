@@ -15,6 +15,10 @@ import { AudioTool } from "@/components/bean/tools/audio-tool";
 import { BrollTool } from "@/components/bean/tools/broll";
 import { EditorTool } from "@/components/bean/tools/editor";
 import { ProductionHome } from "@/components/bean/production-home";
+import { ProductionCrewPage } from "@/components/bean/crew-page";
+import { MediaLibraryPage } from "@/components/bean/library-page";
+import { IntelligencePage } from "@/components/bean/intelligence-page";
+import { SettingsPage } from "@/components/bean/settings-page";
 import { InviteView } from "@/components/bean/invite-view";
 import { ReviewLinkView } from "@/components/bean/review-link-view";
 import type { SessionUser } from "@/lib/types";
@@ -96,7 +100,8 @@ export function AppShell() {
     );
   }
 
-  const isWorkspaceRoute = ["/home", "/studio", "/editor", "/autocut", "/captions", "/watermark", "/audio", "/broll", "/produce", "/showcase"].includes(route) || /^\/(autocut|captions|watermark|audio|broll)(\/editor)?$/.test(route);
+  // M47 — the six studio destinations plus the retained legacy tool deep links.
+  const isWorkspaceRoute = ["/home", "/crew", "/library", "/intelligence", "/settings", "/studio", "/editor", "/autocut", "/captions", "/watermark", "/audio", "/broll", "/produce", "/showcase"].includes(route) || /^\/(autocut|captions|watermark|audio|broll)(\/editor)?$/.test(route);
 
   // Protected workspace routes require authentication.
   if (isWorkspaceRoute && !user) {
@@ -125,13 +130,35 @@ export function AppShell() {
     const token = route.slice("/review/".length);
     return <ReviewLinkView token={token} />;
   }
-  // M45 — chat-first production home (the main screen after sign-in).
+  // M45/M47 — Studio Chat: the primary home after sign-in.
   if (route === "/home") {
     return <ProductionHome user={user!} onLogout={onLogout} />;
   }
 
-  if (route === "/studio") {
-    return <StudioDashboard user={user!} onLogout={onLogout} />;
+  // M47 — AI Production Crew control room.
+  if (route === "/crew") {
+    return <ProductionCrewPage user={user!} onLogout={onLogout} />;
+  }
+
+  // M47 — Media Library.
+  if (route === "/library") {
+    return <MediaLibraryPage user={user!} onLogout={onLogout} />;
+  }
+
+  // M47 — Creative Intelligence (real computed data only).
+  if (route === "/intelligence") {
+    return <IntelligencePage user={user!} onLogout={onLogout} />;
+  }
+
+  // M47 — Settings & studio control.
+  if (route === "/settings") {
+    return <SettingsPage user={user!} onLogout={onLogout} />;
+  }
+
+  // M47 — legacy dashboards redirect into the unified studio (their backend
+  // APIs are untouched; the old fragmented UI surfaces are retired).
+  if (route === "/studio" || route === "/produce" || route === "/showcase") {
+    return <RedirectToHome />;
   }
 
   if (route === "/editor") {
@@ -216,6 +243,18 @@ export function AppShell() {
       <main className="flex-1">
         <LandingPage onOpenStudio={openStudio} onLogin={user ? undefined : openLogin} />
       </main>
+    </div>
+  );
+}
+
+/** M47 — legacy dashboard routes land on the unified Studio Chat. */
+function RedirectToHome() {
+  useEffect(() => {
+    window.location.hash = "#/home";
+  }, []);
+  return (
+    <div className="flex min-h-screen items-center justify-center bg-[#050505]">
+      <div className="h-8 w-8 animate-spin rounded-full border-2 border-[#2a2a2a] border-t-[#d4a017]" aria-label="Redirecting" />
     </div>
   );
 }
