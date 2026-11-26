@@ -14,6 +14,7 @@ import { WatermarkTool } from "@/components/bean/tools/watermark";
 import { AudioTool } from "@/components/bean/tools/audio-tool";
 import { BrollTool } from "@/components/bean/tools/broll";
 import { EditorTool } from "@/components/bean/tools/editor";
+import { ProductionHome } from "@/components/bean/production-home";
 import { InviteView } from "@/components/bean/invite-view";
 import { ReviewLinkView } from "@/components/bean/review-link-view";
 import type { SessionUser } from "@/lib/types";
@@ -65,7 +66,8 @@ export function AppShell() {
 
   const onAuthed = useCallback((u: SessionUser) => {
     setUser(u);
-    window.location.hash = "#/editor";
+    // M45 — chat-first product: signing in lands on the production home.
+    window.location.hash = "#/home";
   }, []);
 
   const onLogout = useCallback(async () => {
@@ -94,7 +96,7 @@ export function AppShell() {
     );
   }
 
-  const isWorkspaceRoute = ["/studio", "/editor", "/autocut", "/captions", "/watermark", "/audio", "/broll", "/produce", "/showcase"].includes(route) || /^\/(autocut|captions|watermark|audio|broll)(\/editor)?$/.test(route);
+  const isWorkspaceRoute = ["/home", "/studio", "/editor", "/autocut", "/captions", "/watermark", "/audio", "/broll", "/produce", "/showcase"].includes(route) || /^\/(autocut|captions|watermark|audio|broll)(\/editor)?$/.test(route);
 
   // Protected workspace routes require authentication.
   if (isWorkspaceRoute && !user) {
@@ -123,6 +125,11 @@ export function AppShell() {
     const token = route.slice("/review/".length);
     return <ReviewLinkView token={token} />;
   }
+  // M45 — chat-first production home (the main screen after sign-in).
+  if (route === "/home") {
+    return <ProductionHome user={user!} onLogout={onLogout} />;
+  }
+
   if (route === "/studio") {
     return <StudioDashboard user={user!} onLogout={onLogout} />;
   }
@@ -216,7 +223,7 @@ export function AppShell() {
 /** Renders the same redirecting spinner while moving an authed user out of /login. */
 function RedirectToEditor() {
   useEffect(() => {
-    window.location.hash = "#/editor";
+    window.location.hash = "#/home";
   }, []);
   return (
     <div className="flex min-h-screen items-center justify-center bg-[#050505]">
