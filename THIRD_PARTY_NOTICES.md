@@ -1,0 +1,565 @@
+# THIRD-PARTY NOTICES — BEAN FX
+
+Generated 2026-11-26 from `package.json` + `package-lock.json` + installed package metadata. 537 npm packages (70 direct, 467 transitive). Full inventory: `docs/legal/OPEN_SOURCE_INVENTORY.md`. Machine-readable SBOM: `docs/legal/sbom.cdx.json`.
+
+> This file contains required attributions and license notices for third-party material. BEAN FX's own code is governed by the repository license. Nothing here is legal advice; entries link to their upstream licenses.
+
+## System components and fonts
+
+- **FFmpeg (Debian build)** (7.1.5 (system binary)) — LGPL-2.1+ with GPL-enabled components (libx264). Debian package build enabled GPL components (--enable-gpl --enable-libx264). Used server-side on user-owned media; bundling/redistributing this build would trigger GPL obligations.
+- **Noto Sans (font)** (unmodified upstream build) — OFL-1.1. Bundled for canvas preview + FFmpeg drawtext; OFL permits redistribution with the license included.
+- **Noto Sans Tamil (font)** (unmodified upstream build) — OFL-1.1. Same OFL terms; required for Tamil caption rendering.
+- **Geist / Geist Mono (next/font/google)** (build-time fetch) — OFL-1.1. Loaded by next/font at build time per Vercel's Geist font (OFL).
+- **System Python 3 (runtime)** (system) — PSF-2.0 (interpreter). Invoked isolated (-I) with inline standard-library scripts; NO third-party Python packages are bundled.
+
+## npm packages — per license classification
+
+### PERMISSIVE (521)
+
+- **@babel/runtime** 7.28.6 — MIT — https://github.com/babel/babel.git
+- **@codemirror/autocomplete** 6.20.0 — MIT — https://github.com/codemirror/autocomplete.git
+- **@codemirror/commands** 6.10.1 — MIT — https://github.com/codemirror/commands.git
+- **@codemirror/lang-angular** 0.1.4 — MIT — https://github.com/codemirror/lang-angular.git
+- **@codemirror/lang-cpp** 6.0.3 — MIT — https://github.com/codemirror/lang-cpp.git
+- **@codemirror/lang-css** 6.3.1 — MIT — https://github.com/codemirror/lang-css.git
+- **@codemirror/lang-go** 6.0.1 — MIT — https://github.com/codemirror/lang-go.git
+- **@codemirror/lang-html** 6.4.11 — MIT — https://github.com/codemirror/lang-html.git
+- **@codemirror/lang-java** 6.0.2 — MIT — https://github.com/codemirror/lang-java.git
+- **@codemirror/lang-javascript** 6.2.4 — MIT — https://github.com/codemirror/lang-javascript.git
+- **@codemirror/lang-jinja** 6.0.0 — MIT — https://github.com/codemirror/lang-jinja.git
+- **@codemirror/lang-json** 6.0.2 — MIT — https://github.com/codemirror/lang-json.git
+- **@codemirror/lang-less** 6.0.2 — MIT — https://github.com/codemirror/lang-less.git
+- **@codemirror/lang-liquid** 6.3.1 — MIT — https://github.com/codemirror/lang-liquid.git
+- **@codemirror/lang-markdown** 6.5.0 — MIT — https://github.com/codemirror/lang-markdown.git
+- **@codemirror/lang-php** 6.0.2 — MIT — https://github.com/codemirror/lang-php.git
+- **@codemirror/lang-python** 6.2.1 — MIT — https://github.com/codemirror/lang-python.git
+- **@codemirror/lang-rust** 6.0.2 — MIT — https://github.com/codemirror/lang-rust.git
+- **@codemirror/lang-sass** 6.0.2 — MIT — https://github.com/codemirror/lang-sass.git
+- **@codemirror/lang-sql** 6.10.0 — MIT — https://github.com/codemirror/lang-sql.git
+- **@codemirror/lang-vue** 0.1.3 — MIT — https://github.com/codemirror/lang-vue.git
+- **@codemirror/lang-wast** 6.0.2 — MIT — https://github.com/codemirror/lang-wast.git
+- **@codemirror/lang-xml** 6.1.0 — MIT — https://github.com/codemirror/lang-xml.git
+- **@codemirror/lang-yaml** 6.1.2 — MIT — git+https://github.com/codemirror/lang-yaml.git
+- **@codemirror/language** 6.12.1 — MIT — https://github.com/codemirror/language.git
+- **@codemirror/language-data** 6.5.2 — MIT — https://github.com/codemirror/language-data.git
+- **@codemirror/legacy-modes** 6.5.2 — MIT — https://github.com/codemirror/legacy-modes.git
+- **@codemirror/lint** 6.9.2 — MIT — https://github.com/codemirror/lint.git
+- **@codemirror/merge** 6.11.2 — MIT — https://github.com/codemirror/merge.git
+- **@codemirror/search** 6.6.0 — MIT — git+https://github.com/codemirror/search.git
+- **@codemirror/state** 6.5.4 — MIT — git+https://github.com/codemirror/state.git
+- **@codemirror/view** 6.39.11 — MIT — git+https://github.com/codemirror/view.git
+- **@codesandbox/sandpack-client** 2.19.8 — Apache-2.0 — https://github.com/codesandbox/sandpack
+- **@codesandbox/sandpack-react** 2.20.0 — Apache-2.0 — https://github.com/codesandbox/sandpack
+- **@date-fns/tz** 1.4.1 — MIT — git+https://github.com/date-fns/tz.git
+- **@dnd-kit/accessibility** 3.1.1 — MIT — git+https://github.com/clauderic/dnd-kit.git
+- **@dnd-kit/core** 6.3.1 — MIT — git+https://github.com/clauderic/dnd-kit.git _(direct dependency)_
+- **@dnd-kit/sortable** 10.0.0 — MIT — git+https://github.com/clauderic/dnd-kit.git _(direct dependency)_
+- **@dnd-kit/utilities** 3.2.2 — MIT — git+https://github.com/clauderic/dnd-kit.git _(direct dependency)_
+- **@emnapi/runtime** 1.11.3 — MIT — https://registry.npmjs.org/@emnapi/runtime/-/runtime-1.11.3.tgz
+- **@floating-ui/core** 1.7.3 — MIT — https://github.com/floating-ui/floating-ui.git
+- **@floating-ui/dom** 1.7.4 — MIT — https://github.com/floating-ui/floating-ui.git
+- **@floating-ui/react** 0.27.16 — MIT — https://github.com/floating-ui/floating-ui.git
+- **@floating-ui/react-dom** 2.1.6 — MIT — https://github.com/floating-ui/floating-ui.git
+- **@floating-ui/utils** 0.2.10 — MIT — https://github.com/floating-ui/floating-ui.git
+- **@formatjs/ecma402-abstract** 2.3.6 — MIT
+- **@formatjs/fast-memoize** 2.2.7 — MIT — formatjs/formatjs.git
+- **@formatjs/icu-messageformat-parser** 2.11.4 — MIT — https://github.com/formatjs/formatjs.git
+- **@formatjs/icu-skeleton-parser** 1.8.16 — MIT — https://github.com/formatjs/formatjs.git
+- **@formatjs/intl-localematcher** 0.5.10 — MIT — formatjs/formatjs.git
+- **@hookform/resolvers** 5.2.2 — MIT — git+https://github.com/react-hook-form/resolvers.git _(direct dependency)_
+- **@img/colour** 1.0.0 — MIT — git+https://github.com/lovell/colour.git
+- **@img/sharp-darwin-arm64** 0.34.5 — Apache-2.0 — https://registry.npmjs.org/@img/sharp-darwin-arm64/-/sharp-darwin-arm64-0.34.5.tgz
+- **@img/sharp-darwin-x64** 0.34.5 — Apache-2.0 — https://registry.npmjs.org/@img/sharp-darwin-x64/-/sharp-darwin-x64-0.34.5.tgz
+- **@img/sharp-linux-arm** 0.34.5 — Apache-2.0 — https://registry.npmjs.org/@img/sharp-linux-arm/-/sharp-linux-arm-0.34.5.tgz
+- **@img/sharp-linux-arm64** 0.34.5 — Apache-2.0 — https://registry.npmjs.org/@img/sharp-linux-arm64/-/sharp-linux-arm64-0.34.5.tgz
+- **@img/sharp-linux-ppc64** 0.34.5 — Apache-2.0 — https://registry.npmjs.org/@img/sharp-linux-ppc64/-/sharp-linux-ppc64-0.34.5.tgz
+- **@img/sharp-linux-riscv64** 0.34.5 — Apache-2.0 — https://registry.npmjs.org/@img/sharp-linux-riscv64/-/sharp-linux-riscv64-0.34.5.tgz
+- **@img/sharp-linux-s390x** 0.34.5 — Apache-2.0 — https://registry.npmjs.org/@img/sharp-linux-s390x/-/sharp-linux-s390x-0.34.5.tgz
+- **@img/sharp-linux-x64** 0.34.5 — Apache-2.0 — git+https://github.com/lovell/sharp.git
+- **@img/sharp-linuxmusl-arm64** 0.34.5 — Apache-2.0 — https://registry.npmjs.org/@img/sharp-linuxmusl-arm64/-/sharp-linuxmusl-arm64-0.34.5.tgz
+- **@img/sharp-linuxmusl-x64** 0.34.5 — Apache-2.0 — git+https://github.com/lovell/sharp.git
+- **@lexical/clipboard** 0.35.0 — MIT — https://github.com/facebook/lexical
+- **@lexical/code** 0.35.0 — MIT — https://github.com/facebook/lexical
+- **@lexical/devtools-core** 0.35.0 — MIT — https://github.com/facebook/lexical
+- **@lexical/dragon** 0.35.0 — MIT — https://github.com/facebook/lexical
+- **@lexical/hashtag** 0.35.0 — MIT — https://github.com/facebook/lexical
+- **@lexical/history** 0.35.0 — MIT — https://github.com/facebook/lexical
+- **@lexical/html** 0.35.0 — MIT — https://github.com/facebook/lexical
+- **@lexical/link** 0.35.0 — MIT — https://github.com/facebook/lexical
+- **@lexical/list** 0.35.0 — MIT — https://github.com/facebook/lexical
+- **@lexical/mark** 0.35.0 — MIT — https://github.com/facebook/lexical
+- **@lexical/markdown** 0.35.0 — MIT — https://github.com/facebook/lexical
+- **@lexical/offset** 0.35.0 — MIT — https://github.com/facebook/lexical
+- **@lexical/overflow** 0.35.0 — MIT — https://github.com/facebook/lexical
+- **@lexical/plain-text** 0.35.0 — MIT — https://github.com/facebook/lexical
+- **@lexical/react** 0.35.0 — MIT — https://github.com/facebook/lexical
+- **@lexical/rich-text** 0.35.0 — MIT — https://github.com/facebook/lexical
+- **@lexical/selection** 0.35.0 — MIT — https://github.com/facebook/lexical
+- **@lexical/table** 0.35.0 — MIT — https://github.com/facebook/lexical
+- **@lexical/text** 0.35.0 — MIT — https://github.com/facebook/lexical
+- **@lexical/utils** 0.35.0 — MIT — https://github.com/facebook/lexical
+- **@lexical/yjs** 0.35.0 — MIT — https://github.com/facebook/lexical
+- **@lezer/common** 1.5.0 — MIT — https://github.com/lezer-parser/common.git
+- **@lezer/cpp** 1.1.5 — MIT — https://github.com/lezer-parser/cpp.git
+- **@lezer/css** 1.3.0 — MIT — https://github.com/lezer-parser/css.git
+- **@lezer/go** 1.0.1 — MIT — https://github.com/lezer-parser/go.git
+- **@lezer/highlight** 1.2.3 — MIT — https://github.com/lezer-parser/highlight.git
+- **@lezer/html** 1.3.13 — MIT — https://github.com/lezer-parser/html.git
+- **@lezer/java** 1.1.3 — MIT — https://github.com/lezer-parser/java.git
+- **@lezer/javascript** 1.5.4 — MIT — https://github.com/lezer-parser/javascript.git
+- **@lezer/json** 1.0.3 — MIT — https://github.com/lezer-parser/json.git
+- **@lezer/lr** 1.4.7 — MIT — https://github.com/lezer-parser/lr.git
+- **@lezer/markdown** 1.6.3 — MIT — https://github.com/lezer-parser/markdown.git
+- **@lezer/php** 1.0.5 — MIT — https://github.com/lezer-parser/php.git
+- **@lezer/python** 1.1.18 — MIT — https://github.com/lezer-parser/python.git
+- **@lezer/rust** 1.0.2 — MIT — https://github.com/lezer-parser/rust.git
+- **@lezer/sass** 1.1.0 — MIT — https://github.com/lezer-parser/sass.git
+- **@lezer/xml** 1.0.6 — MIT — https://github.com/lezer-parser/xml.git
+- **@lezer/yaml** 1.0.3 — MIT — https://github.com/lezer-parser/yaml.git
+- **@marijn/find-cluster-break** 1.0.2 — MIT — git+https://github.com/marijnh/find-cluster-break.git
+- **@mdxeditor/editor** 3.52.3 — MIT — https://github.com/mdx-editor/editor.git _(direct dependency)_
+- **@mdxeditor/gurx** 1.2.4 — MIT — https://github.com/mdx-editor/gurx.git
+- **@microsoft/fetch-event-source** 2.0.1 — MIT — https://github.com/Azure/fetch-event-source#readme
+- **@next/env** 16.1.3 — MIT — https://github.com/vercel/next.js
+- **@next/swc-darwin-arm64** 16.1.3 — MIT — https://registry.npmjs.org/@next/swc-darwin-arm64/-/swc-darwin-arm64-16.1.3.tgz
+- **@next/swc-darwin-x64** 16.1.3 — MIT — https://registry.npmjs.org/@next/swc-darwin-x64/-/swc-darwin-x64-16.1.3.tgz
+- **@next/swc-linux-arm64-gnu** 16.1.3 — MIT — https://registry.npmjs.org/@next/swc-linux-arm64-gnu/-/swc-linux-arm64-gnu-16.1.3.tgz
+- **@next/swc-linux-arm64-musl** 16.1.3 — MIT — https://registry.npmjs.org/@next/swc-linux-arm64-musl/-/swc-linux-arm64-musl-16.1.3.tgz
+- **@next/swc-linux-x64-gnu** 16.1.3 — MIT — https://github.com/vercel/next.js
+- **@next/swc-linux-x64-musl** 16.1.3 — MIT — https://github.com/vercel/next.js
+- **@next/swc-win32-arm64-msvc** 16.1.3 — MIT — https://registry.npmjs.org/@next/swc-win32-arm64-msvc/-/swc-win32-arm64-msvc-16.1.3.tgz
+- **@next/swc-win32-x64-msvc** 16.1.3 — MIT — https://registry.npmjs.org/@next/swc-win32-x64-msvc/-/swc-win32-x64-msvc-16.1.3.tgz
+- **@open-draft/deferred-promise** 2.2.0 — MIT — https://github.com/open-draft/deferred-promise
+- **@panva/hkdf** 1.2.1 — MIT — https://github.com/panva/hkdf
+- **@parcel/watcher** 2.5.4 — MIT — https://github.com/parcel-bundler/watcher.git
+- **@parcel/watcher-android-arm64** 2.5.4 — MIT — https://registry.npmjs.org/@parcel/watcher-android-arm64/-/watcher-android-arm64-2.5.4.tgz
+- **@parcel/watcher-darwin-arm64** 2.5.4 — MIT — https://registry.npmjs.org/@parcel/watcher-darwin-arm64/-/watcher-darwin-arm64-2.5.4.tgz
+- **@parcel/watcher-darwin-x64** 2.5.4 — MIT — https://registry.npmjs.org/@parcel/watcher-darwin-x64/-/watcher-darwin-x64-2.5.4.tgz
+- **@parcel/watcher-freebsd-x64** 2.5.4 — MIT — https://registry.npmjs.org/@parcel/watcher-freebsd-x64/-/watcher-freebsd-x64-2.5.4.tgz
+- **@parcel/watcher-linux-arm-glibc** 2.5.4 — MIT — https://registry.npmjs.org/@parcel/watcher-linux-arm-glibc/-/watcher-linux-arm-glibc-2.5.4.tgz
+- **@parcel/watcher-linux-arm-musl** 2.5.4 — MIT — https://registry.npmjs.org/@parcel/watcher-linux-arm-musl/-/watcher-linux-arm-musl-2.5.4.tgz
+- **@parcel/watcher-linux-arm64-glibc** 2.5.4 — MIT — https://registry.npmjs.org/@parcel/watcher-linux-arm64-glibc/-/watcher-linux-arm64-glibc-2.5.4.tgz
+- **@parcel/watcher-linux-arm64-musl** 2.5.4 — MIT — https://registry.npmjs.org/@parcel/watcher-linux-arm64-musl/-/watcher-linux-arm64-musl-2.5.4.tgz
+- **@parcel/watcher-linux-x64-glibc** 2.5.4 — MIT — https://github.com/parcel-bundler/watcher.git
+- **@parcel/watcher-linux-x64-musl** 2.5.4 — MIT — https://github.com/parcel-bundler/watcher.git
+- **@parcel/watcher-win32-arm64** 2.5.4 — MIT — https://registry.npmjs.org/@parcel/watcher-win32-arm64/-/watcher-win32-arm64-2.5.4.tgz
+- **@parcel/watcher-win32-ia32** 2.5.4 — MIT — https://registry.npmjs.org/@parcel/watcher-win32-ia32/-/watcher-win32-ia32-2.5.4.tgz
+- **@parcel/watcher-win32-x64** 2.5.4 — MIT — https://registry.npmjs.org/@parcel/watcher-win32-x64/-/watcher-win32-x64-2.5.4.tgz
+- **@prisma/client** 6.19.2 — Apache-2.0 — https://github.com/prisma/prisma.git _(direct dependency)_
+- **@prisma/config** 6.19.2 — Apache-2.0 — https://github.com/prisma/prisma.git
+- **@prisma/debug** 6.19.2 — Apache-2.0 — https://github.com/prisma/prisma.git
+- **@prisma/engines** 6.19.2 — Apache-2.0 — https://github.com/prisma/prisma.git
+- **@prisma/engines-version** 7.1.1-3.c2990dca591cba766e3b7ef5d9e8a84796e47ab7 — Apache-2.0 — https://github.com/prisma/engines-wrapper.git
+- **@prisma/fetch-engine** 6.19.2 — Apache-2.0 — https://github.com/prisma/prisma.git
+- **@prisma/get-platform** 6.19.2 — Apache-2.0 — https://github.com/prisma/prisma.git
+- **@radix-ui/colors** 3.0.0 — MIT
+- **@radix-ui/number** 1.1.1 — MIT — git+https://github.com/radix-ui/primitives.git
+- **@radix-ui/primitive** 1.1.3 — MIT — git+https://github.com/radix-ui/primitives.git
+- **@radix-ui/react-accordion** 1.2.12 — MIT — git+https://github.com/radix-ui/primitives.git _(direct dependency)_
+- **@radix-ui/react-alert-dialog** 1.1.15 — MIT — git+https://github.com/radix-ui/primitives.git _(direct dependency)_
+- **@radix-ui/react-arrow** 1.1.7 — MIT — git+https://github.com/radix-ui/primitives.git
+- **@radix-ui/react-aspect-ratio** 1.1.8 — MIT — git+https://github.com/radix-ui/primitives.git _(direct dependency)_
+- **@radix-ui/react-avatar** 1.1.11 — MIT — git+https://github.com/radix-ui/primitives.git _(direct dependency)_
+- **@radix-ui/react-checkbox** 1.3.3 — MIT — git+https://github.com/radix-ui/primitives.git _(direct dependency)_
+- **@radix-ui/react-collapsible** 1.1.12 — MIT — git+https://github.com/radix-ui/primitives.git _(direct dependency)_
+- **@radix-ui/react-collection** 1.1.7 — MIT — git+https://github.com/radix-ui/primitives.git
+- **@radix-ui/react-compose-refs** 1.1.2 — MIT — git+https://github.com/radix-ui/primitives.git
+- **@radix-ui/react-context** 1.1.2 — MIT — git+https://github.com/radix-ui/primitives.git
+- **@radix-ui/react-context-menu** 2.2.16 — MIT — git+https://github.com/radix-ui/primitives.git _(direct dependency)_
+- **@radix-ui/react-dialog** 1.1.15 — MIT — git+https://github.com/radix-ui/primitives.git _(direct dependency)_
+- **@radix-ui/react-direction** 1.1.1 — MIT — git+https://github.com/radix-ui/primitives.git
+- **@radix-ui/react-dismissable-layer** 1.1.11 — MIT — git+https://github.com/radix-ui/primitives.git
+- **@radix-ui/react-dropdown-menu** 2.1.16 — MIT — git+https://github.com/radix-ui/primitives.git _(direct dependency)_
+- **@radix-ui/react-focus-guards** 1.1.3 — MIT — git+https://github.com/radix-ui/primitives.git
+- **@radix-ui/react-focus-scope** 1.1.7 — MIT — git+https://github.com/radix-ui/primitives.git
+- **@radix-ui/react-hover-card** 1.1.15 — MIT — git+https://github.com/radix-ui/primitives.git _(direct dependency)_
+- **@radix-ui/react-icons** 1.3.2 — MIT
+- **@radix-ui/react-id** 1.1.1 — MIT — git+https://github.com/radix-ui/primitives.git
+- **@radix-ui/react-label** 2.1.8 — MIT — git+https://github.com/radix-ui/primitives.git _(direct dependency)_
+- **@radix-ui/react-menu** 2.1.16 — MIT — git+https://github.com/radix-ui/primitives.git
+- **@radix-ui/react-menubar** 1.1.16 — MIT — git+https://github.com/radix-ui/primitives.git _(direct dependency)_
+- **@radix-ui/react-navigation-menu** 1.2.14 — MIT — git+https://github.com/radix-ui/primitives.git _(direct dependency)_
+- **@radix-ui/react-popover** 1.1.15 — MIT — git+https://github.com/radix-ui/primitives.git _(direct dependency)_
+- **@radix-ui/react-popper** 1.2.8 — MIT — git+https://github.com/radix-ui/primitives.git
+- **@radix-ui/react-portal** 1.1.9 — MIT — git+https://github.com/radix-ui/primitives.git
+- **@radix-ui/react-presence** 1.1.5 — MIT — git+https://github.com/radix-ui/primitives.git
+- **@radix-ui/react-primitive** 2.1.3 — MIT — git+https://github.com/radix-ui/primitives.git
+- **@radix-ui/react-progress** 1.1.8 — MIT — git+https://github.com/radix-ui/primitives.git _(direct dependency)_
+- **@radix-ui/react-radio-group** 1.3.8 — MIT — git+https://github.com/radix-ui/primitives.git _(direct dependency)_
+- **@radix-ui/react-roving-focus** 1.1.11 — MIT — git+https://github.com/radix-ui/primitives.git
+- **@radix-ui/react-scroll-area** 1.2.10 — MIT — git+https://github.com/radix-ui/primitives.git _(direct dependency)_
+- **@radix-ui/react-select** 2.2.6 — MIT — git+https://github.com/radix-ui/primitives.git _(direct dependency)_
+- **@radix-ui/react-separator** 1.1.8 — MIT — git+https://github.com/radix-ui/primitives.git _(direct dependency)_
+- **@radix-ui/react-slider** 1.3.6 — MIT — git+https://github.com/radix-ui/primitives.git _(direct dependency)_
+- **@radix-ui/react-slot** 1.2.4 — MIT — git+https://github.com/radix-ui/primitives.git _(direct dependency)_
+- **@radix-ui/react-switch** 1.2.6 — MIT — git+https://github.com/radix-ui/primitives.git _(direct dependency)_
+- **@radix-ui/react-tabs** 1.1.13 — MIT — git+https://github.com/radix-ui/primitives.git _(direct dependency)_
+- **@radix-ui/react-toast** 1.2.15 — MIT — git+https://github.com/radix-ui/primitives.git _(direct dependency)_
+- **@radix-ui/react-toggle** 1.1.10 — MIT — git+https://github.com/radix-ui/primitives.git _(direct dependency)_
+- **@radix-ui/react-toggle-group** 1.1.11 — MIT — git+https://github.com/radix-ui/primitives.git _(direct dependency)_
+- **@radix-ui/react-toolbar** 1.1.11 — MIT — git+https://github.com/radix-ui/primitives.git
+- **@radix-ui/react-tooltip** 1.2.8 — MIT — git+https://github.com/radix-ui/primitives.git _(direct dependency)_
+- **@radix-ui/react-use-callback-ref** 1.1.1 — MIT — git+https://github.com/radix-ui/primitives.git
+- **@radix-ui/react-use-controllable-state** 1.2.2 — MIT — git+https://github.com/radix-ui/primitives.git
+- **@radix-ui/react-use-effect-event** 0.0.2 — MIT — git+https://github.com/radix-ui/primitives.git
+- **@radix-ui/react-use-escape-keydown** 1.1.1 — MIT — git+https://github.com/radix-ui/primitives.git
+- **@radix-ui/react-use-is-hydrated** 0.1.0 — MIT — git+https://github.com/radix-ui/primitives.git
+- **@radix-ui/react-use-layout-effect** 1.1.1 — MIT — git+https://github.com/radix-ui/primitives.git
+- **@radix-ui/react-use-previous** 1.1.1 — MIT — git+https://github.com/radix-ui/primitives.git
+- **@radix-ui/react-use-rect** 1.1.1 — MIT — git+https://github.com/radix-ui/primitives.git
+- **@radix-ui/react-use-size** 1.1.1 — MIT — git+https://github.com/radix-ui/primitives.git
+- **@radix-ui/react-visually-hidden** 1.2.3 — MIT — git+https://github.com/radix-ui/primitives.git
+- **@radix-ui/rect** 1.1.1 — MIT — git+https://github.com/radix-ui/primitives.git
+- **@react-hook/intersection-observer** 3.1.2 — MIT — https://github.com/jaredLunde/react-hook/tree/master/packages/intersection-observer#readme
+- **@react-hook/passive-layout-effect** 1.2.1 — MIT — https://github.com/jaredLunde/react-hook/tree/master/packages/passive-layout-effect#readme
+- **@reactuses/core** 6.1.9 — Unlicense — git+https://github.com/childrentime/reactuse.git _(direct dependency)_
+- **@schummar/icu-type-parser** 1.21.5 — MIT
+- **@standard-schema/spec** 1.1.0 — MIT — https://github.com/standard-schema/standard-schema
+- **@standard-schema/utils** 0.3.0 — MIT — https://github.com/standard-schema/standard-schema
+- **@stitches/core** 1.2.8 — MIT — https://stitches.dev/
+- **@swc/core** 1.15.8 — Apache-2.0 — git+https://github.com/swc-project/swc.git
+- **@swc/core-darwin-arm64** 1.15.8 — Apache-2.0 AND MIT — https://registry.npmjs.org/@swc/core-darwin-arm64/-/core-darwin-arm64-1.15.8.tgz
+- **@swc/core-darwin-x64** 1.15.8 — Apache-2.0 AND MIT — https://registry.npmjs.org/@swc/core-darwin-x64/-/core-darwin-x64-1.15.8.tgz
+- **@swc/core-linux-arm-gnueabihf** 1.15.8 — Apache-2.0 — https://registry.npmjs.org/@swc/core-linux-arm-gnueabihf/-/core-linux-arm-gnueabihf-1.15.8.tgz
+- **@swc/core-linux-arm64-gnu** 1.15.8 — Apache-2.0 AND MIT — https://registry.npmjs.org/@swc/core-linux-arm64-gnu/-/core-linux-arm64-gnu-1.15.8.tgz
+- **@swc/core-linux-arm64-musl** 1.15.8 — Apache-2.0 AND MIT — https://registry.npmjs.org/@swc/core-linux-arm64-musl/-/core-linux-arm64-musl-1.15.8.tgz
+- **@swc/core-linux-x64-gnu** 1.15.8 — Apache-2.0 AND MIT — git+https://github.com/swc-project/swc.git
+- **@swc/core-linux-x64-musl** 1.15.8 — Apache-2.0 AND MIT — git+https://github.com/swc-project/swc.git
+- **@swc/core-win32-arm64-msvc** 1.15.8 — Apache-2.0 AND MIT — https://registry.npmjs.org/@swc/core-win32-arm64-msvc/-/core-win32-arm64-msvc-1.15.8.tgz
+- **@swc/core-win32-ia32-msvc** 1.15.8 — Apache-2.0 AND MIT — https://registry.npmjs.org/@swc/core-win32-ia32-msvc/-/core-win32-ia32-msvc-1.15.8.tgz
+- **@swc/core-win32-x64-msvc** 1.15.8 — Apache-2.0 AND MIT — https://registry.npmjs.org/@swc/core-win32-x64-msvc/-/core-win32-x64-msvc-1.15.8.tgz
+- **@swc/counter** 0.1.3 — Apache-2.0 — git+https://github.com/swc-project/pkgs.git
+- **@swc/types** 0.1.25 — Apache-2.0 — git+https://github.com/swc-project/swc.git
+- **@tanstack/query-core** 5.90.19 — MIT — git+https://github.com/TanStack/query.git
+- **@tanstack/react-query** 5.90.19 — MIT — git+https://github.com/TanStack/query.git _(direct dependency)_
+- **@tanstack/react-table** 8.21.3 — MIT — https://github.com/TanStack/table.git _(direct dependency)_
+- **@tanstack/table-core** 8.21.3 — MIT — https://github.com/TanStack/table.git
+- **@types/d3-array** 3.2.2 — MIT — https://github.com/DefinitelyTyped/DefinitelyTyped.git
+- **@types/d3-color** 3.1.3 — MIT — https://github.com/DefinitelyTyped/DefinitelyTyped.git
+- **@types/d3-ease** 3.0.2 — MIT — https://github.com/DefinitelyTyped/DefinitelyTyped.git
+- **@types/d3-interpolate** 3.0.4 — MIT — https://github.com/DefinitelyTyped/DefinitelyTyped.git
+- **@types/d3-path** 3.1.1 — MIT — https://github.com/DefinitelyTyped/DefinitelyTyped.git
+- **@types/d3-scale** 4.0.9 — MIT — https://github.com/DefinitelyTyped/DefinitelyTyped.git
+- **@types/d3-shape** 3.1.8 — MIT — https://github.com/DefinitelyTyped/DefinitelyTyped.git
+- **@types/d3-time** 3.0.4 — MIT — https://github.com/DefinitelyTyped/DefinitelyTyped.git
+- **@types/d3-timer** 3.0.2 — MIT — https://github.com/DefinitelyTyped/DefinitelyTyped.git
+- **@types/debug** 4.1.12 — MIT — https://github.com/DefinitelyTyped/DefinitelyTyped.git
+- **@types/estree** 1.0.8 — MIT — https://github.com/DefinitelyTyped/DefinitelyTyped.git
+- **@types/estree-jsx** 1.0.5 — MIT — https://github.com/DefinitelyTyped/DefinitelyTyped.git
+- **@types/hast** 3.0.4 — MIT — https://github.com/DefinitelyTyped/DefinitelyTyped.git
+- **@types/mdast** 4.0.4 — MIT — https://github.com/DefinitelyTyped/DefinitelyTyped.git
+- **@types/ms** 2.1.0 — MIT — https://github.com/DefinitelyTyped/DefinitelyTyped.git
+- **@types/react** 19.2.8 — MIT — https://github.com/DefinitelyTyped/DefinitelyTyped.git _(direct dependency)_
+- **@types/react-dom** 19.2.3 — MIT — https://github.com/DefinitelyTyped/DefinitelyTyped.git _(direct dependency)_
+- **@types/unist** 3.0.3 — MIT — https://github.com/DefinitelyTyped/DefinitelyTyped.git
+- **@ungap/structured-clone** 1.3.0 — ISC — git+https://github.com/ungap/structured-clone.git
+- **acorn** 8.15.0 — MIT — git+https://github.com/acornjs/acorn.git
+- **acorn-jsx** 5.3.2 — MIT — https://github.com/acornjs/acorn-jsx
+- **anser** 2.3.5 — MIT — git://github.com/IonicaBizau/anser.git
+- **argparse** 2.0.1 — Python-2.0
+- **aria-hidden** 1.2.6 — MIT — git+https://github.com/theKashey/aria-hidden.git
+- **bail** 2.0.2 — MIT
+- **base64-js** 1.5.1 — MIT — git://github.com/beatgammit/base64-js.git
+- **baseline-browser-mapping** 2.9.15 — Apache-2.0 — git+https://github.com/web-platform-dx/baseline-browser-mapping.git
+- **buffer** 6.0.3 — MIT — git://github.com/feross/buffer.git
+- **c12** 3.1.0 — MIT
+- **caniuse-lite** 1.0.30001764 — CC-BY-4.0
+- **ccount** 2.0.1 — MIT
+- **character-entities** 2.0.2 — MIT
+- **character-entities-html4** 2.1.0 — MIT
+- **character-entities-legacy** 3.0.0 — MIT
+- **character-reference-invalid** 2.0.1 — MIT
+- **chokidar** 4.0.3 — MIT — git+https://github.com/paulmillr/chokidar.git
+- **citty** 0.1.6 — MIT
+- **class-variance-authority** 0.7.1 — Apache-2.0 — https://github.com/joe-bell/cva#readme _(direct dependency)_
+- **classnames** 2.5.1 — MIT — git+https://github.com/JedWatson/classnames.git
+- **clean-set** 1.1.2 — MIT — git+https://github.com/fwilkerson/clean-set.git
+- **client-only** 0.0.1 — MIT — https://reactjs.org/
+- **clsx** 2.1.1 — MIT _(direct dependency)_
+- **cm6-theme-basic-light** 0.2.0 — MIT — https://github.com/craftzdog/cm6-themes.git
+- **cmdk** 1.1.1 — MIT — git+https://github.com/pacocoursey/cmdk.git _(direct dependency)_
+- **codemirror** 6.0.2 — MIT — https://github.com/codemirror/basic-setup.git
+- **comma-separated-tokens** 2.0.3 — MIT
+- **compute-scroll-into-view** 2.0.4 — MIT — git+https://github.com/scroll-into-view/compute-scroll-into-view.git
+- **confbox** 0.2.2 — MIT
+- **consola** 3.4.2 — MIT
+- **cookie** 0.7.2 — MIT
+- **crelt** 1.0.6 — MIT — git+https://github.com/marijnh/crelt.git
+- **csstype** 3.2.3 — MIT
+- **d** 1.0.2 — ISC
+- **d3-array** 3.2.4 — ISC — https://github.com/d3/d3-array.git
+- **d3-color** 3.1.0 — ISC — https://github.com/d3/d3-color.git
+- **d3-ease** 3.0.1 — BSD-3-Clause — https://github.com/d3/d3-ease.git
+- **d3-format** 3.1.2 — ISC — https://github.com/d3/d3-format.git
+- **d3-interpolate** 3.0.1 — ISC — https://github.com/d3/d3-interpolate.git
+- **d3-path** 3.1.0 — ISC — https://github.com/d3/d3-path.git
+- **d3-scale** 4.0.2 — ISC — https://github.com/d3/d3-scale.git
+- **d3-shape** 3.2.0 — ISC — https://github.com/d3/d3-shape.git
+- **d3-time** 3.1.0 — ISC — https://github.com/d3/d3-time.git
+- **d3-time-format** 4.1.0 — ISC — https://github.com/d3/d3-time-format.git
+- **d3-timer** 3.0.1 — ISC — https://github.com/d3/d3-timer.git
+- **date-fns** 4.1.0 — MIT _(direct dependency)_
+- **date-fns-jalali** 4.1.0-0 — MIT
+- **debug** 4.4.3 — MIT — git://github.com/debug-js/debug.git
+- **decimal.js** 10.6.0 — MIT
+- **decimal.js-light** 2.5.1 — MIT — https://github.com/MikeMcl/decimal.js-light.git
+- **decode-named-character-reference** 1.2.0 — MIT
+- **deepmerge-ts** 7.1.5 — BSD-3-Clause — git+https://github.com/RebeccaStevens/deepmerge-ts.git
+- **defu** 6.1.4 — MIT
+- **dequal** 2.0.3 — MIT
+- **destr** 2.0.5 — MIT
+- **detect-libc** 2.1.2 — Apache-2.0 — git://github.com/lovell/detect-libc.git
+- **detect-node-es** 1.1.0 — MIT — https://github.com/thekashey/detect-node
+- **devlop** 1.1.0 — MIT
+- **diff** 5.2.0 — BSD-3-Clause — git://github.com/kpdecker/jsdiff.git
+- **dom-helpers** 5.2.1 — MIT — git+https://github.com/react-bootstrap/dom-helpers.git
+- **dotenv** 16.6.1 — BSD-2-Clause — git://github.com/motdotla/dotenv.git
+- **downshift** 7.6.2 — MIT — https://github.com/downshift-js/downshift.git
+- **effect** 3.18.4 — MIT — https://github.com/Effect-TS/effect.git
+- **embla-carousel** 8.6.0 — MIT — git+https://github.com/davidjerleke/embla-carousel
+- **embla-carousel-react** 8.6.0 — MIT — git+https://github.com/davidjerleke/embla-carousel _(direct dependency)_
+- **embla-carousel-reactive-utils** 8.6.0 — MIT — git+https://github.com/davidjerleke/embla-carousel
+- **empathic** 2.0.0 — MIT
+- **es5-ext** 0.10.64 — ISC
+- **es6-iterator** 2.0.3 — MIT — git://github.com/medikoo/es6-iterator.git
+- **es6-symbol** 3.1.4 — ISC
+- **escape-carriage** 1.3.1 — MIT — git+https://github.com/lgeiger/escape-carriage.git
+- **esniff** 2.0.1 — ISC
+- **estree-util-is-identifier-name** 3.0.0 — MIT
+- **estree-util-visit** 2.0.0 — MIT
+- **event-emitter** 0.3.5 — MIT — git://github.com/medikoo/event-emitter.git
+- **eventemitter3** 4.0.7 — MIT — git://github.com/primus/eventemitter3.git
+- **exsolve** 1.0.8 — MIT
+- **ext** 1.7.0 — ISC — https://github.com/medikoo/es5-ext#ext
+- **extend** 3.0.2 — MIT — https://github.com/justmoon/node-extend.git
+- **fast-check** 3.23.2 — MIT — git+https://github.com/dubzzz/fast-check.git
+- **fast-equals** 5.4.0 — MIT — git+https://github.com/planttheidea/fast-equals.git
+- **fault** 2.0.1 — MIT
+- **format** 0.2.2 — MIT (declared in package README; package.json omits the field) — git://github.com/samsonjs/format.git
+- **framer-motion** 12.26.2 — MIT _(direct dependency)_
+- **get-nonce** 1.0.1 — MIT — https://github.com/theKashey/get-nonce
+- **giget** 2.0.0 — MIT
+- **hast-util-parse-selector** 2.2.5 — MIT
+- **hast-util-to-jsx-runtime** 2.3.6 — MIT
+- **hast-util-whitespace** 3.0.0 — MIT
+- **hastscript** 6.0.0 — MIT
+- **highlight.js** 10.7.3 — BSD-3-Clause — git://github.com/highlightjs/highlight.js.git
+- **highlightjs-vue** 1.0.0 — CC0-1.0 — git+https://github.com/highlightjs/highlightjs-vue.git
+- **html-url-attributes** 3.0.1 — MIT
+- **ieee754** 1.2.1 — BSD-3-Clause — git://github.com/feross/ieee754.git
+- **inline-style-parser** 0.2.7 — MIT — git+https://github.com/remarkablemark/inline-style-parser.git
+- **input-otp** 1.4.2 — MIT — git+https://github.com/guilhermerodz/input-otp.git _(direct dependency)_
+- **internmap** 2.0.3 — ISC — https://github.com/mbostock/internmap.git
+- **intl-messageformat** 10.7.18 — BSD-3-Clause — git@github.com:formatjs/formatjs.git
+- **is-alphabetical** 2.0.1 — MIT
+- **is-alphanumerical** 2.0.1 — MIT
+- **is-decimal** 2.0.1 — MIT
+- **is-extglob** 2.1.1 — MIT — https://github.com/jonschlinkert/is-extglob
+- **is-glob** 4.0.3 — MIT — https://github.com/micromatch/is-glob
+- **is-hexadecimal** 2.0.1 — MIT
+- **is-plain-obj** 4.1.0 — MIT
+- **isomorphic.js** 0.2.5 — MIT — git+https://github.com/dmonad/isomorphic.js.git
+- **jiti** 2.6.1 — MIT
+- **jose** 4.15.9 — MIT — https://github.com/panva/jose
+- **js-cookie** 3.0.5 — MIT — git://github.com/js-cookie/js-cookie.git
+- **js-tokens** 4.0.0 — MIT
+- **js-yaml** 4.1.1 — MIT
+- **kleur** 4.1.5 — MIT
+- **lexical** 0.35.0 — MIT — https://github.com/facebook/lexical
+- **lib0** 0.2.117 — MIT — git+https://github.com/dmonad/lib0.git
+- **lodash** 4.17.21 — MIT — https://lodash.com/
+- **lodash-es** 4.17.22 — MIT — https://lodash.com/custom-builds
+- **longest-streak** 3.1.0 — MIT
+- **loose-envify** 1.4.0 — MIT — git://github.com/zertosh/loose-envify.git
+- **lowlight** 1.20.0 — MIT
+- **lru-cache** 6.0.0 — ISC
+- **lucide-react** 0.525.0 — ISC — https://github.com/lucide-icons/lucide.git _(direct dependency)_
+- **lz-string** 1.5.0 — MIT — https://github.com/pieroxy/lz-string.git
+- **markdown-table** 3.0.4 — MIT
+- **mdast-util-directive** 3.1.0 — MIT
+- **mdast-util-from-markdown** 2.0.2 — MIT
+- **mdast-util-frontmatter** 2.0.1 — MIT
+- **mdast-util-gfm-strikethrough** 2.0.0 — MIT
+- **mdast-util-gfm-table** 2.0.0 — MIT
+- **mdast-util-gfm-task-list-item** 2.0.0 — MIT
+- **mdast-util-highlight-mark** 1.2.2 — MIT
+- **mdast-util-mdx** 3.0.0 — MIT
+- **mdast-util-mdx-expression** 2.0.1 — MIT
+- **mdast-util-mdx-jsx** 3.2.0 — MIT
+- **mdast-util-mdxjs-esm** 2.0.1 — MIT
+- **mdast-util-phrasing** 4.1.0 — MIT
+- **mdast-util-to-hast** 13.2.1 — MIT
+- **mdast-util-to-markdown** 2.1.2 — MIT
+- **mdast-util-to-string** 4.0.0 — MIT
+- **micromark** 4.0.2 — MIT
+- **micromark-core-commonmark** 2.0.3 — MIT
+- **micromark-extension-directive** 3.0.2 — MIT
+- **micromark-extension-frontmatter** 2.0.0 — MIT
+- **micromark-extension-gfm-strikethrough** 2.1.0 — MIT
+- **micromark-extension-gfm-table** 2.1.1 — MIT
+- **micromark-extension-gfm-task-list-item** 2.1.0 — MIT
+- **micromark-extension-highlight-mark** 1.2.0 — MIT
+- **micromark-extension-mdx-expression** 3.0.1 — MIT
+- **micromark-extension-mdx-jsx** 3.0.2 — MIT
+- **micromark-extension-mdx-md** 2.0.0 — MIT
+- **micromark-extension-mdxjs** 3.0.0 — MIT
+- **micromark-extension-mdxjs-esm** 3.0.0 — MIT
+- **micromark-factory-destination** 2.0.1 — MIT
+- **micromark-factory-label** 2.0.1 — MIT
+- **micromark-factory-mdx-expression** 2.0.3 — MIT
+- **micromark-factory-space** 2.0.1 — MIT
+- **micromark-factory-title** 2.0.1 — MIT
+- **micromark-factory-whitespace** 2.0.1 — MIT
+- **micromark-util-character** 2.1.1 — MIT
+- **micromark-util-chunked** 2.0.1 — MIT
+- **micromark-util-classify-character** 2.0.1 — MIT
+- **micromark-util-combine-extensions** 2.0.1 — MIT
+- **micromark-util-decode-numeric-character-reference** 2.0.2 — MIT
+- **micromark-util-decode-string** 2.0.1 — MIT
+- **micromark-util-encode** 2.0.1 — MIT
+- **micromark-util-events-to-acorn** 2.0.3 — MIT
+- **micromark-util-html-tag-name** 2.0.1 — MIT
+- **micromark-util-normalize-identifier** 2.0.1 — MIT
+- **micromark-util-resolve-all** 2.0.1 — MIT
+- **micromark-util-sanitize-uri** 2.0.1 — MIT
+- **micromark-util-subtokenize** 2.1.0 — MIT
+- **micromark-util-symbol** 2.0.1 — MIT
+- **micromark-util-types** 2.0.2 — MIT
+- **mime-db** 1.54.0 — MIT
+- **motion-dom** 12.26.2 — MIT
+- **motion-utils** 12.24.10 — MIT
+- **mri** 1.2.0 — MIT
+- **ms** 2.1.3 — MIT
+- **nanoid** 3.3.11 — MIT
+- **negotiator** 1.0.0 — MIT
+- **next** 16.1.3 — MIT — https://nextjs.org _(direct dependency)_
+- **next-auth** 4.24.13 — ISC — https://authjs.dev _(direct dependency)_
+- **next-intl** 4.7.0 — MIT — git+https://github.com/amannn/next-intl.git _(direct dependency)_
+- **next-intl-swc-plugin-extractor** 4.7.0 — MIT — git+https://github.com/amannn/next-intl.git
+- **next-themes** 0.4.6 — MIT — https://github.com/pacocoursey/next-themes.git _(direct dependency)_
+- **next-tick** 1.1.0 — ISC — git://github.com/medikoo/next-tick.git
+- **node-addon-api** 7.1.1 — MIT — git://github.com/nodejs/node-addon-api.git
+- **node-fetch-native** 1.6.7 — MIT
+- **nypm** 0.6.2 — MIT
+- **oauth** 0.9.15 — MIT — http://github.com/ciaranj/node-oauth.git
+- **object-assign** 4.1.1 — MIT
+- **object-hash** 2.2.0 — MIT — https://github.com/puleos/object-hash
+- **ohash** 2.0.11 — MIT
+- **oidc-token-hash** 5.2.0 — MIT — https://github.com/panva/oidc-token-hash
+- **openid-client** 5.7.1 — MIT — https://github.com/panva/openid-client
+- **outvariant** 1.4.0 — MIT — https://github.com/open-draft/outvariant
+- **parse-entities** 4.0.2 — MIT
+- **pathe** 2.0.3 — MIT
+- **perfect-debounce** 1.0.0 — MIT
+- **picocolors** 1.1.1 — ISC
+- **picomatch** 4.0.3 — MIT — https://github.com/micromatch/picomatch
+- **pkg-types** 2.3.0 — MIT
+- **po-parser** 2.1.1 — MIT — git@github.com:amannn/po-parser.git
+- **preact** 10.28.2 — MIT — https://preactjs.com
+- **preact-render-to-string** 5.2.6 — MIT — https://github.com/developit/preact-render-to-string
+- **pretty-format** 3.8.0 — MIT — https://github.com/thejameskle/pretty-format
+- **prisma** 6.19.2 — Apache-2.0 — https://github.com/prisma/prisma.git _(direct dependency)_
+- **prismjs** 1.30.0 — MIT — git+https://github.com/PrismJS/prism.git
+- **prop-types** 15.8.1 — MIT — https://facebook.github.io/react/
+- **property-information** 7.1.0 — MIT
+- **pure-rand** 6.1.0 — MIT — git+https://github.com/dubzzz/pure-rand.git
+- **rc9** 2.1.2 — MIT
+- **react** 19.2.3 — MIT — https://github.com/facebook/react.git _(direct dependency)_
+- **react-day-picker** 9.13.0 — MIT — https://github.com/gpbl/react-day-picker _(direct dependency)_
+- **react-devtools-inline** 4.4.0 — MIT — https://github.com/facebook/react.git
+- **react-dom** 19.2.3 — MIT — https://github.com/facebook/react.git _(direct dependency)_
+- **react-error-boundary** 3.1.4 — MIT — https://github.com/bvaughn/react-error-boundary
+- **react-hook-form** 7.71.1 — MIT — https://github.com/react-hook-form/react-hook-form _(direct dependency)_
+- **react-is** 18.3.1 — MIT — https://github.com/facebook/react.git
+- **react-markdown** 10.1.0 — MIT _(direct dependency)_
+- **react-remove-scroll** 2.7.2 — MIT
+- **react-remove-scroll-bar** 2.3.8 — MIT
+- **react-resizable-panels** 3.0.6 — MIT — git+https://github.com/bvaughn/react-resizable-panels.git _(direct dependency)_
+- **react-smooth** 4.0.4 — MIT — https://github.com/recharts/react-smooth.git
+- **react-style-singleton** 2.2.3 — MIT — https://github.com/theKashey/react-style-singleton
+- **react-syntax-highlighter** 15.6.6 — MIT — git+https://github.com/react-syntax-highlighter/react-syntax-highlighter.git _(direct dependency)_
+- **react-transition-group** 4.4.5 — BSD-3-Clause — https://github.com/reactjs/react-transition-group.git
+- **readdirp** 4.1.2 — MIT — git://github.com/paulmillr/readdirp.git
+- **recharts** 2.15.4 — MIT — git+https://github.com/recharts/recharts.git _(direct dependency)_
+- **recharts-scale** 0.4.5 — MIT — https://github.com/recharts/recharts-scale.git
+- **refractor** 3.6.0 — MIT
+- **remark-parse** 11.0.0 — MIT — https://remark.js.org
+- **remark-rehype** 11.1.2 — MIT
+- **sade** 1.8.1 — MIT
+- **scheduler** 0.27.0 — MIT — https://github.com/facebook/react.git
+- **screenfull** 5.2.0 — MIT
+- **semver** 7.7.3 — ISC — git+https://github.com/npm/node-semver.git
+- **sharp** 0.34.5 — Apache-2.0 — git+https://github.com/lovell/sharp.git _(direct dependency)_
+- **sonner** 2.0.7 — MIT — git+https://github.com/emilkowalski/sonner.git _(direct dependency)_
+- **source-map-js** 1.2.1 — BSD-3-Clause — https://github.com/7rulnik/source-map-js
+- **space-separated-tokens** 2.0.2 — MIT
+- **static-browser-server** 1.0.3 — Apache-2.0
+- **strict-event-emitter** 0.4.6 — MIT
+- **stringify-entities** 4.0.4 — MIT
+- **style-mod** 4.1.3 — MIT — git+https://github.com/marijnh/style-mod.git
+- **style-to-js** 1.1.21 — MIT — git+https://github.com/remarkablemark/style-to-js.git
+- **style-to-object** 1.0.14 — MIT — git+https://github.com/remarkablemark/style-to-object.git
+- **styled-jsx** 5.1.6 — MIT
+- **tabbable** 6.4.0 — MIT — git+https://github.com/focus-trap/tabbable.git
+- **tailwind-merge** 3.4.0 — MIT — https://github.com/dcastil/tailwind-merge.git _(direct dependency)_
+- **tailwindcss** 4.1.18 — MIT — https://github.com/tailwindlabs/tailwindcss.git _(direct dependency)_
+- **tailwindcss-animate** 1.0.7 — MIT _(direct dependency)_
+- **tiny-invariant** 1.3.3 — MIT — https://github.com/alexreardon/tiny-invariant.git
+- **tinyexec** 1.0.2 — MIT — git+https://github.com/tinylibs/tinyexec.git
+- **trim-lines** 3.0.1 — MIT
+- **trough** 2.2.0 — MIT
+- **tslib** 2.8.1 — 0BSD — https://github.com/Microsoft/tslib.git
+- **type** 2.7.3 — ISC
+- **typescript** 5.9.3 — Apache-2.0 — https://github.com/microsoft/TypeScript.git _(direct dependency)_
+- **unidiff** 1.0.4 — MIT — https://github.com/mvoss9000/unidiff.git
+- **unified** 11.0.5 — MIT — https://unifiedjs.com
+- **unist-util-is** 6.0.1 — MIT
+- **unist-util-position** 5.0.0 — MIT
+- **unist-util-position-from-estree** 2.0.0 — MIT
+- **unist-util-stringify-position** 4.0.0 — MIT
+- **unist-util-visit** 5.0.0 — MIT
+- **unist-util-visit-parents** 6.0.2 — MIT
+- **use-callback-ref** 1.3.3 — MIT
+- **use-intl** 4.7.0 — MIT — git+https://github.com/amannn/next-intl.git
+- **use-sidecar** 1.1.3 — MIT — https://github.com/theKashey/use-sidecar
+- **use-sync-external-store** 1.6.0 — MIT — https://github.com/facebook/react.git
+- **uuid** 11.1.0 — MIT — https://github.com/uuidjs/uuid.git _(direct dependency)_
+- **uvu** 0.5.6 — MIT
+- **vaul** 1.1.2 — MIT — https://github.com/emilkowalski/vaul.git _(direct dependency)_
+- **vfile** 6.0.3 — MIT
+- **vfile-message** 4.0.3 — MIT
+- **victory-vendor** 36.9.2 — MIT AND ISC — https://github.com/FormidableLabs/victory
+- **w3c-keyname** 2.2.8 — MIT — git+https://github.com/marijnh/w3c-keyname.git
+- **xtend** 4.0.2 — MIT — https://github.com/Raynos/xtend
+- **yallist** 4.0.0 — ISC — git+https://github.com/isaacs/yallist.git
+- **yjs** 13.6.29 — MIT — https://github.com/yjs/yjs.git
+- **z-ai-web-dev-sdk** 0.0.18 — ISC _(direct dependency)_
+- **zod** 4.3.5 — MIT — git+https://github.com/colinhacks/zod.git _(direct dependency)_
+- **zustand** 5.0.10 — MIT — git+https://github.com/pmndrs/zustand.git _(direct dependency)_
+- **zwitch** 2.0.4 — MIT
+
+### COPYLEFT-WEAK (14)
+
+- **@img/sharp-libvips-darwin-arm64** 1.2.4 — LGPL-3.0-or-later — https://registry.npmjs.org/@img/sharp-libvips-darwin-arm64/-/sharp-libvips-darwin-arm64-1.2.4.tgz
+- **@img/sharp-libvips-darwin-x64** 1.2.4 — LGPL-3.0-or-later — https://registry.npmjs.org/@img/sharp-libvips-darwin-x64/-/sharp-libvips-darwin-x64-1.2.4.tgz
+- **@img/sharp-libvips-linux-arm** 1.2.4 — LGPL-3.0-or-later — https://registry.npmjs.org/@img/sharp-libvips-linux-arm/-/sharp-libvips-linux-arm-1.2.4.tgz
+- **@img/sharp-libvips-linux-arm64** 1.2.4 — LGPL-3.0-or-later — https://registry.npmjs.org/@img/sharp-libvips-linux-arm64/-/sharp-libvips-linux-arm64-1.2.4.tgz
+- **@img/sharp-libvips-linux-ppc64** 1.2.4 — LGPL-3.0-or-later — https://registry.npmjs.org/@img/sharp-libvips-linux-ppc64/-/sharp-libvips-linux-ppc64-1.2.4.tgz
+- **@img/sharp-libvips-linux-riscv64** 1.2.4 — LGPL-3.0-or-later — https://registry.npmjs.org/@img/sharp-libvips-linux-riscv64/-/sharp-libvips-linux-riscv64-1.2.4.tgz
+- **@img/sharp-libvips-linux-s390x** 1.2.4 — LGPL-3.0-or-later — https://registry.npmjs.org/@img/sharp-libvips-linux-s390x/-/sharp-libvips-linux-s390x-1.2.4.tgz
+- **@img/sharp-libvips-linux-x64** 1.2.4 — LGPL-3.0-or-later — git+https://github.com/lovell/sharp-libvips.git
+- **@img/sharp-libvips-linuxmusl-arm64** 1.2.4 — LGPL-3.0-or-later — https://registry.npmjs.org/@img/sharp-libvips-linuxmusl-arm64/-/sharp-libvips-linuxmusl-arm64-1.2.4.tgz
+- **@img/sharp-libvips-linuxmusl-x64** 1.2.4 — LGPL-3.0-or-later — git+https://github.com/lovell/sharp-libvips.git
+- **@img/sharp-wasm32** 0.34.5 — Apache-2.0 AND LGPL-3.0-or-later AND MIT — https://registry.npmjs.org/@img/sharp-wasm32/-/sharp-wasm32-0.34.5.tgz
+- **@img/sharp-win32-arm64** 0.34.5 — Apache-2.0 AND LGPL-3.0-or-later — https://registry.npmjs.org/@img/sharp-win32-arm64/-/sharp-win32-arm64-0.34.5.tgz
+- **@img/sharp-win32-ia32** 0.34.5 — Apache-2.0 AND LGPL-3.0-or-later — https://registry.npmjs.org/@img/sharp-win32-ia32/-/sharp-win32-ia32-0.34.5.tgz
+- **@img/sharp-win32-x64** 0.34.5 — Apache-2.0 AND LGPL-3.0-or-later — https://registry.npmjs.org/@img/sharp-win32-x64/-/sharp-win32-x64-0.34.5.tgz
+
+### NON-STANDARD (2)
+
+- **@codesandbox/nodebox** 0.1.8 — SEE LICENSE IN ./LICENSE — https://github.com/codesandbox/nodebox-runtime
+- **intersection-observer** 0.10.0 — W3C-20150513 — git@github.com:w3c/IntersectionObserver.git
+
+## Full license texts
+
+License texts for all **direct** dependencies are copied verbatim into `docs/legal/licenses/` (one file per package, named `<pkg>.txt`). For transitive packages the upstream link above is authoritative; the installed package ships its own LICENSE file.

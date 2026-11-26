@@ -49,6 +49,10 @@ export default function TermsPage() {
           <p className="mt-2 text-[14px] leading-relaxed text-[#b8b8b0]">{body}</p>
         </section>
       ))}
+    
+      <p className="mt-8 text-[12.5px] leading-relaxed text-[#8f8f8a]">
+        Part of the <a href="/legal" className="text-[#d4a017] hover:underline">Legal &amp; Trust Center</a> — see also the <a href="/legal/ai-processing" className="text-[#d4a017] hover:underline">AI Processing &amp; Data Usage Policy</a> and the <a href="/legal/voice-data" className="text-[#d4a017] hover:underline">Voice &amp; Audio Data Policy</a>.
+      </p>
     </div>
   );
 }

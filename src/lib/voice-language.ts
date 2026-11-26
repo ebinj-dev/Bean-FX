@@ -39,13 +39,13 @@ export const VOICE_LANGUAGES: VoiceLanguage[] = [
     id: "ta",
     label: "தமிழ் (Tamil)",
     status: "unverified",
-    note: "The configured provider documents no Tamil support. The attempt is real and the transcript is returned as recognised — accuracy needs native-speaker validation before production use.",
+    note: "The configured provider documents no Tamil support, and the M47.1 automated check (Tamil audio through the provider) returned unusable output. Transcription attempts are real and disclosed as unverified — production use requires a capable provider plus native-speaker validation.",
   },
   {
     id: "tanglish",
     label: "Tanglish (Tamil–English mix)",
     status: "unverified",
-    note: "Tamil–English code-switching, treated as its own input style — not English with another label. Accuracy needs native-speaker validation before production use.",
+    note: "Tamil–English code-switching, treated as its own input style — not English with another label. The M47.1 automated check recognized the English portion but misrecognized the Tamil words. Production use requires native-speaker validation and a provider that supports code-switching.",
   },
 ];
 
