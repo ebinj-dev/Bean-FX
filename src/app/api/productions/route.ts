@@ -101,11 +101,20 @@ export async function POST(req: NextRequest) {
     const owned = await db.mediaAsset.findFirst({ where: { id: sid, userId: user.id } });
     if (owned) sourceMediaIds.push(owned.id);
   }
+  // M46H §4 — durable user→project→conversation→production association.
+  let conversationId: string | null = null;
+  const rawConversationId = typeof body.conversationId === "string" ? body.conversationId : "";
+  if (rawConversationId) {
+    const convo = await db.conversation.findFirst({ where: { id: rawConversationId, userId: user.id } });
+    if (!convo) return NextResponse.json({ error: "Conversation not found or not owned by the caller." }, { status: 403 });
+    conversationId = convo.id;
+  }
   const briefWithSources = { ...brief, ...(sourceMediaIds.length > 0 ? { sourceMediaIds } : {}) };
   const production = await db.production.create({
     data: {
       userId: user.id,
       projectId,
+      conversationId,
       templateId,
       title,
       briefJson: JSON.stringify(briefWithSources),

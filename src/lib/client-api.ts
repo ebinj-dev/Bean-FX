@@ -196,7 +196,10 @@ const START_CHUNK_BYTES = 5 * 1024 * 1024;
 /** Floor for the adaptive shrink: survives any gateway that accepts ~256 KB bodies. */
 const MIN_CHUNK_BYTES = 256 * 1024;
 
-type UploadOpts = { role?: "BROLL"; notes?: string; onProgress?: (pct: number) => void; signal?: AbortSignal };
+type UploadOpts = { role?: "BROLL"; notes?: string; onProgress?: (pct: number) => void; signal?: AbortSignal;
+  /** M46H §1 — optional project binding (ownership validated server-side) and
+   *  production role classification; applied to single-shot AND chunked paths. */
+  projectId?: string | null; productionRole?: string };
 
 type RawUploadResult = { status: number; ok: boolean; text: string };
 
@@ -276,6 +279,8 @@ async function uploadSingleShot(file: File, opts: UploadOpts): Promise<{ media: 
   const headers: Record<string, string> = { "x-filename": filenameHeader(file) };
   if (opts.role) headers["x-role"] = opts.role;
   if (opts.notes) headers["x-notes"] = encodeURIComponent(opts.notes);
+  if (opts.projectId) headers["x-project-id"] = opts.projectId;
+  if (opts.productionRole) headers["x-asset-role"] = opts.productionRole;
   const res = await xhrUpload(file, headers, (f) => opts.onProgress?.(Math.round(f * 100)), opts.signal);
   if (!res.ok) throw interpretFailure(res);
   return JSON.parse(res.text) as { media: MediaMeta };
@@ -298,6 +303,8 @@ async function uploadChunked(file: File, opts: UploadOpts, chunkSize: number): P
     const headers: Record<string, string> = {
       "x-filename": filenameHeader(file),
       "x-upload-id": uploadId,
+      ...(opts.projectId ? { "x-project-id": opts.projectId } : {}),
+      ...(opts.productionRole ? { "x-asset-role": opts.productionRole } : {}),
       "x-chunk-index": String(index),
       "x-chunk-total": String(chunkTotal),
       "x-chunk-size": String(chunkSize),

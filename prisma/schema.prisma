@@ -1458,6 +1458,7 @@ model Notification {
 /// approved stage artifacts; deliveryJson lists final validated artifacts.
 model Production {
   id                  String   @id @default(cuid())
+  conversationId String?
   userId              String
   user                User     @relation("Productions", fields: [userId], references: [id], onDelete: Cascade)
   projectId           String?
@@ -1493,6 +1494,7 @@ model Production {
   variants            ProductionVariant[] @relation("Variants")
   @@index([userId, status])
   @@index([projectId])
+  @@index([conversationId])
 }
 
 /// One pipeline stage per production; deterministic server-enforced states.
@@ -1644,6 +1646,8 @@ model ProductionVariant {
 /// from which inputs, to which artifact, with dependencies and criteria.
 model ProductionTask {
   id           String    @id @default(cuid())
+  mode         String?
+  providerNote String?
   productionId String
   stageKey     String
   seq          Int       @default(0)

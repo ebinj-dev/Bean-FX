@@ -8,6 +8,7 @@ import { execSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
 import { db } from "@/lib/db";
+import { finishStageTask } from "@/lib/production/tasks";
 import { ffprobe } from "@/lib/media-storage";
 import { applyTimelineEdits, getTimelineHead } from "@/lib/editor/persistence";
 import { enqueueMediaJob, JOB_TYPE_RENDER_TIMELINE } from "@/lib/job-helpers";
@@ -156,6 +157,9 @@ export async function syncJobBackedStages(productionId: string): Promise<void> {
         versionNumber: priorCount + 1,
       }) });
     } else if (job.status === "FAILED" || job.status === "CANCELLED") {
+      // M46H §6 — a FAILED job also closes its task row (honest history).
+      const failedTask = await db.productionTask.findFirst({ where: { productionId, stageKey: s.key, jobId: job.id, status: "RUNNING" }, orderBy: { seq: "desc" } });
+      if (failedTask) await finishStageTask(failedTask.id, "FAILED", null, (job.message ?? job.status).slice(0, 300)).catch(() => undefined);
       await setStage(productionId, s.id, "FAILED", { error: job.message ?? job.status, completedAt: new Date() });
       await db.production.update({ where: { id: productionId }, data: { status: "FAILED" } });
     }

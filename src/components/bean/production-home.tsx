@@ -18,7 +18,7 @@ import {
   Music, Paperclip, Play, RefreshCw, Search, Send, Settings, Sparkles, Users, X, CheckCircle2, AlertCircle,
 } from "lucide-react";
 import { BeanLogo } from "@/components/bean/logo";
-import { ProductionCrewPanel, useProductionPolling, type ProductionLite, type StageLite, type TaskLite, type EventLite } from "@/components/bean/production-crew";
+import { ProductionCrewPanel, useProductionPolling, type ProductionLite, type StageLite, type StageAction, type TaskLite, type EventLite, type AssetLite as CrewAssetLite, type MediaLite as CrewMediaLite } from "@/components/bean/production-crew";
 import {
   connectAndCreate, reconnect, disconnect, status as folderStatus, verifyFiles, saveDeliverable,
   saveAssetFile, isSupported, type LocalFolderStatus,
@@ -85,6 +85,103 @@ export function ProductionHome({ user, onLogout }: { user: { name: string | null
   const [productionId, setProductionId] = useState<string | null>(null);
   const [productionStages, setProductionStages] = useState<StageLite[]>([]);
   const [productionTasks, setProductionTasks] = useState<TaskLite[]>([]);
+  const [stageError, setStageError] = useState<string | null>(null);
+  // M46H §5 — every card must belong to THIS production (never a project-wide render list).
+  const [productionExports, setProductionExports] = useState<Array<{ exportId: string; version: number; failed?: boolean; error?: string | null }>>([]);
+  const [compareOpen, setCompareOpen] = useState(false);
+  useEffect(() => { productionExportsRef.current = productionExports; }, [productionExports]);
+  useEffect(() => {
+    // M46H §2 — project library for the per-scene attach selects.
+    if (!activeProjectId) return;
+    void (async () => {
+      const res = await fetch(`/api/media?projectId=${activeProjectId}`);
+      if (!res.ok) return;
+      const d = await res.json();
+      setProjectAssets((d.media ?? []).map((m: { id: string; originalName: string; kind: string; role?: string | null }) => ({ id: m.id, originalName: m.originalName, kind: m.kind, role: m.role ?? null })));
+    })();
+  }, [activeProjectId]);
+
+  /** Derive the production's real export lineage (successful + failed) from stage outputs and delivery artifacts. */
+  const absorbProductionOutputs = useCallback((stages: StageLite[], delivery: { artifacts?: Array<{ exportFileId?: string; versionNumber?: number }> } | null) => {
+    const fr = stages.find((x) => x.key === "FINAL_RENDER");
+    const failed = fr?.state === "FAILED";
+    const ids: Array<{ exportId: string; version: number; failed?: boolean; error?: string | null }> = [];
+    for (const a of delivery?.artifacts ?? []) {
+      if (a.exportFileId) ids.push({ exportId: a.exportFileId, version: a.versionNumber ?? 0, failed: false });
+    }
+    if (ids.length === 0 && fr?.output && typeof fr.output.exportFileId === "string") {
+      ids.push({ exportId: String(fr.output.exportFileId), version: Number(fr.output.versionNumber ?? 1), failed: false });
+    }
+    if (ids.length > 0) {
+      let v = 1;
+      for (const x of ids) if (!x.version) { x.version = v; }
+      for (let i = 0; i < ids.length; i++) ids[i].version = ids[i].version || i + 1;
+      v = ids.length; // keep counter honest
+    }
+    if (failed && ids.length === 0) {
+      ids.push({ exportId: "", version: 1, failed: true, error: fr?.error ?? "Render job failed — no output was produced." });
+    }
+    setProductionExports(ids);
+  }, []);
+  const [productionAssets, setProductionAssets] = useState<CrewAssetLite[]>([]);
+  const [projectAssets, setProjectAssets] = useState<CrewMediaLite[]>([]);
+
+  /** M46H §2 — shared production refresh for asset actions. */
+  const refreshProduction = useCallback(async () => {
+    if (!productionId) return;
+    const res = await fetch(`/api/productions/${productionId}`);
+    if (!res.ok) return;
+    const d = await res.json();
+    setProductionAssets(d.assets ?? []);
+    setProductionStages(d.stages ?? []);
+    setProductionTasks(d.tasks ?? []);
+    absorbProductionOutputs(d.stages ?? [], d.production.delivery ?? null);
+  }, [productionId, absorbProductionOutputs]);
+
+  const attachAsset = useCallback(async (assetRowId: string, mediaAssetId: string) => {
+    setBusyAction(assetRowId);
+    setStageError(null);
+    try {
+      const res = await fetch(`/api/productions/${productionId}/assets`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "attach", assetRowId, mediaAssetId }),
+      });
+      const payload = await res.json().catch(() => null);
+      if (!res.ok) {
+        setStageError(`Asset attach rejected: ${payload?.error ?? `HTTP ${res.status}`}`);
+        return;
+      }
+      await refreshProduction();
+    } catch (err) {
+      setStageError(`Network error attaching asset: ${err instanceof Error ? err.message : "connection failed"}`);
+    } finally {
+      setBusyAction(null);
+    }
+  }, [productionId, refreshProduction]);
+
+  const decideAsset = useCallback(async (assetRowId: string, decision: "APPROVED" | "REJECTED") => {
+    setBusyAction(assetRowId);
+    setStageError(null);
+    try {
+      const res = await fetch(`/api/productions/${productionId}/assets`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "decide", assetRowId, decision }),
+      });
+      const payload = await res.json().catch(() => null);
+      if (!res.ok) {
+        setStageError(`Asset decision rejected: ${payload?.error ?? `HTTP ${res.status}`}`);
+        return;
+      }
+      await refreshProduction();
+    } catch (err) {
+      setStageError(`Network error on asset decision: ${err instanceof Error ? err.message : "connection failed"}`);
+    } finally {
+      setBusyAction(null);
+    }
+  }, [productionId, refreshProduction]);
+  useEffect(() => { if (productionId) void refreshProduction(); }, [productionId, refreshProduction]);
   const [productionEvents, setProductionEvents] = useState<EventLite[]>([]);
   const [productionData, setProductionData] = useState<ProductionLite | null>(null);
   const [busyAction, setBusyAction] = useState<string | null>(null);
@@ -135,7 +232,13 @@ export function ProductionHome({ user, onLogout }: { user: { name: string | null
       const d = await res.json();
       // The exports list returns { id, ... } — normalize to the card's exportId.
       const all = (d.exports ?? []).map((e: { id: string } & RenderCard) => ({ ...e, exportId: e.exportId ?? e.id }));
-      setRenders(all.filter((r) => r.params?.projectId === projectId));
+      // M46H §5 — when a production is linked, show ONLY its outputs.
+      if (productionExportsRef.current.length > 0) {
+        const ok = new Set(productionExportsRef.current.filter((x) => !x.failed).map((x) => x.exportId));
+        setRenders(all.filter((r) => ok.has(r.exportId)));
+      } else {
+        setRenders(all.filter((r) => r.params?.projectId === projectId));
+      }
     }
   }, []);
 
@@ -147,6 +250,7 @@ export function ProductionHome({ user, onLogout }: { user: { name: string | null
   // real readiness. The chat provider is configured server-side; the registry
   // is shown as availability status, never as a fake selector.
   const activeProjectIdRef = useRef<string | null>(null);
+  const productionExportsRef = useRef<Array<{ exportId: string; version: number; failed?: boolean; error?: string | null }>>([]);
   useEffect(() => { activeProjectIdRef.current = activeProjectId; }, [activeProjectId]);
 
   const loadModels = useCallback(async () => {
@@ -170,18 +274,46 @@ export function ProductionHome({ user, onLogout }: { user: { name: string | null
   }, [activeProjectId, loadRenders]);
 
   /** Restore the latest crew production for a project (server persistence). */
-  const restoreProduction = useCallback(async (projectId: string) => {
-    const res = await fetch("/api/productions");
+  const restoreProduction = useCallback(async (conversationId: string) => {
+    // M46H §4 — restore the production OF THIS CONVERSATION, never a newer
+    // production from a sibling conversation. No silent substitution.
+    if (!conversationId) {
+      setProductionId(null);
+      setProductionStages([]);
+      setProductionTasks([]);
+      setProductionEvents([]);
+      setProductionData(null);
+      return;
+    }
+    const res = await fetch(`/api/my-ai/conversations/${conversationId}/messages`);
     if (!res.ok) return;
     const d = await res.json();
-    const mine = (d.productions ?? []) as Array<{ id: string; projectId: string | null }>;
-    const match = mine.find((p) => p.projectId === projectId);
-    setProductionId(match?.id ?? null);
-    if (!match) {
+    const linkedId: string | null = (d.conversation ?? {}).productionId ?? null;
+    if (!linkedId) {
+      setProductionId(null);
       setProductionStages([]);
       setProductionData(null);
+      return;
     }
-  }, []);
+    const res2 = await fetch(`/api/productions/${linkedId}`);
+    if (!res2.ok) {
+      setProductionId(null);
+      setProductionData(null);
+      return;
+    }
+    const d2 = await res2.json();
+    setProductionId(d2.production.id);
+    setProductionStages(d2.stages ?? []);
+    setProductionTasks(d2.tasks ?? []);
+    setProductionEvents(d2.events ?? []);
+    setProductionData({
+      id: d2.production.id, title: d2.production.title, templateId: d2.production.templateId,
+      status: d2.production.status, projectId: d2.production.projectId,
+      script: d2.production.script ?? null, storyboard: d2.production.storyboard ?? null,
+      delivery: d2.production.delivery ?? null,
+    });
+    absorbProductionOutputs(d2.stages ?? [], d2.production.delivery ?? null);
+  }, [absorbProductionOutputs]);
 
   // Restore a conversation from the SERVER (history survives reload/devices).
   const openConversation = useCallback(async (id: string) => {
@@ -209,7 +341,8 @@ export function ProductionHome({ user, onLogout }: { user: { name: string | null
       }
       if (conv.projectId) {
         setActiveProjectId(conv.projectId);
-        void restoreProduction(conv.projectId);
+        // M46H §4 — restore the production OF THIS CONVERSATION (never by project).
+        void restoreProduction(id);
       } else {
         setProductionId(null);
         setProductionStages([]);
@@ -350,6 +483,10 @@ export function ProductionHome({ user, onLogout }: { user: { name: string | null
         return;
       }
       setActiveConversationId(d.conversationId);
+      // M46H §4 — use the REPLY's conversation id: the state update above does
+      // not affect this closure, and the production must link to the real
+      // conversation even on the very first message.
+      const replyConversationId: string | null = d.conversationId ?? activeConversationId;
       setProviderMode(d.mode ?? null);
       setMessages((m) => [
         ...m,
@@ -371,6 +508,8 @@ export function ProductionHome({ user, onLogout }: { user: { name: string | null
               // M45-P2 — footage/references attached to THIS conversation become
               // the crew's authorized sources (ownership re-validated server-side).
               sourceMediaIds: attachments.filter((x) => x.state === "ready").map((x) => x.id),
+              // M46H §4 — the production belongs to THIS conversation.
+              conversationId: replyConversationId,
             }),
           });
           const pd = await pres.json().catch(() => null);
@@ -395,23 +534,62 @@ export function ProductionHome({ user, onLogout }: { user: { name: string | null
     setProductionTasks(p.tasks);
     setProductionEvents(p.events);
     setProductionData(p.production);
+    absorbProductionOutputs(p.stages, p.production.delivery);
     if (activeProjectId) void loadRenders(activeProjectId);
   });
 
   /** Drive a crew stage through the EXISTING stage route. */
-  const stageAction = useCallback(async (stageKey: string, action: "start" | "approve" | "reject" | "skip") => {
+  const stageAction = useCallback(async (stageKey: string, action: StageAction) => {
+    // M46H §3 — a button is not complete because it sends a request: check the
+    // HTTP response, surface the API's structured error, refresh the stage list
+    // immediately, and never fake completion. busyAction is per-stage so one
+    // slow stage cannot silently block the others (duplicate clicks ARE blocked).
     if (!productionId) return;
     setBusyAction(stageKey);
+    setStageError(null);
     try {
-      await fetch(`/api/productions/${productionId}/stages/${stageKey}`, {
+      const res = await fetch(`/api/productions/${productionId}/stages/${stageKey}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ action }),
       });
+      let payload: { error?: string; message?: string } | null = null;
+      try {
+        payload = await res.json();
+      } catch {
+        payload = null;
+      }
+      if (!res.ok) {
+        const detail = payload?.error ?? `Stage action failed (HTTP ${res.status}).`;
+        setStageError(`${stageKey.replaceAll("_", " ")} · ${action}: ${detail}`);
+        return; // no fake completion — state stays as the server reported
+      }
+      setStageError(null);
+    } catch (err) {
+      setStageError(`Network error while running ${action} on ${stageKey.replaceAll("_", " ")}: ${err instanceof Error ? err.message : "connection failed"}`);
     } finally {
       setBusyAction(null);
+      // Immediate refresh — don't wait for the next poll tick.
+      try {
+        const res = await fetch(`/api/productions/${productionId}`);
+        if (res.ok) {
+          const d = await res.json();
+          setProductionStages(d.stages ?? []);
+          setProductionTasks(d.tasks ?? []);
+          setProductionEvents(d.events ?? []);
+          setProductionData({
+            id: d.production.id, title: d.production.title, templateId: d.production.templateId,
+            status: d.production.status, projectId: d.production.projectId,
+            script: d.production.script ?? null, storyboard: d.production.storyboard ?? null,
+            delivery: d.production.delivery ?? null,
+          });
+          absorbProductionOutputs(d.stages ?? [], d.production.delivery ?? null);
+        }
+      } catch {
+        // polling will catch up; the immediate refresh is best-effort
+      }
     }
-  }, [productionId]);
+  }, [productionId, absorbProductionOutputs]);
 
   /** Save a rendered deliverable into the connected local folder. */
   const saveToFolder = useCallback(async (card: RenderCard) => {
@@ -685,6 +863,11 @@ export function ProductionHome({ user, onLogout }: { user: { name: string | null
                   <ProductionCrewPanel
                     production={productionData}
                     stages={productionStages}
+                    stageError={stageError}
+                    assets={productionAssets}
+                    projectAssets={projectAssets}
+                    onAttachAsset={(r, m) => void attachAsset(r, m)}
+                    onDecideAsset={(r, d) => void decideAsset(r, d)}
                     tasks={productionTasks}
                     events={productionEvents}
                     busyAction={busyAction}
@@ -716,9 +899,21 @@ export function ProductionHome({ user, onLogout }: { user: { name: string | null
                 )}
                 {/* M45-P3 — the result of THIS production run: linked to the
                     workflow, render job, timeline revision and export id. */}
+                {productionExports.some((x) => x.failed) && (
+                  <div className="rounded-2xl border border-[#7f1d1d] bg-[#1a0d0d] p-3.5">
+                    <p className="bean-label text-[9px] text-[#f87171]">RENDER FAILED FOR THIS PRODUCTION</p>
+                    <p className="mt-1 text-[11px] text-[#d8d8d2]">{productionExports.find((x) => x.failed)?.error ?? "The render job failed — no output was produced."}</p>
+                    <p className="mt-1 text-[10px] text-[#8f8f8a]">Fix the cause (usually a stage input or provider) and retry FINAL_RENDER from the crew panel. Earlier successful outputs are never overwritten.</p>
+                  </div>
+                )}
                 {productionData && productionData.status === "COMPLETED" && productionData.delivery?.artifacts?.length ? (
                   <div className="rounded-2xl border border-[#d4a017] bg-gradient-to-b from-[#1a1508] to-[#0d0d0c] p-3.5">
-                    <p className="bean-label text-[9px] text-[#d4a017]">RESULT OF THIS PRODUCTION · VERSION {productionData.delivery.artifacts[0].versionNumber ?? 1}</p>
+                    <p className="bean-label text-[9px] text-[#d4a017]">RESULT OF THIS PRODUCTION · VERSION {productionExports[0]?.version ?? productionData.delivery.artifacts[0].versionNumber ?? 1}{productionExports.length > 1 ? ` · ${productionExports.length} renders for this production` : ""}</p>
+                    {productionExports.length > 1 && (
+                      <button onClick={() => setCompareOpen((o) => !o)} className="ml-2 rounded border border-[#2a2a2a] px-2 py-0.5 text-[10px] text-[#d4a017] hover:border-[#d4a017]">
+                        {compareOpen ? "Hide version compare" : "Compare versions"}
+                      </button>
+                    )}
                     <p className="mt-1 text-[10px] text-[#8f8f8a]">
                       workflow {productionData.id.slice(-6)} · render job {String(productionData.delivery.artifacts[0].jobId ?? "").slice(-8) || "durable queue"} · timeline v{String((productionTasks.find((t) => t.stageKey === "TIMELINE_ASSEMBLY")?.output as { newVersion?: number } | null)?.newVersion ?? "?")}
                     </p>
@@ -732,6 +927,16 @@ export function ProductionHome({ user, onLogout }: { user: { name: string | null
                         </div>
                       ) : null
                     ))}
+                    {compareOpen && productionExports.filter((x) => !x.failed).length > 1 && (
+                      <div className="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-2">
+                        {productionExports.filter((x) => !x.failed).slice(0, 2).map((x) => (
+                          <div key={x.exportId}>
+                            <p className="mb-1 text-[9px] text-[#8f8f8a]">Version {x.version}</p>
+                            <video controls preload="metadata" src={`/api/exports/${x.exportId}/file`} className="max-h-[180px] w-full bg-black" />
+                          </div>
+                        ))}
+                      </div>
+                    )}
                   </div>
                 ) : null}
                 {/* Real rendered outputs for this production (M45-D) */}
@@ -829,19 +1034,28 @@ export function ProductionHome({ user, onLogout }: { user: { name: string | null
                       ＋ Library
                     </button>
                     {attachments.map((a) => (
-                      <span key={a.id} className={`flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[10px] ${a.state === "ready" ? "border-[#1e3a26] bg-[#0d1a10] text-[#4cc47f]" : a.state === "failed" ? "border-[#3b1515] bg-[#1a0d0d] text-[#f87171]" : "border-[#2a2a2a] bg-[#111110] text-[#a8a8a0]"}`}>
-                        {a.previewUrl ? (
-                          a.previewUrl.startsWith("blob:") && a.name.match(/\.(mp4|mov|webm|mkv|m4v)$/i)
-                            ? <video src={a.previewUrl} muted className="h-5 w-8 rounded object-cover" />
-                            : <img src={a.previewUrl} alt="" className="h-5 w-8 rounded object-cover" />
-                        ) : null}
-                        {a.state === "uploading" && <span className="tabular-nums">{a.progress ?? 0}%</span>}
-                        {a.state === "uploading" && !a.progress && <Loader2 className="h-3 w-3 animate-spin" />}
-                        {a.state === "failed" && <AlertCircle className="h-3 w-3" />}
-                        {a.state === "ready" && <CheckCircle2 className="h-3 w-3" />}
-                        <span className="max-w-[160px] truncate">{a.name}</span>
-                        <button onClick={() => { if (a.previewUrl) URL.revokeObjectURL(a.previewUrl); setAttachments((arr) => arr.filter((x) => x.id !== a.id)); }} aria-label={`Remove ${a.name}`} className="text-current opacity-60 hover:opacity-100"><X className="h-3 w-3" /></button>
+                      a.state === "ready" ? (
+                      <span key={a.id} className="flex items-center gap-1 rounded-full border border-[#2a2a2a] bg-[#111110] px-2 py-1">
+                        <span className="max-w-[110px] truncate text-[10px] text-[#d8d8d2]">{a.name}</span>
+                        {/* M46H §1.9 — the user chooses the production role; the id
+                            (never the filename) is the identity that travels. */}
+                        <select
+                          className="rounded border border-[#2a2a2a] bg-[#0d0d0c] px-1 py-0 text-[9px] text-[#d4a017]"
+                          value={a.role ?? ""}
+                          onChange={(e) => setAttachments((arr) => arr.map((x) => (x.id === a.id ? { ...x, role: e.target.value || null } : x)))}
+                        >
+                          <option value="SOURCE_FOOTAGE">raw source</option>
+                          <option value="REFERENCE">reference</option>
+                          <option value="REFERENCE_IMAGE">image ref</option>
+                          <option value="AUDIO_MUSIC">music</option>
+                        </select>
+                        <button onClick={() => setAttachments((arr) => arr.filter((x) => x.id !== a.id))} className="text-[#8f8f8a] hover:text-[#f87171]">×</button>
                       </span>
+                      ) : (
+                      <span key={a.id} className="rounded-full border border-[#2a2a2a] bg-[#111110] px-2 py-1 text-[10px] text-[#d8d8d2]">
+                        {a.name}{a.state === "failed" ? " · failed" : ` · ${a.progress ?? 0}%`}
+                      </span>
+                      )
                     ))}
                   </div>
                 )}
@@ -899,7 +1113,7 @@ export function ProductionHome({ user, onLogout }: { user: { name: string | null
               {projects.map((p) => (
                 <li key={p.id}>
                   <button
-                    onClick={() => { setActiveProjectId(p.id); setSection("chat"); void restoreProduction(p.id); }}
+                    onClick={() => { setActiveProjectId(p.id); setSection("chat"); void restoreProduction(""); }}
                     className={`flex w-full items-center justify-between rounded-lg border px-3.5 py-2.5 text-left ${activeProjectId === p.id ? "border-[#d4a017]/50 bg-[#d4a017]/5" : "border-[#1c1c1a] bg-[#0d0d0c] hover:border-[#2e2e2c]"}`}
                   >
                     <span className="truncate text-sm text-[#e6e6e0]">{p.name}</span>

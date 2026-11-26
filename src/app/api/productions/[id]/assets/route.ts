@@ -28,6 +28,12 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
     if (!row || row.productionId !== id) return NextResponse.json({ error: "Asset row not found." }, { status: 404 });
     const media = await db.mediaAsset.findUnique({ where: { id: mediaAssetId } });
     if (!media || media.userId !== user.id) return NextResponse.json({ error: "Media asset not found or not owned by the caller." }, { status: 404 });
+    // M46H §1 — an asset from ANOTHER project must never silently become this
+    // production's material: reject on project mismatch (unbound assets that
+    // the user owns are still attachable — the explicit attach IS the binding).
+    if (media.projectId && production.projectId && media.projectId !== production.projectId) {
+      return NextResponse.json({ error: "That media belongs to a different project — attach it inside its own project." }, { status: 409 });
+    }
     await db.productionAsset.update({ where: { id: row.id }, data: { mediaAssetId, status: "READY", licenseState: "USER_CONFIRMED", costUnknown: false, costCents: 0, provenanceJson: JSON.stringify({ attachedAt: new Date().toISOString(), source: "user-media", originalName: media.originalName }) } });
     await logEvent(id, "asset.attached", undefined, { assetRowId: row.id, mediaAssetId });
     return NextResponse.json({ ok: true });
