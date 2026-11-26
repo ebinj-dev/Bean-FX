@@ -88,6 +88,17 @@ type UploadIdentity = {
   notes: string | null;
 };
 
+/** M45-P2 — header decoding for project/role association headers. */
+function parseIdentityHeader(req: NextRequest, name: string): string {
+  const raw = (req.headers.get(name) ?? "").trim();
+  if (!raw) return "";
+  try {
+    return decodeURIComponent(raw);
+  } catch {
+    return raw;
+  }
+}
+
 /** Shared request-identity parsing: header decoding + name/extension/type rules. */
 function parseIdentity(req: NextRequest): { identity: UploadIdentity } | { error: NextResponse } {
   // Header values are ISO-8859-1 on the wire: the client percent-encodes the
@@ -186,8 +197,11 @@ async function finalizeUpload(
   userId: string,
   identity: UploadIdentity,
   tmpPath: string,
-  uploadId: string | null
+  uploadId: string | null,
+  projectContext?: { projectId: string | null; role: string | null }
 ): Promise<NextResponse> {
+  const projectId = projectContext?.projectId ?? null;
+  const projectRole = projectContext?.role ?? null;
   // Subtitle references (SRT) are parsed, not probed: a valid cue list IS the
   // validation. Original text and timestamps are preserved verbatim.
   if (identity.kind === "SUBTITLE") {
@@ -207,6 +221,7 @@ async function finalizeUpload(
     const asset = await db.mediaAsset.create({
       data: {
         userId,
+        projectId: projectId || null,
         originalName: identity.originalName.slice(0, 200),
         storagePath: finalPath,
         kind: "SUBTITLE",
@@ -263,6 +278,7 @@ async function finalizeUpload(
     const asset = await db.mediaAsset.create({
       data: {
         userId,
+        projectId: projectId || null,
         originalName: identity.originalName.slice(0, 200),
         storagePath: existing.storagePath,
         kind: existing.kind,
@@ -290,7 +306,7 @@ async function finalizeUpload(
         proxyPath: existing.proxyPath,
         proxySizeBytes: existing.proxySizeBytes,
         proxyDurationSec: existing.proxyDurationSec,
-        role: identity.role,
+        role: projectRole ?? identity.role,
         notes: identity.notes,
       },
     });
@@ -332,6 +348,7 @@ async function finalizeUpload(
   const asset = await db.mediaAsset.create({
     data: {
       userId,
+      projectId: projectId || null,
       originalName: identity.originalName.slice(0, 200),
       storagePath: finalPath,
       kind: identity.kind,
@@ -340,7 +357,7 @@ async function finalizeUpload(
       sha256: sha,
       probeStatus: "PENDING",
       proxyStatus: "NONE",
-      role: identity.role,
+      role: projectRole ?? identity.role,
       notes: identity.notes,
     },
   });
@@ -590,7 +607,7 @@ async function handleChunkedUpload(req: NextRequest, user: { id: string }): Prom
       }
     }
 
-    const response = await finalizeUpload(user.id, identity, assembledPath, uploadId);
+    const response = await finalizeUpload(user.id, identity, assembledPath, uploadId, { projectId: null, role: null });
     await fs.rm(partsDir, { recursive: true, force: true }).catch(() => undefined);
     return response;
   } catch (err) {
@@ -611,12 +628,15 @@ async function handleChunkedUpload(req: NextRequest, user: { id: string }): Prom
   }
 }
 
-export async function GET() {
+export async function GET(req: NextRequest) {
+  // M45-P2 — optional project-scoped listing (ownership validated).
+  const qProjectId = (req.nextUrl.searchParams.get("projectId") ?? "").trim();
+
   const user = await getCurrentUser();
   if (!user) return jsonError("Authentication required.", 401);
 
   const assets = await db.mediaAsset.findMany({
-    where: { userId: user.id },
+    where: qProjectId ? { userId: user.id, projectId: qProjectId } : { userId: user.id },
     orderBy: { createdAt: "desc" },
     take: 200,
   });
@@ -629,6 +649,8 @@ export async function GET() {
 
   return NextResponse.json({
     media: assets.map((a, i) => ({
+      projectId: a.projectId,
+      role: a.role,
       id: a.id,
       originalName: a.originalName,
       kind: a.kind,
@@ -645,7 +667,6 @@ export async function GET() {
       probeStatus: a.probeStatus,
       proxyStatus: a.proxyStatus,
       thumbnailUrl: posterExists[i] ? `/api/media/${a.id}/thumbnail` : null,
-      role: a.role,
       notes: a.notes,
       createdAt: a.createdAt.toISOString(),
     })),
@@ -657,6 +678,20 @@ export async function POST(req: NextRequest) {
   if (!user) {
     await discardBody(req);
     return jsonError("Authentication required.", 401);
+  }
+  // M45-P2 — optional project association: uploads can be bound to the
+  // caller's project (ownership validated server-side) with a role that keeps
+  // source footage / references / audio / graphics / captions distinguishable.
+  const projectId = parseIdentityHeader(req, "x-project-id");
+  let projectRole: string | null = null;
+  if (projectId) {
+    const project = await db.project.findUnique({ where: { id: projectId } });
+    if (!project || project.userId !== user.id) {
+      return jsonError("Project not found or not owned by the caller.", 403);
+    }
+    const roleHeader = parseIdentityHeader(req, "x-asset-role").toUpperCase();
+    const allowed = new Set(["SOURCE_FOOTAGE", "REFERENCE", "REFERENCE_IMAGE", "AUDIO_MUSIC", "GRAPHIC"]);
+    projectRole = allowed.has(roleHeader) ? roleHeader : null;
   }
 
   const chunkTotalHeader = req.headers.get("x-chunk-total");
@@ -712,7 +747,7 @@ export async function POST(req: NextRequest) {
       throw new Error(`Upload incomplete: received ${stat.size} of ${contentLength} bytes.`);
     }
 
-    return await finalizeUpload(user.id, identity, tmpPath, null);
+    return await finalizeUpload(user.id, identity, tmpPath, null, { projectId, role: projectRole });
   } catch (err) {
     await removeFileQuiet(tmpPath);
     const message = err instanceof Error ? err.message : "Upload failed.";

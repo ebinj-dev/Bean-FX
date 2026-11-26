@@ -61,7 +61,7 @@ export function classifyIntent(message: string): RiisheIntent {
 
 /** M44 — anchored detection for DIRECT canonical-command phrases. */
 export function isDirectCommandPhrase(message: string): boolean {
-  return /^(?:please\s+)?(?:add|create|place|put|set)\s+(?:a\s+|an\s+|the\s+)?(?:new\s+)?marker\b/i.test(message)
+  return /^(?:please\s+)?(?:add|create|place|put|set)\s+(?:a\s+|an\s+|the\s+)?(?:new\s+)?(?:timeline\s+)?marker\b/i.test(message)
     || /^(?:please\s+)?(?:mute|unmute|solo|un-?solo)\b/i.test(message);
 }
 
@@ -79,9 +79,9 @@ export function parseDirectCommand(
   fps: number,
   tracks: Array<{ id: string; kind: string; name: string }>,
 ): DirectCommandParse {
-  const markerM = message.match(/^(?:please\s+)?(?:add|create|place|put|set)\s+(?:a\s+|an\s+|the\s+)?(?:new\s+)?marker\b/i);
+  const markerM = message.match(/^(?:please\s+)?(?:add|create|place|put|set)\s+(?:a\s+|an\s+|the\s+)?(?:new\s+)?(?:timeline\s+)?marker\b/i);
   if (markerM) {
-    const rest = message.slice(markerM[0].length);
+    const rest = message.slice(markerM[0].length).replace(/^\s+timeline\s+/i, " ");
     const labelM = rest.match(/\b(?:named|called|label(?:ed|led)?)\s+["'“]?([^"'”]+?)["'”]?(?:\s+(?:at|on)\b|\s*$)/i);
     const frameM = rest.match(/\bframe\s+(\d{1,7})\b/i);
     const secM = frameM ? null : rest.match(/\bat\s+(\d{1,7})\s*(?:s\b|sec\b|secs\b|seconds?\b)/i);

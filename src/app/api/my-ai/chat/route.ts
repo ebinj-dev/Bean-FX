@@ -21,6 +21,12 @@ const Schema = z.object({
   projectId: z.string().max(64).nullable().default(null),
   conversationId: z.string().max(64).nullable().default(null),
   message: z.string().min(1).max(2000),
+  // M45-P2 — explicit authorized asset references (ownership validated below;
+  // persisted on the user message so the conversation keeps its attachments).
+  attachments: z.array(z.object({
+    mediaAssetId: z.string().max(64),
+    role: z.string().max(32).optional(),
+  })).max(16).optional().default([]),
 });
 
 export const runtime = "nodejs";
@@ -73,8 +79,23 @@ export async function POST(req: NextRequest) {
     });
     convoId = convo.id;
   }
+  // M45-P2 — validate the referenced assets (ownership; project match when the
+  // message is project-scoped) and persist them on the user message so the
+  // conversation keeps real asset references across reloads and devices.
+  const assetRefs: Array<{ mediaAssetId: string; name: string; kind: string; role: string | null }> = [];
+  for (const a of parsed.data.attachments) {
+    const asset = await db.mediaAsset.findUnique({ where: { id: a.mediaAssetId } });
+    if (!asset || asset.userId !== user.id) return badRequest(`Referenced asset ${a.mediaAssetId} not found or not owned.`);
+    if (parsed.data.projectId && asset.projectId && asset.projectId !== parsed.data.projectId) {
+      return badRequest(`Asset ${asset.originalName} belongs to a different project — attach it to the active project instead.`);
+    }
+    assetRefs.push({ mediaAssetId: asset.id, name: asset.originalName, kind: asset.kind, role: a.role ?? asset.role ?? null });
+  }
+  const userMeta: Record<string, unknown> = {};
+  if (ctxSummary) userMeta.contextProvided = true;
+  if (assetRefs.length > 0) userMeta.assetRefs = assetRefs;
   await db.conversationMessage.create({
-    data: { conversationId: convoId, role: "user", content: parsed.data.message, metaJson: ctxSummary ? JSON.stringify({ contextProvided: true }) : null },
+    data: { conversationId: convoId, role: "user", content: parsed.data.message, metaJson: Object.keys(userMeta).length > 0 ? JSON.stringify(userMeta) : null },
   });
 
   // M44 — chat → structured plan loop. Detection is DETERMINISTIC so a

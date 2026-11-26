@@ -9,6 +9,7 @@ import { getCurrentUser } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { canTransition, type StageState } from "@/lib/production/engine";
 import { logEvent, startStage, ProductionError } from "@/lib/production/runner";
+import { beginStageTask, finishStageTask } from "@/lib/production/tasks";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -27,7 +28,18 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
   try {
     switch (action) {
       case "start": {
-        const r = await startStage(id, key, user.id);
+        // M45-P1 — every real stage execution is recorded as a crew task with
+        // its inputs, responsible agent profile and honest result.
+        const taskInput = { briefTextLength: (production.briefJson ?? "").length, projectId: production.projectId };
+        const taskId = await beginStageTask(id, key, taskInput).catch(() => null);
+        let r: { state: string; message: string };
+        try {
+          r = await startStage(id, key, user.id);
+        } catch (err) {
+          if (taskId) await finishStageTask(taskId, "FAILED", null, err instanceof Error ? err.message.slice(0, 300) : "stage failed");
+          throw err;
+        }
+        if (taskId) await finishStageTask(taskId, r.state === "SUCCEEDED" ? "SUCCEEDED" : r.state === "RUNNING" ? "RUNNING" : "PENDING", { state: r.state, message: r.message });
         return NextResponse.json(r);
       }
       case "approve": {

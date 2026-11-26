@@ -16,7 +16,7 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 async function loadOwned(id: string, userId: string) {
-  const production = await db.production.findUnique({ where: { id }, include: { stages: { orderBy: { order: "asc" } }, decisions: { orderBy: { createdAt: "asc" } }, assets: { orderBy: { createdAt: "asc" } }, events: { orderBy: { createdAt: "desc" }, take: 100 } } });
+  const production = await db.production.findUnique({ where: { id }, include: { stages: { orderBy: { order: "asc" } }, decisions: { orderBy: { createdAt: "asc" } }, assets: { orderBy: { createdAt: "asc" } }, events: { orderBy: { createdAt: "desc" }, take: 100 }, tasks: { orderBy: { seq: "asc" } } } });
   if (!production || production.userId !== userId) return null;
   return production;
 }
@@ -57,6 +57,7 @@ export async function GET(_req: NextRequest, ctx: { params: Promise<{ id: string
     },
     stages: production.stages.map((s) => ({ key: s.key, state: s.state, order: s.order, jobId: s.jobId, startedAt: s.startedAt, completedAt: s.completedAt, output: s.outputJson ? JSON.parse(s.outputJson) : null, error: s.error, costs: stageCosts.find((c) => c.key === s.key) ?? null })),
     decisions: production.decisions.map((d) => ({ id: d.id, kind: d.kind, value: JSON.parse(d.valueJson), createdAt: d.createdAt })),
+    tasks: production.tasks.map((t) => ({ id: t.id, stageKey: t.stageKey, seq: t.seq, agent: t.agent, roleLabel: t.roleLabel, tool: t.tool, status: t.status, criteria: t.criteria, error: t.error, jobId: t.jobId, startedAt: t.startedAt, completedAt: t.completedAt, input: t.inputJson ? JSON.parse(t.inputJson) : null, output: t.outputJson ? JSON.parse(t.outputJson) : null })),
     assets: production.assets.map((a) => ({ id: a.id, sceneKey: a.sceneKey, category: a.category, description: a.description, sourceType: a.sourceType, provider: a.provider, licenseState: a.licenseState, attribution: a.attribution, status: a.status, costUnknown: a.costUnknown, costCents: a.costCents, mediaAssetId: a.mediaAssetId })),
     events: production.events.map((e) => ({ id: e.id, kind: e.kind, stageKey: e.stageKey, detail: e.detailJson ? JSON.parse(e.detailJson) : null, createdAt: e.createdAt })),
     brief, concept, script, storyboard,

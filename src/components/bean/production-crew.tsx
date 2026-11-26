@@ -13,6 +13,13 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { AlertCircle, CheckCircle2, ChevronRight, CircleDashed, Clock, Loader2, Users } from "lucide-react";
 
+export interface TaskLite {
+  id: string; stageKey: string; seq: number; agent: string; roleLabel: string; tool: string;
+  status: string; criteria: string | null; error: string | null; jobId: string | null;
+  startedAt: string | null; completedAt: string | null;
+  input: Record<string, unknown> | null; output: Record<string, unknown> | null;
+}
+export interface EventLite { id: string; kind: string; stageKey: string | null; createdAt: string; detail?: Record<string, unknown> | null }
 export interface StageLite {
   key: string;
   state: string;
@@ -21,6 +28,7 @@ export interface StageLite {
   error: string | null;
   output: Record<string, unknown> | null;
 }
+export interface DeliveryArtifact { exportFileId?: string; sizeBytes?: number; durationSec?: number; storagePath?: string; versionNumber?: number; jobId?: string }
 export interface ProductionLite {
   id: string;
   title: string;
@@ -29,6 +37,7 @@ export interface ProductionLite {
   projectId: string | null;
   script: { beats?: string[]; hook?: string; cta?: string } | null;
   storyboard: { scenes?: Array<{ key?: string; description?: string; shot?: string }> } | null;
+  delivery: { deliveredAt?: string; artifacts?: DeliveryArtifact[] } | null;
 }
 
 /** Which canonical agent leads each stage — role PROFILES, not new identities. */
@@ -78,17 +87,56 @@ function StateBadge({ state }: { state: string }) {
 export function ProductionCrewPanel({
   production,
   stages,
+  tasks,
+  events,
   busyAction,
   onAction,
   onOpenEditor,
 }: {
   production: ProductionLite;
   stages: StageLite[];
+  tasks: TaskLite[];
+  events: EventLite[];
   busyAction: string | null;
   onAction: (stageKey: string, action: "start" | "approve" | "reject" | "skip") => void;
   onOpenEditor: () => void;
 }) {
   const ordered = [...stages].sort((a, b) => a.order - b.order);
+  const [logOpen, setLogOpen] = useState(false);
+  const [intelOpen, setIntelOpen] = useState(false);
+  const [intel, setIntel] = useState<{ coverage: Array<{ scene: string; covered: boolean }>; versions: number; lastVersion: number; traced: Array<{ from: string; via: string; to: string }> } | null>(null);
+  useEffect(() => {
+    // M45 intelligence foundations — computed from REAL data only:
+    // coverage = storyboard scenes vs actual timeline clips; change map =
+    // timeline version history; traceability = bound assets → render artifact.
+    let alive = true;
+    const run = async () => {
+      if (!production.projectId) return;
+      try {
+        const t = await fetch(`/api/editor/projects/${production.projectId}/timeline`).then((r) => (r.ok ? r.json() : null));
+        const v = await fetch(`/api/editor/projects/${production.projectId}/timeline/versions`).then((r) => (r.ok ? r.json() : null));
+        if (!alive) return;
+        const clips: Array<{ label?: string; name?: string }> = (t && (t.sequence?.clips ?? [])) || [];
+        const scenes = production.storyboard?.scenes ?? [];
+        const coverage = scenes.map((sc) => {
+          const key = (sc.key ?? "").toLowerCase();
+          return { scene: sc.key ?? "scene", covered: clips.some((c) => `${c.label ?? ""} ${c.name ?? ""}`.toLowerCase().includes(key)) };
+        });
+        const versionList: Array<{ versionNumber?: number }> = (v && (v.versions ?? v)) || [];
+        const bound = tasks.filter((x) => x.stageKey === "ASSET_PLANNING" || x.stageKey === "TIMELINE_ASSEMBLY");
+        const artifact = production.delivery?.artifacts?.[0];
+        const traced = [
+          ...bound.map((x) => ({ from: x.stageKey, via: x.tool, to: x.output ? "timeline revision" : "pending" })),
+          ...(artifact ? [{ from: `timeline v${artifact.versionNumber ?? "?"}`, via: `render job ${String(artifact.jobId ?? "").slice(-6) || "durable"}`, to: `export ${String(artifact.exportFileId ?? "").slice(-8)}` }] : []),
+        ];
+        setIntel({ coverage, versions: versionList.length, lastVersion: versionList[0]?.versionNumber ?? 0, traced });
+      } catch {
+        // intelligence stays null — never fabricated
+      }
+    };
+    void run();
+    return () => { alive = false; };
+  }, [production.projectId, production.storyboard, production.delivery, tasks]);
   const actionable = ordered.find((s) => s.state === "AWAITING_APPROVAL");
   const startable = ordered.find((s) => s.state === "PENDING" && (!actionable || s === actionable));
   const doneCount = ordered.filter((s) => s.state === "SUCCEEDED" || s.state === "SKIPPED").length;
@@ -164,6 +212,52 @@ export function ProductionCrewPanel({
             {actionable.key.replaceAll("_", " ")} is awaiting your approval — RIISHE pauses the crew here.
           </p>
         )}
+        {/* M45-P1 — the latest real task per stage: agent · tool · status · error */}
+        {tasks.length > 0 && (
+          <details className="mt-2 rounded-lg border border-[#1c1c1a] bg-[#101010] px-2.5 py-1.5">
+            <summary className="cursor-pointer text-[10px] font-bold uppercase tracking-wider text-[#8f8f8a]">Crew tasks ({tasks.length} executed)</summary>
+            <ul className="mt-1.5 flex max-h-40 flex-col gap-1 overflow-y-auto">
+              {tasks.slice().reverse().map((t) => (
+                <li key={t.id} className="text-[10px] leading-relaxed">
+                  <span className={t.status === "SUCCEEDED" ? "text-[#4cc47f]" : t.status === "FAILED" ? "text-[#f87171]" : "text-[#d4a017]"}>[{t.status}]</span>{" "}
+                  <span className="text-[#c8c8c2]">{t.stageKey.replaceAll("_", " ")}</span>
+                  <span className="text-[#6a6a64]"> · {t.agent} · {t.tool}</span>
+                  {t.error && <span className="text-[#f87171]"> · {t.error.slice(0, 90)}</span>}
+                </li>
+              ))}
+            </ul>
+          </details>
+        )}
+        {/* M45 — expandable real activity log (ProductionEvent stream) */}
+        {events.length > 0 && (
+          <details className="mt-1.5 rounded-lg border border-[#1c1c1a] bg-[#101010] px-2.5 py-1.5">
+            <summary className="cursor-pointer text-[10px] font-bold uppercase tracking-wider text-[#8f8f8a]" onClick={() => setLogOpen((o) => !o)}>Activity log ({events.length} events)</summary>
+            {logOpen && (
+              <ul className="mt-1.5 flex max-h-40 flex-col gap-0.5 overflow-y-auto">
+                {events.slice(0, 30).map((e) => (
+                  <li key={e.id} className="text-[9px] text-[#8f8f8a]">
+                    <span className="text-[#55555a]">{new Date(e.createdAt).toLocaleTimeString()}</span> <span className="text-[#c8c8c2]">{e.kind}</span>{e.stageKey ? <span className="text-[#55555a]"> · {e.stageKey}</span> : ""}
+                  </li>
+                ))}
+              </ul>
+            )}
+          </details>
+        )}
+        {/* M45 intelligence foundations — real computed data, never panels of air */}
+        {intel && (
+          <details className="mt-1.5 rounded-lg border border-[#1c1c1a] bg-[#101010] px-2.5 py-1.5">
+            <summary className="cursor-pointer text-[10px] font-bold uppercase tracking-wider text-[#8f8f8a]" onClick={() => setIntelOpen((o) => !o)}>Production intelligence</summary>
+            {intelOpen && (
+              <div className="mt-1.5 flex flex-col gap-1.5 text-[10px] leading-relaxed">
+                <p className="text-[#c8c8c2]">Shot coverage radar: {intel.coverage.filter((c) => c.covered).length}/{intel.coverage.length || 0} storyboard scenes present in the timeline{intel.coverage.some((c) => !c.covered) ? ` — missing: ${intel.coverage.filter((c) => !c.covered).map((c) => c.scene).join(", ")}` : ""}</p>
+                <p className="text-[#c8c8c2]">Timeline change map: {intel.versions} revision(s) recorded; current v{intel.lastVersion}</p>
+                {intel.traced.length > 0 && (
+                  <p className="text-[#c8c8c2]">Source-to-final trace: {intel.traced.map((t) => `${t.from} → ${t.to}`).join(" → ")}</p>
+                )}
+              </div>
+            )}
+          </details>
+        )}
         <div className="mt-2 flex justify-end">
           <button onClick={onOpenEditor} className="rounded border border-[#2a2a2a] px-2 py-0.5 text-[10px] text-[#d8d8d2] hover:border-[#d4a017] hover:text-[#d4a017]">
             Open Editor
@@ -177,7 +271,7 @@ export function ProductionCrewPanel({
 /** Poll the production detail endpoint while any stage is in flight. */
 export function useProductionPolling(
   productionId: string | null,
-  onTick: (p: { stages: StageLite[]; production: ProductionLite }) => void,
+  onTick: (p: { stages: StageLite[]; tasks: TaskLite[]; events: EventLite[]; production: ProductionLite }) => void,
   intervalMs = 4000,
 ): void {
   const cbRef = useRef(onTick);
@@ -195,6 +289,8 @@ export function useProductionPolling(
         if (!alive) return;
         cbRef.current({
           stages: d.stages ?? [],
+          tasks: d.tasks ?? [],
+          events: d.events ?? [],
           production: {
             id: d.production.id,
             title: d.production.title,
@@ -203,6 +299,7 @@ export function useProductionPolling(
             projectId: d.production.projectId,
             script: d.production.script ?? null,
             storyboard: d.production.storyboard ?? null,
+            delivery: d.production.delivery ?? null,
           },
         });
       } catch {
