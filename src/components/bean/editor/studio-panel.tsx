@@ -258,11 +258,12 @@ export function StudioPanel({ onProjectCreated }: { onProjectCreated?: (projectI
 
   return (
     <div className="rounded-lg border border-[#2a2a2a] bg-[#0b0b0a] p-3">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col gap-1.5">
         <h2 className={`${label} flex items-center gap-1.5`}>
           <Clapperboard className="h-3 w-3 text-[#d4a017]" /> SOCIAL VIDEO STUDIO
         </h2>
-        <div className="flex gap-1">
+        {/* Tabs wrap instead of clipping — M44 audit: VOICE/ASSEMBLE were cut off at 300px dock width. */}
+        <div className="flex flex-wrap gap-1">
           {(["create", "script", "storyboard", "voice", "assemble"] as Tab[]).map((t) => (
             <button key={t} type="button" onClick={() => setTab(t)} className={`rounded px-1.5 py-0.5 text-[9px] ${tab === t ? "bg-[#d4a017]/15 text-[#d4a017]" : "text-[#7a7a76] hover:text-[#a0a09a]"}`}>
               {t.toUpperCase()}
@@ -275,7 +276,8 @@ export function StudioPanel({ onProjectCreated }: { onProjectCreated?: (projectI
       {tab === "create" && (
         <div className="mt-2 space-y-1.5">
           <input value={topic} onChange={(e) => setTopic(e.target.value.slice(0, 300))} placeholder="Video topic or keywords…" className={input} />
-          <div className="flex gap-1">
+          {/* Rows wrap with min-w-0 children so nothing clips at any dock width (M44 audit). */}
+          <div className="flex flex-wrap gap-1 [&>*]:min-w-[104px] [&>*]:flex-1">
             <select value={language} onChange={(e) => setLanguage(e.target.value as "en" | "ta")} className={input}>
               <option value="en">English</option>
               <option value="ta">Tamil (தமிழ்)</option>
@@ -288,7 +290,7 @@ export function StudioPanel({ onProjectCreated }: { onProjectCreated?: (projectI
               <option value="square_social">Square social (1:1)</option>
             </select>
           </div>
-          <div className="flex gap-1">
+          <div className="flex flex-wrap gap-1 [&>*]:min-w-[88px] [&>*]:flex-1">
             <input value={durationSec === 0 ? "" : String(durationSec)} onChange={(e) => setDurationSec(Math.max(15, Math.min(300, Number(e.target.value) || 0)))} placeholder="Duration (s)" className={input} />
             <input value={audience} onChange={(e) => setAudience(e.target.value.slice(0, 200))} placeholder="Target audience" className={input} />
             <input value={tone} onChange={(e) => setTone(e.target.value.slice(0, 120))} placeholder="Tone" className={input} />

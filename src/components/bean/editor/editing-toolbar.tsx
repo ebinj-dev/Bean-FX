@@ -27,15 +27,19 @@ export function EditingToolbar({
   onToolChange,
   snap,
   onSnapChange,
+  visibleTools,
 }: {
   activeTool: EditToolId;
   onToolChange: (tool: EditToolId) => void;
   snap: boolean;
   onSnapChange: (snap: boolean) => void;
+  /** M44 — subset of tools to render (Essentials workspace); undefined renders every tool (Pro). */
+  visibleTools?: EditToolId[];
 }) {
+  const tools = visibleTools ? EDIT_TOOLS.filter((tool) => visibleTools.includes(tool.id)) : EDIT_TOOLS;
   return (
     <div className="flex items-center gap-1 border-b border-[#2a2a2a] bg-[#0d0d0c] px-2 py-1" role="toolbar" aria-label="Editing tools">
-      {EDIT_TOOLS.map((tool) => {
+      {tools.map((tool) => {
         const Icon = TOOL_ICONS[tool.id];
         const active = activeTool === tool.id;
         return (
