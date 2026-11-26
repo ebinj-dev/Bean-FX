@@ -18,6 +18,7 @@ import {
   Music, Paperclip, Play, RefreshCw, Search, Send, Settings, Sparkles, Users, X, CheckCircle2, AlertCircle,
 } from "lucide-react";
 import { BeanLogo } from "@/components/bean/logo";
+import { ProductionCrewPanel, useProductionPolling, type ProductionLite, type StageLite } from "@/components/bean/production-crew";
 import {
   connectAndCreate, reconnect, disconnect, status as folderStatus, verifyFiles, saveDeliverable,
   saveAssetFile, isSupported, type LocalFolderStatus,
@@ -35,7 +36,8 @@ interface AssetLite {
 }
 interface RenderCard {
   exportId: string; filename: string; format: string; sizeBytes: number | null;
-  durationSec: number | null; createdAt: string; params?: { projectId?: string | null } | null;
+  durationSec: number | null; createdAt: string;
+  params?: { projectId?: string | null; width?: number | null; height?: number | null; fps?: string | number | null } | null;
 }
 interface CrewMember { name: string; role: string; blurb: string }
 
@@ -77,7 +79,16 @@ export function ProductionHome({ user, onLogout }: { user: { name: string | null
   const [renders, setRenders] = useState<RenderCard[]>([]);
 
   // Attachments
-  const [attachments, setAttachments] = useState<Array<{ id: string; name: string; state: "uploading" | "ready" | "failed"; kind?: string }>>([]);
+  const [attachments, setAttachments] = useState<Array<{ id: string; name: string; state: "uploading" | "ready" | "failed"; kind?: string; progress?: number; previewUrl?: string | null }>>([]);
+
+  // M45-D — production crew (existing durable pipeline) + honest model registry + version compare
+  const [productionId, setProductionId] = useState<string | null>(null);
+  const [productionStages, setProductionStages] = useState<StageLite[]>([]);
+  const [productionData, setProductionData] = useState<ProductionLite | null>(null);
+  const [busyAction, setBusyAction] = useState<string | null>(null);
+  const [modelRegistry, setModelRegistry] = useState<Array<{ id?: string; model?: string; provider?: string; ready?: boolean; detail?: string }> | null>(null);
+  const [registryOpen, setRegistryOpen] = useState(false);
+  const [compareIds, setCompareIds] = useState<string[]>([]);
 
   // Local folder
   const [folder, setFolder] = useState<LocalFolderStatus | null>(null);
@@ -118,7 +129,8 @@ export function ProductionHome({ user, onLogout }: { user: { name: string | null
     const res = await fetch("/api/exports?kind=TIMELINE_RENDER");
     if (res.ok) {
       const d = await res.json();
-      const all = (d.exports ?? []) as RenderCard[];
+      // The exports list returns { id, ... } — normalize to the card's exportId.
+      const all = (d.exports ?? []).map((e: { id: string } & RenderCard) => ({ ...e, exportId: e.exportId ?? e.id }));
       setRenders(all.filter((r) => r.params?.projectId === projectId));
     }
   }, []);
@@ -127,16 +139,42 @@ export function ProductionHome({ user, onLogout }: { user: { name: string | null
     setFolder(await folderStatus());
   }, []);
 
+  // M45-C — the honest model registry (GET /api/ai/models): real providers,
+  // real readiness. The chat provider is configured server-side; the registry
+  // is shown as availability status, never as a fake selector.
+  const loadModels = useCallback(async () => {
+    const res = await fetch("/api/ai/models");
+    if (res.ok) {
+      const d = await res.json();
+      setModelRegistry(d.models ?? d.registry ?? null);
+    }
+  }, []);
+
   useEffect(() => {
     void loadConversations();
     void loadProjects();
     void loadAssets();
     void refreshFolder();
-  }, [loadConversations, loadProjects, loadAssets, refreshFolder]);
+    void loadModels();
+  }, [loadConversations, loadProjects, loadAssets, refreshFolder, loadModels]);
 
   useEffect(() => {
     if (activeProjectId) void loadRenders(activeProjectId);
   }, [activeProjectId, loadRenders]);
+
+  /** Restore the latest crew production for a project (server persistence). */
+  const restoreProduction = useCallback(async (projectId: string) => {
+    const res = await fetch("/api/productions");
+    if (!res.ok) return;
+    const d = await res.json();
+    const mine = (d.productions ?? []) as Array<{ id: string; projectId: string | null }>;
+    const match = mine.find((p) => p.projectId === projectId);
+    setProductionId(match?.id ?? null);
+    if (!match) {
+      setProductionStages([]);
+      setProductionData(null);
+    }
+  }, []);
 
   // Restore a conversation from the SERVER (history survives reload/devices).
   const openConversation = useCallback(async (id: string) => {
@@ -155,7 +193,14 @@ export function ProductionHome({ user, onLogout }: { user: { name: string | null
       }));
       setMessages(restored);
       const conv = (d.conversation ?? {}) as { projectId?: string | null };
-      if (conv.projectId) setActiveProjectId(conv.projectId);
+      if (conv.projectId) {
+        setActiveProjectId(conv.projectId);
+        void restoreProduction(conv.projectId);
+      } else {
+        setProductionId(null);
+        setProductionStages([]);
+        setProductionData(null);
+      }
     } else {
       setChatError("Conversation history could not be restored.");
     }
@@ -187,28 +232,54 @@ export function ProductionHome({ user, onLogout }: { user: { name: string | null
     setAttachments([]);
     setRenders([]);
     setFolderNotice(null);
+    setProductionId(null);
+    setProductionStages([]);
+    setProductionData(null);
+    setCompareIds([]);
     await loadProjects();
   }, [newProjectName, loadProjects]);
 
-  /** Attach files through the EXISTING media pipeline (probe + thumbnail). */
+  /** Attach files through the EXISTING media pipeline — XHR so the chip
+   *  shows REAL byte progress, plus a local object-URL preview. */
   const attachFiles = useCallback(async (files: FileList | File[]) => {
     for (const file of Array.from(files).slice(0, 8)) {
       const tempId = `up-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
-      setAttachments((a) => [...a, { id: tempId, name: file.name, state: "uploading" }]);
-      try {
-        const res = await fetch("/api/media", {
-          method: "POST",
-          headers: { "x-filename": encodeURIComponent(file.name), "Content-Type": file.type || "application/octet-stream" },
-          body: file,
-        });
-        const d = await res.json().catch(() => null);
-        if (!res.ok || !d?.media?.id) throw new Error(d?.error ?? `Upload failed (${res.status})`);
-        setAttachments((a) => a.map((x) => (x.id === tempId ? { ...x, id: d.media.id, state: "ready", kind: d.media.kind } : x)));
-        void loadAssets();
-      } catch (err) {
-        setAttachments((a) => a.map((x) => (x.id === tempId ? { ...x, state: "failed" } : x)));
-        setChatError(err instanceof Error ? err.message : "An upload failed.");
-      }
+      const isPreviewable = /^(video|image)\//.test(file.type);
+      const previewUrl = isPreviewable ? URL.createObjectURL(file) : null;
+      setAttachments((a) => [...a, { id: tempId, name: file.name, state: "uploading", progress: 0, previewUrl }]);
+      await new Promise<void>((resolve) => {
+        const xhr = new XMLHttpRequest();
+        xhr.open("POST", "/api/media");
+        xhr.setRequestHeader("x-filename", encodeURIComponent(file.name));
+        xhr.setRequestHeader("Content-Type", file.type || "application/octet-stream");
+        xhr.upload.onprogress = (e) => {
+          if (e.lengthComputable) {
+            const pct = Math.round((e.loaded / e.total) * 100);
+            setAttachments((a) => a.map((x) => (x.id === tempId ? { ...x, progress: pct } : x)));
+          }
+        };
+        xhr.onload = () => {
+          try {
+            const d = JSON.parse(xhr.responseText);
+            if (xhr.status >= 200 && xhr.status < 300 && d?.media?.id) {
+              setAttachments((a) => a.map((x) => (x.id === tempId ? { ...x, id: d.media.id, state: "ready", kind: d.media.kind, progress: 100 } : x)));
+              void loadAssets();
+            } else {
+              throw new Error(d?.error ?? `Upload failed (${xhr.status})`);
+            }
+          } catch (err) {
+            setAttachments((a) => a.map((x) => (x.id === tempId ? { ...x, state: "failed" } : x)));
+            setChatError(err instanceof Error ? err.message : "An upload failed.");
+          }
+          resolve();
+        };
+        xhr.onerror = () => {
+          setAttachments((a) => a.map((x) => (x.id === tempId ? { ...x, state: "failed" } : x)));
+          setChatError("Network error during upload.");
+          resolve();
+        };
+        xhr.send(file);
+      });
     }
   }, [loadAssets]);
 
@@ -242,12 +313,52 @@ export function ProductionHome({ user, onLogout }: { user: { name: string | null
       ]);
       if (d.plan) void loadConversations();
       if (activeProjectId) void loadRenders(activeProjectId);
+      // M45-D — a substantive brief spins up the REAL crew pipeline
+      // (existing durable Production system) for this project.
+      if (!productionId && activeProjectId && text.length >= 40) {
+        try {
+          const pres = await fetch("/api/productions", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ templateId: "brand-commercial", briefText: text.slice(0, 4000), projectId: activeProjectId }),
+          });
+          const pd = await pres.json().catch(() => null);
+          if (pres.ok && pd?.production?.id) {
+            setProductionId(pd.production.id);
+          }
+        } catch {
+          // production creation surfaced via polling absence — never blocks chat
+        }
+      }
     } catch {
       setChatError("Network error — the message was not delivered.");
     } finally {
       setSending(false);
     }
   }, [draft, sending, attachments, activeProjectId, activeConversationId, loadConversations, loadRenders]);
+
+  // M45-D — poll the crew pipeline while stages run; refresh renders when the
+  // render stage produces a new export.
+  useProductionPolling(productionId, (p) => {
+    setProductionStages(p.stages);
+    setProductionData(p.production);
+    if (activeProjectId) void loadRenders(activeProjectId);
+  });
+
+  /** Drive a crew stage through the EXISTING stage route. */
+  const stageAction = useCallback(async (stageKey: string, action: "start" | "approve" | "reject" | "skip") => {
+    if (!productionId) return;
+    setBusyAction(stageKey);
+    try {
+      await fetch(`/api/productions/${productionId}/stages/${stageKey}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action }),
+      });
+    } finally {
+      setBusyAction(null);
+    }
+  }, [productionId]);
 
   /** Save a rendered deliverable into the connected local folder. */
   const saveToFolder = useCallback(async (card: RenderCard) => {
@@ -488,14 +599,74 @@ export function ProductionHome({ user, onLogout }: { user: { name: string | null
                     <AlertCircle className="mt-0.5 h-3.5 w-3.5 shrink-0" /> {chatError}
                   </p>
                 )}
+                {/* M45-D — the REAL crew pipeline panel (existing durable production system) */}
+                {productionId && productionData && (
+                  <ProductionCrewPanel
+                    production={productionData}
+                    stages={productionStages}
+                    busyAction={busyAction}
+                    onAction={(k, a) => void stageAction(k, a)}
+                    onOpenEditor={() => { if (activeProjectId) window.location.hash = `#/editor?project=${activeProjectId}`; }}
+                  />
+                )}
+                {/* M45-C — honest model availability from the live registry */}
+                {modelRegistry && modelRegistry.length > 0 && (
+                  <div className="ml-2 max-w-[92%] rounded-xl border border-[#22221f] bg-[#0d0d0c] px-3 py-2">
+                    <button onClick={() => setRegistryOpen((o) => !o)} className="flex w-full items-center justify-between text-[10px] font-bold uppercase tracking-wider text-[#8f8f8a]">
+                      <span>Model availability (live registry)</span>
+                      <span>{registryOpen ? "hide" : `${modelRegistry.filter((m) => m.ready).length}/${modelRegistry.length} ready`}</span>
+                    </button>
+                    {registryOpen && (
+                      <ul className="mt-1.5 flex flex-col gap-1">
+                        {modelRegistry.map((m, i) => (
+                          <li key={`${m.model ?? m.id ?? i}-${i}`} className="flex items-center justify-between gap-2 text-[10px]">
+                            <span className="truncate text-[#c8c8c2]">{m.model ?? m.id ?? "model"} <span className="text-[#6a6a64]">· {m.provider ?? "?"}</span></span>
+                            <span className={m.ready ? "text-[#4cc47f]" : "text-[#d4a017]"} title={m.detail ?? ""}>{m.ready ? "ready" : (m.detail ?? "not ready")}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                    <p className="mt-1 text-[9px] leading-relaxed text-[#55555a]">
+                      The chat provider is configured server-side; this panel reports the registry honestly rather than offering a fake selector.
+                    </p>
+                  </div>
+                )}
                 {/* Real rendered outputs for this production (M45-D) */}
+                {compareIds.length === 2 && (
+                  <div className="rounded-2xl border border-[#d4a017]/40 bg-[#0d0d0c] p-3">
+                    <p className="bean-label mb-2 text-[9px] text-[#d4a017]">VERSION COMPARISON · SIDE BY SIDE</p>
+                    <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                      {compareIds.map((cid) => {
+                        const card = renders.find((r) => r.exportId === cid);
+                        if (!card) return null;
+                        return (
+                          <div key={cid}>
+                            <p className="mb-1 truncate text-[10px] text-[#8f8f8a]">{card.filename}</p>
+                            <video controls preload="metadata" src={`/api/exports/${card.exportId}/file`} className="w-full rounded bg-black" />
+                          </div>
+                        );
+                      })}
+                    </div>
+                    <button onClick={() => setCompareIds([])} className="mt-2 rounded border border-[#2a2a2a] px-2 py-0.5 text-[10px] text-[#8f8f8a] hover:border-[#d4a017]">Close comparison</button>
+                  </div>
+                )}
                 {renders.length > 0 && (
                   <div className="flex flex-col gap-3">
                     <p className="bean-label text-[9px] text-[#7a7a76]">RENDERED VERSIONS · {renders.length}</p>
                     {renders.map((card, i) => (
                       <div key={card.exportId} className="overflow-hidden rounded-2xl border border-[#2a2a28] bg-[#0d0d0c]">
                         <div className="flex items-center justify-between border-b border-[#1c1c1a] px-3.5 py-2">
-                          <span className="text-xs font-bold text-[#d4a017]">Version {renders.length - i}</span>
+                          <span className="flex items-center gap-2 text-xs font-bold text-[#d4a017]">
+                            <input
+                              type="checkbox"
+                              checked={compareIds.includes(card.exportId)}
+                              onChange={(e) => setCompareIds((ids) => e.target.checked ? [...ids, card.exportId].slice(-2) : ids.filter((x) => x !== card.exportId))}
+                              className="accent-[#d4a017]"
+                              aria-label={`Compare version ${renders.length - i}`}
+                              title="Select two versions to compare side by side"
+                            />
+                            Version {renders.length - i}
+                          </span>
                           <span className="text-[10px] text-[#6a6a64]">{new Date(card.createdAt).toLocaleString()}</span>
                         </div>
                         <video
@@ -505,15 +676,24 @@ export function ProductionHome({ user, onLogout }: { user: { name: string | null
                           className="max-h-[320px] w-full bg-black"
                         />
                         <div className="flex flex-wrap items-center justify-between gap-2 px-3.5 py-2.5 text-[10px] text-[#8f8f8a]">
-                          <span>{card.format.toUpperCase()} · {card.durationSec ? `${card.durationSec.toFixed(1)}s` : "—"} · {fmtBytes(card.sizeBytes)}</span>
+                          <span>
+                            {card.format.toUpperCase()} · {card.durationSec ? `${card.durationSec.toFixed(1)}s` : "—"} · {fmtBytes(card.sizeBytes)}
+                            {card.params?.width ? ` · ${card.params.width}×${card.params.height}` : ""}
+                            {card.params?.fps ? ` · ${card.params.fps} fps` : ""}
+                          </span>
                           <div className="flex flex-wrap items-center gap-2">
                             <a href={`/api/exports/${card.exportId}/file?download=1`} download={card.filename} className="flex items-center gap-1 rounded border border-[#2a2a2a] px-2 py-1 text-[10px] text-[#d8d8d2] hover:border-[#d4a017] hover:text-[#d4a017]">
                               <Download className="h-3 w-3" /> Download
                             </a>
                             {activeProjectId && (
-                              <a href={`#/editor?project=${activeProjectId}`} className="rounded border border-[#2a2a2a] px-2 py-1 text-[10px] text-[#d8d8d2] hover:border-[#d4a017] hover:text-[#d4a017]">
-                                Open Editor
-                              </a>
+                              <>
+                                <a href={`#/editor?project=${activeProjectId}`} className="rounded border border-[#2a2a2a] px-2 py-1 text-[10px] text-[#d8d8d2] hover:border-[#d4a017] hover:text-[#d4a017]">
+                                  Open Editor
+                                </a>
+                                <a href={`#/editor?project=${activeProjectId}`} className="rounded border border-[#2a2a2a] px-2 py-1 text-[10px] text-[#d8d8d2] hover:border-[#d4a017] hover:text-[#d4a017]" title="Edit in the editor and render a new version — versions are never overwritten">
+                                  Create New Version
+                                </a>
+                              </>
                             )}
                             <button
                               onClick={() => void saveToFolder(card)}
@@ -540,11 +720,17 @@ export function ProductionHome({ user, onLogout }: { user: { name: string | null
                   <div className="mb-2 flex flex-wrap gap-1.5">
                     {attachments.map((a) => (
                       <span key={a.id} className={`flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[10px] ${a.state === "ready" ? "border-[#1e3a26] bg-[#0d1a10] text-[#4cc47f]" : a.state === "failed" ? "border-[#3b1515] bg-[#1a0d0d] text-[#f87171]" : "border-[#2a2a2a] bg-[#111110] text-[#a8a8a0]"}`}>
-                        {a.state === "uploading" && <Loader2 className="h-3 w-3 animate-spin" />}
+                        {a.previewUrl ? (
+                          a.previewUrl.startsWith("blob:") && a.name.match(/\.(mp4|mov|webm|mkv|m4v)$/i)
+                            ? <video src={a.previewUrl} muted className="h-5 w-8 rounded object-cover" />
+                            : <img src={a.previewUrl} alt="" className="h-5 w-8 rounded object-cover" />
+                        ) : null}
+                        {a.state === "uploading" && <span className="tabular-nums">{a.progress ?? 0}%</span>}
+                        {a.state === "uploading" && !a.progress && <Loader2 className="h-3 w-3 animate-spin" />}
                         {a.state === "failed" && <AlertCircle className="h-3 w-3" />}
                         {a.state === "ready" && <CheckCircle2 className="h-3 w-3" />}
                         <span className="max-w-[160px] truncate">{a.name}</span>
-                        <button onClick={() => setAttachments((arr) => arr.filter((x) => x.id !== a.id))} aria-label={`Remove ${a.name}`} className="text-current opacity-60 hover:opacity-100"><X className="h-3 w-3" /></button>
+                        <button onClick={() => { if (a.previewUrl) URL.revokeObjectURL(a.previewUrl); setAttachments((arr) => arr.filter((x) => x.id !== a.id)); }} aria-label={`Remove ${a.name}`} className="text-current opacity-60 hover:opacity-100"><X className="h-3 w-3" /></button>
                       </span>
                     ))}
                   </div>
@@ -603,7 +789,7 @@ export function ProductionHome({ user, onLogout }: { user: { name: string | null
               {projects.map((p) => (
                 <li key={p.id}>
                   <button
-                    onClick={() => { setActiveProjectId(p.id); setSection("chat"); }}
+                    onClick={() => { setActiveProjectId(p.id); setSection("chat"); void restoreProduction(p.id); }}
                     className={`flex w-full items-center justify-between rounded-lg border px-3.5 py-2.5 text-left ${activeProjectId === p.id ? "border-[#d4a017]/50 bg-[#d4a017]/5" : "border-[#1c1c1a] bg-[#0d0d0c] hover:border-[#2e2e2c]"}`}
                   >
                     <span className="truncate text-sm text-[#e6e6e0]">{p.name}</span>
