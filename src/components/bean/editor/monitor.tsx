@@ -20,7 +20,7 @@
  *   parity by construction).
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import type { Sequence } from "@/lib/editor/model";
+import type { Sequence, Effect } from "@/lib/editor/model";
 import { activeAudioAt, activeCaptionAt, activeVideoClipAt, fadeMultiplierAt, sequenceEndFrame, sourceSecondsAt } from "@/lib/editor/preview";
 import { activeGraphicsAt } from "@/lib/nikki/state";
 import { drawGraphicsLayer, ensureNikkiFonts } from "@/lib/nikki/canvas";
@@ -29,8 +29,9 @@ import { api } from "@/lib/client-api";
 import type { Rational } from "@/lib/editor/time";
 import { PlaybackController, publishFrame, subscribeFrame } from "@/lib/editor/playback";
 import { AudioPreviewMixer, setActiveMixer } from "@/lib/editor/audio-mixer";
-import { cssEffectFilter, cssEffectFilterAt } from "@/lib/editor/filters";
-import { cssTransformStyle, transformAt } from "@/lib/editor/transform";
+import { cssEffectFilter, cssEffectFilterAt, CANVAS_VFX_TYPES, animatedEffectAt } from "@/lib/editor/filters";
+import { applyCanvasVfx, blendFrameRing } from "@/lib/editor/vfx-canvas";
+import { cssTransformStyle, transformAt, transformIsIdentity, type ResolvedTransform } from "@/lib/editor/transform";
 import { volumeAutomationAt } from "@/lib/editor/audio";
 import { unsupportedCodecMessage } from "@/lib/editor/codec-support";
 import { CompositionCanvas } from "@/components/bean/editor/composition-canvas";
@@ -40,6 +41,91 @@ import type { EditorSession } from "@/hooks/use-editor-session";
 const AUDIO_POOL_SIZE = 4; // element-pool FALLBACK only (Web Audio removes the cap)
 /** Seek the active video element when drift exceeds this many seconds. */
 const DRIFT_THRESHOLD = 0.08;
+
+// ── M45 Unit B — canvas VFX preview layer ────────────────────────────────────
+// Effects with no CSS equivalent (chromaKey, masks, motionBlur) preview by
+// drawing the decoded video frame into an offscreen canvas, applying the SAME
+// parameterized ops the export chain runs (lib/editor/vfx-canvas.ts), and
+// compositing the result on the sequence-resolution canvas. Preview caps the
+// offscreen at 1280px wide — honest preview-quality < export-quality.
+const VFX_PREVIEW_MAX_WIDTH = 1280;
+const VFX_MOTION_RING = 4;
+let vfxOffscreen: HTMLCanvasElement | null = null;
+const vfxMotionRing: ImageData[] = [];
+/** When a canvas-VFX layer owns the picture, the video element stays hidden. */
+let vfxOwnsPicture = false;
+
+function clipHasCanvasVfx(clip: { effects: Array<{ type: string; enabled: boolean }> }): boolean {
+  return clip.effects.some((e) => e.enabled && (CANVAS_VFX_TYPES as string[]).includes(e.type));
+}
+
+/**
+ * Paint the active clip's frame with its canvas-VFX effect stack onto the
+ * sequence canvas. Returns true when the layer owns the picture this frame.
+ */
+function paintVfxFrame(
+  ctx: CanvasRenderingContext2D,
+  seq: Sequence,
+  clip: { effects: Effect[]; timelineStartFrame: number },
+  frame: number,
+  videoEl: HTMLVideoElement,
+  transform: ResolvedTransform | null,
+): boolean {
+  const vw = videoEl.videoWidth;
+  const vh = videoEl.videoHeight;
+  if (!vw || !vh || videoEl.readyState < 2) return false;
+  if (!vfxOffscreen) vfxOffscreen = document.createElement("canvas");
+  const scale = Math.min(1, VFX_PREVIEW_MAX_WIDTH / vw);
+  const ow = Math.max(2, Math.round(vw * scale));
+  const oh = Math.max(2, Math.round(vh * scale));
+  if (vfxOffscreen.width !== ow || vfxOffscreen.height !== oh) {
+    vfxOffscreen.width = ow;
+    vfxOffscreen.height = oh;
+  }
+  const off = vfxOffscreen.getContext("2d", { willReadFrequently: true });
+  if (!off) return false;
+  off.drawImage(videoEl, 0, 0, ow, oh);
+
+  const clipRelFrame = Math.max(0, frame - clip.timelineStartFrame);
+  const vfxEffects = clip.effects.filter((e) => e.enabled && (CANVAS_VFX_TYPES as string[]).includes(e.type));
+  if (vfxEffects.length > 0) {
+    const img = off.getImageData(0, 0, ow, oh);
+    // Motion blur blends RAW frames (tmix semantics) — push before ops.
+    if (vfxEffects.some((e) => e.type === "motionBlur")) {
+      vfxMotionRing.push(off.getImageData(0, 0, ow, oh));
+      while (vfxMotionRing.length > VFX_MOTION_RING) vfxMotionRing.shift();
+    }
+    for (const effect of vfxEffects) {
+      const evaluated = animatedEffectAt(effect, clipRelFrame);
+      if (evaluated.type === "motionBlur") {
+        if (vfxMotionRing.length > 1) blendFrameRing(img, vfxMotionRing.slice(0, -1));
+      } else {
+        applyCanvasVfx(evaluated.type, img, evaluated.params);
+      }
+    }
+    off.putImageData(img, 0, 0);
+  }
+
+  ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
+  // Contain-fit the frame into sequence space (the same box the video
+  // element's object-contain uses), then apply the clip transform in
+  // sequence pixels (x/y are composition units on ResolvedTransform).
+  const s = Math.min(ctx.canvas.width / ow, ctx.canvas.height / oh);
+  const dw = ow * s;
+  const dh = oh * s;
+  ctx.save();
+  if (transform && !transformIsIdentity(transform)) {
+    ctx.globalAlpha = Math.max(0, Math.min(1, transform.opacity));
+    ctx.translate(ctx.canvas.width / 2 + transform.x, ctx.canvas.height / 2 + transform.y);
+    ctx.rotate((transform.rotation * Math.PI) / 180);
+    ctx.scale(transform.scale, transform.scale);
+    ctx.drawImage(vfxOffscreen, -dw / 2, -dh / 2, dw, dh);
+  } else {
+    ctx.drawImage(vfxOffscreen, (ctx.canvas.width - dw) / 2, (ctx.canvas.height - dh) / 2, dw, dh);
+  }
+  ctx.restore();
+  return true;
+}
 
 /** Next same-track clip (for preloading) — adjacency by start frame. */
 function nextClipOnTrack(sequence: Sequence, clipId: string) {
@@ -223,10 +309,21 @@ export function ProgramMonitor({
       const seq = seqRef.current;
       const ctx = nikkiCtxRef.current;
       if (!seq || !ctx) return;
+      // M45 — canvas VFX layer: for clips with chroma key / masks / motion
+      // blur the processed frame owns the picture (the video element stays
+      // decoded but visually hidden; audio is unaffected).
+      const activeClip = activeVideoClipAt(seq, frame);
+      vfxOwnsPicture = false;
+      if (activeClip && clipHasCanvasVfx(activeClip.clip)) {
+        const el = [videoARef.current, videoBRef.current].find((v) => v && !v.className.includes("hidden"));
+        if (el && paintVfxFrame(ctx, seq, activeClip.clip, frame, el, transformAt(activeClip.clip, frame))) {
+          vfxOwnsPicture = true;
+        }
+      }
       paintTransitionLayer(ctx, seq, frame, [videoARef.current, videoBRef.current]);
       const graphics = activeGraphicsAt(seq, frame);
       if (graphics.length === 0) {
-        if (isPlaying || frame !== playheadRef.current) ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
+        if (!vfxOwnsPicture && (isPlaying || frame !== playheadRef.current)) ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
         return;
       }
       drawGraphicsLayer(ctx, seq, frame, graphics);
@@ -238,10 +335,19 @@ export function ProgramMonitor({
     const seq = sequence;
     const ctx = nikkiCtxRef.current;
     if (!seq || !ctx) return;
+    // M45 — canvas VFX layer for the settled frame (same as the live path).
+    const activeClip = activeVideoClipAt(seq, playhead);
+    vfxOwnsPicture = false;
+    if (activeClip && clipHasCanvasVfx(activeClip.clip)) {
+      const el = [videoARef.current, videoBRef.current].find((v) => v && !v.className.includes("hidden"));
+      if (el && paintVfxFrame(ctx, seq, activeClip.clip, playhead, el, transformAt(activeClip.clip, playhead))) {
+        vfxOwnsPicture = true;
+      }
+    }
     paintTransitionLayer(ctx, seq, playhead, [videoARef.current, videoBRef.current]);
     const graphics = activeGraphicsAt(seq, playhead);
     if (graphics.length === 0) {
-      if (!paintTransitionLayer(ctx, seq, playhead, [videoARef.current, videoBRef.current])) ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
+      if (!vfxOwnsPicture && !paintTransitionLayer(ctx, seq, playhead, [videoARef.current, videoBRef.current])) ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
     } else drawGraphicsLayer(ctx, seq, playhead, graphics);
   }, [playhead, sequence, playing]);
 
@@ -399,15 +505,21 @@ export function ProgramMonitor({
       el.style.filter = isActive && !comparing ? previewFilter ?? "" : "";
       // M37: clip transform (the export chain applies the same order:
       // rotate → scale → translate, so preview and export agree).
+      // M45: when the canvas VFX layer owns the picture, the element stays
+      // decoded but invisible — its processed frame is drawn on the canvas.
+      const hideForVfx = isActive && (activeVideo ? clipHasCanvasVfx(activeVideo.clip) : false);
       if (isActive && activeTransform) {
         el.style.transform = activeTransform.transform ?? "";
-        el.style.opacity = activeTransform.opacity ?? "";
+        el.style.opacity = hideForVfx ? "0" : activeTransform.opacity ?? "";
+      } else if (isActive && hideForVfx) {
+        el.style.transform = "";
+        el.style.opacity = "0";
       } else {
         el.style.transform = "";
         el.style.opacity = "";
       }
     }
-  }, [activeAssetId, isImageAsset, previewFilter, comparing, previewTransform, measureDisplayScale]);
+  }, [activeAssetId, isImageAsset, previewFilter, comparing, previewTransform, measureDisplayScale, activeVideo]);
   // M37: display size changes (window resize) re-measure the composition→
   // display factor; settled transforms re-apply on the next React pass.
   useEffect(() => {
@@ -427,8 +539,9 @@ export function ProgramMonitor({
       const t = cssTransformStyle(transformAt(active.clip, frame), displayScaleRef.current);
       for (const el of [videoARef.current, videoBRef.current]) {
         if (!el || el.className.includes("hidden")) continue;
+        // M45 — the canvas VFX layer owns visibility while it is active.
         el.style.transform = t.transform ?? "";
-        el.style.opacity = t.opacity ?? "";
+        if (!vfxOwnsPicture) el.style.opacity = t.opacity ?? "";
       }
     });
   }, []);

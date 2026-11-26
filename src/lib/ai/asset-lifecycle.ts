@@ -15,7 +15,7 @@ import { db } from "@/lib/db";
 import { MEDIA_ROOT, pathInsideMediaRoot, sniffContainer, sniffMatchesClass, sha256File, ffprobe, hasQuotaFor } from "@/lib/media-storage";
 import { ProviderError } from "@/lib/jazmii/types";
 
-export type GeneratedEngine = "JAZMII" | "LAXII" | "SHOWCASE";
+export type GeneratedEngine = "JAZMII" | "LAXII" | "SHOWCASE" | "NIIKI";
 
 export interface RegisterOptions {
   engine: GeneratedEngine;

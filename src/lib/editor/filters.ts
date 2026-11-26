@@ -23,7 +23,7 @@ import type { Effect, EffectType } from "@/lib/editor/model";
 export interface FilterEffectSpec {
   type: EffectType;
   label: string;
-  group: "transform" | "audio" | "color" | "stylize";
+  group: "transform" | "audio" | "color" | "stylize" | "vfx";
   /** Additional parameter editors beyond the primary `param`. */
   paramExtras?: { key: string; min: number; max: number; step: number; default: number; unit?: string }[];
   /** FFmpeg filter fragment with `%v` replaced by the computed value. */
@@ -224,6 +224,105 @@ export const FILTER_EFFECTS: FilterEffectSpec[] = [
     css: (p) => `blur(${num(p, "radius", 0)}px)`,
     param: { key: "radius", min: 0, max: 20, step: 0.5, default: 0, unit: "px" },
   },
+  // ── M45 Unit B — NIIKI VFX ────────────────────────────────────────────────
+  // These have NO CSS filter equivalent: preview parity goes through the
+  // canvas VFX ops in lib/editor/vfx-canvas.ts (same parameterization and
+  // the same documented math), and cssEffectFilter() skips them (null css).
+  {
+    type: "chromaKey",
+    label: "Chroma Key",
+    group: "vfx",
+    // FFmpeg colorkey keys in RGB space — the SAME metric family as the
+    // canvas op (Euclidean RGB distance to the key color, soft edge width =
+    // blend). chromakey (YUV-based) was rejected after live verification:
+    // its UV metric keyed neutral pixels, breaking preview/export parity
+    // for whites/grays. Spill suppression on semi-keyed pixels is preview-
+    // side; colorkey's blend already softens edges on export.
+    ffmpeg: (p) => {
+      const color = String(p.color ?? "#00b140");
+      if (!/^#[0-9a-fA-F]{6}$/.test(color)) return null;
+      const s = num(p, "similarity", 0.2);
+      const b = num(p, "blend", 0.1);
+      return `colorkey=color=0x${color.slice(1).toUpperCase()}:similarity=${s.toFixed(3)}:blend=${b.toFixed(3)}`;
+    },
+    css: () => null,
+    param: { key: "similarity", min: 0, max: 1, step: 0.01, default: 0.2 },
+    paramExtras: [
+      { key: "blend", min: 0, max: 1, step: 0.01, default: 0.1 },
+    ],
+  },
+  {
+    type: "rectMask",
+    label: "Rectangle Mask",
+    group: "vfx",
+    // Percent insets define the OPAQUE box; feather is a transition width in
+    // percent of the SMALLER frame dimension at the box edge. FFmpeg path:
+    // yuva444p + geq alpha = clipped linear ramp from each box edge; the
+    // canvas op implements the identical formula.
+    ffmpeg: (p) => {
+      const l = num(p, "left", 10) / 100, r = num(p, "right", 10) / 100, t = num(p, "top", 10) / 100, b = num(p, "bottom", 10) / 100;
+      if (l + r >= 0.999 || t + b >= 0.999) return null;
+      const f = Math.max(0.0001, num(p, "feather", 5) / 100);
+      const inv = p.invert === true;
+      // Box edges in pixels; feather width derived from the smaller dimension.
+      const x0 = `(iw*${l.toFixed(5)})`, x1 = `(iw*(1-${r.toFixed(5)}))`;
+      const y0 = `(ih*${t.toFixed(5)})`, y1 = `(ih*(1-${b.toFixed(5)}))`;
+      const fw = `(min(iw\\,ih)*${f.toFixed(5)})`;
+      const d = `min(((X-${x0})/${fw})\\,(((${x1})-1-X)/${fw})\\,((Y-${y0})/${fw})\\,(((${y1})-1-Y)/${fw}))`;
+      const alpha = inv ? `255*(1-clip(${d}\\,0\\,1))` : `255*clip(${d}\\,0\\,1)`;
+      return `format=yuva444p,geq=lum='lum(X,Y)':cb='cb(X,Y)':cr='cr(X,Y)':a='${alpha}'`;
+    },
+    css: () => null,
+    param: { key: "left", min: 0, max: 45, step: 1, default: 10, unit: "%" },
+    paramExtras: [
+      { key: "right", min: 0, max: 45, step: 1, default: 10, unit: "%" },
+      { key: "top", min: 0, max: 45, step: 1, default: 10, unit: "%" },
+      { key: "bottom", min: 0, max: 45, step: 1, default: 10, unit: "%" },
+      { key: "feather", min: 0, max: 50, step: 1, default: 5, unit: "%" },
+    ],
+  },
+  {
+    type: "ellipseMask",
+    label: "Ellipse Mask",
+    group: "vfx",
+    // Center + radii in percent of frame size; normalized ellipse distance
+    // d = sqrt(((X-cx)/rx)² + ((Y-cy)/ry)²) with a linear feather ramp on
+    // (1-d) — identical definition on both paths.
+    ffmpeg: (p) => {
+      const cx = num(p, "centerX", 50) / 100, cy = num(p, "centerY", 50) / 100;
+      const rx = num(p, "radiusX", 35) / 100, ry = num(p, "radiusY", 35) / 100;
+      if (rx <= 0.001 || ry <= 0.001) return null;
+      const f = Math.max(0.0001, num(p, "feather", 10) / 100);
+      const inv = p.invert === true;
+      const d = `hypot((X-iw*${cx.toFixed(5)})/(iw*${rx.toFixed(5)})\\,(Y-ih*${cy.toFixed(5)})/(ih*${ry.toFixed(5)}))`;
+      const alpha = inv ? `255*(1-clip((1-${d})/${f.toFixed(4)}\\,0\\,1))` : `255*clip((1-${d})/${f.toFixed(4)}\\,0\\,1)`;
+      return `format=yuva444p,geq=lum='lum(X,Y)':cb='cb(X,Y)':cr='cr(X,Y)':a='${alpha}'`;
+    },
+    css: () => null,
+    param: { key: "centerX", min: 0, max: 100, step: 1, default: 50, unit: "%" },
+    paramExtras: [
+      { key: "centerY", min: 0, max: 100, step: 1, default: 50, unit: "%" },
+      { key: "radiusX", min: 5, max: 80, step: 1, default: 35, unit: "%" },
+      { key: "radiusY", min: 5, max: 80, step: 1, default: 35, unit: "%" },
+      { key: "feather", min: 0, max: 50, step: 1, default: 10, unit: "%" },
+    ],
+  },
+  {
+    type: "motionBlur",
+    label: "Motion Blur",
+    group: "vfx",
+    // FFmpeg tmix=frames=N (uniform average of N frames). Canvas preview
+    // keeps a ring buffer of the previous frames and averages the same N —
+    // approximate for fast motion (frame alignment differs by one frame) and
+    // marked in APPROXIMATE_PREVIEW.
+    ffmpeg: (p) => {
+      const n = Math.round(num(p, "frames", 3));
+      if (n < 2) return null;
+      return `tmix=frames=${Math.min(8, n)}`;
+    },
+    css: () => null,
+    param: { key: "frames", min: 2, max: 8, step: 1, default: 3 },
+  },
   {
     type: "sharpen",
     label: "Sharpen",
@@ -279,7 +378,10 @@ export const FILTER_EFFECTS: FilterEffectSpec[] = [
 export const AUDIO_EFFECT_TYPES: EffectType[] = ["volume"];
 
 /** Effects whose preview is an approximation — surfaced honestly in the UI. */
-export const APPROXIMATE_PREVIEW: EffectType[] = ["highlights", "shadows", "sharpen", "vignette", "crop", "whites", "blacks"];
+export const APPROXIMATE_PREVIEW: EffectType[] = ["highlights", "shadows", "sharpen", "vignette", "crop", "whites", "blacks", "motionBlur"];
+
+/** M45 — effect types whose preview parity is the CANVAS VFX ops (no CSS). */
+export const CANVAS_VFX_TYPES: EffectType[] = ["chromaKey", "rectMask", "ellipseMask", "motionBlur"];
 
 export function filterSpec(type: EffectType): FilterEffectSpec | null {
   return FILTER_EFFECTS.find((f) => f.type === type) ?? null;

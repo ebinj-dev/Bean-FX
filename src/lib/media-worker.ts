@@ -8,6 +8,7 @@ import {
   MEDIA_JOB_TYPES,
   JOB_TYPE_MEDIA_PROBE,
   JOB_TYPE_MEDIA_PROXY,
+  JOB_TYPE_MEDIA_STABILIZE,
   JOB_TYPE_GANGZII_ANALYZE,
   JOB_TYPE_GANGZII_PROCESS,
   JOB_TYPE_NIKKI_RENDER,
@@ -38,6 +39,7 @@ import {
 import { MEDIA_ROOT, PROXIES_DIR, removeFileQuiet } from "@/lib/media-storage";
 import { runProbeJob } from "@/lib/media-analysis";
 import { runProxyJob } from "@/lib/media-proxy";
+import { runStabilizeJob } from "@/lib/media-stabilize";
 import { runProjectArchiveJob, importPackage, planImport } from "@/lib/project-archive";
 import { runGangziiAnalyzeJob, runGangziiProcessJob } from "@/lib/gangzii/jobs";
 import { runNikkiRenderJob } from "@/lib/nikki/jobs";
@@ -85,6 +87,7 @@ const GLOBAL_MAX_ACTIVE = 2;
 const USER_MAX_ACTIVE: Record<string, number> = {
   [JOB_TYPE_MEDIA_PROBE]: 2,
   [JOB_TYPE_MEDIA_PROXY]: 1,
+  [JOB_TYPE_MEDIA_STABILIZE]: 1,
   [JOB_TYPE_GANGZII_ANALYZE]: 1,
   [JOB_TYPE_GANGZII_PROCESS]: 1,
   [JOB_TYPE_NIKKI_RENDER]: 1,
@@ -131,6 +134,7 @@ const HANDLERS: Record<string, MediaJobHandler> = {
   [JOB_TYPE_PROJECT_IMPORT]: runProjectImportJob,
   [JOB_TYPE_MEDIA_PROBE]: runProbeJob,
   [JOB_TYPE_MEDIA_PROXY]: runProxyJob,
+  [JOB_TYPE_MEDIA_STABILIZE]: runStabilizeJob,
   [JOB_TYPE_GANGZII_ANALYZE]: runGangziiAnalyzeJob,
   [JOB_TYPE_GANGZII_PROCESS]: runGangziiProcessJob,
   [JOB_TYPE_NIKKI_RENDER]: runNikkiRenderJob,

@@ -24,6 +24,8 @@ export const RationalSchema = z.object({ num: z.number().int().positive(), den: 
 
 // M16 Phase F: additive extension — color correction + sharpening. Old
 // sequences with the original six types keep parsing unchanged.
+// M45 Unit B: additive VFX extension — chroma key, shape masks, motion blur.
+// Old sequences keep parsing unchanged (enum values are additive).
 export const EffectType = z.enum([
   "opacity",
   "volume",
@@ -44,6 +46,12 @@ export const EffectType = z.enum([
   "whites",
   "blacks",
   "crop",
+  // M45 Unit B — NIIKI VFX (each maps to a REAL ffmpeg filter AND a canvas
+  // preview op in filters.ts, preserving preview/export parity).
+  "chromaKey",
+  "rectMask",
+  "ellipseMask",
+  "motionBlur",
 ]);
 export type EffectType = z.infer<typeof EffectType>;
 
