@@ -80,7 +80,18 @@ export function MediaBrowser({
         ) : (
           <ul className="flex flex-col gap-1">
             {filtered.map((m) => (
-              <li key={m.id} className="rounded border border-[#1c1c1a] bg-[#111110] px-2 py-1.5">
+              <li key={m.id} className="flex gap-2 rounded border border-[#1c1c1a] bg-[#111110] px-2 py-1.5">
+                {/* M45 — real probe-generated poster thumbnail when available. */}
+                {m.thumbnailUrl ? (
+                  <img
+                    src={m.thumbnailUrl}
+                    alt=""
+                    loading="lazy"
+                    className="h-12 w-[72px] shrink-0 rounded object-cover"
+                    onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = "none"; }}
+                  />
+                ) : null}
+                <div className="min-w-0 flex-1">
                 <div className="flex items-center gap-1.5">
                   {m.kind === "VIDEO" ? <Film className="h-3 w-3 shrink-0 text-[#d4a017]" /> : m.kind === "AUDIO" ? <Music className="h-3 w-3 shrink-0 text-[#3fa7c4]" /> : <ImageIcon className="h-3 w-3 shrink-0 text-[#4cc47f]" />}
                   <span className="min-w-0 flex-1 truncate text-[11px] text-[#e6e6e0]" title={m.originalName}>
@@ -101,6 +112,7 @@ export function MediaBrowser({
                   >
                     + place
                   </button>
+                </div>
                 </div>
               </li>
             ))}

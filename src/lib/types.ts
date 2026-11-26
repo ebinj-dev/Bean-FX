@@ -316,6 +316,8 @@ export interface MediaMeta {
   probeError?: string | null;
   /** NONE | QUEUED | PROCESSING | READY | FAILED | UNSUPPORTED */
   proxyStatus?: string | null;
+  /** M45 — poster thumbnail URL (probe pipeline output); null when absent. */
+  thumbnailUrl?: string | null;
   /** True when the server recognized identical bytes and reused the stored original. */
   deduplicated?: boolean;
 }

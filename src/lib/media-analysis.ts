@@ -2,7 +2,7 @@ import { execFile } from "child_process";
 import { db } from "@/lib/db";
 import { jobManager } from "@/lib/job-runner";
 import { PermanentJobError, completeJob, finishJob, handleJobError, JOB_TYPE_MEDIA_PROXY } from "@/lib/job-helpers";
-import { pathExists } from "@/lib/media-storage";
+import { pathExists, posterPathFor } from "@/lib/media-storage";
 
 /**
  * M3.2 — deep media analysis. Runs ffprobe in the background worker (never in
@@ -209,8 +209,29 @@ export function proxyEligible(probe: { hasVideo: boolean; width: number | null; 
  * MEDIA_PROBE handler: probe the original file and persist the full metadata
  * picture, then queue proxy generation when the source justifies one.
  */
-export async function runProbeJob(job: {
-  id: string;
+/** M45 — extract a single poster frame with ffmpeg (best-effort helper).
+ *  VIDEO: sample ~10% into the clip (avoiding an all-black first frame);
+ *  IMAGE: a plain scaled copy. Output is a small JPEG for the media browser. */
+export async function generatePosterThumbnail(source: string, output: string, isImage: boolean, durationSec: number | null): Promise<void> {
+  const seek = isImage ? 0 : Math.max(0, Math.min(durationSec && durationSec > 0.2 ? durationSec * 0.1 : 0.5, durationSec ?? 0.5));
+  const args = [
+    "-y", "-loglevel", "error",
+    ...(isImage ? [] : ["-ss", seek.toFixed(3)]),
+    "-i", source,
+    "-frames:v", "1",
+    "-vf", "scale=480:-2",
+    "-q:v", "4",
+    output,
+  ];
+  await new Promise<void>((resolve, reject) => {
+    execFile("ffmpeg", args, { timeout: 30_000 }, (err, _stdout, stderr) => {
+      if (err) reject(new Error(`ffmpeg poster extract failed: ${String(stderr).slice(0, 200) || err.message}`));
+      else resolve();
+    });
+  });
+}
+
+export async function runProbeJob(job: {  id: string;
   userId: string;
   attempts: number;
   maxAttempts: number;
@@ -290,6 +311,16 @@ export async function runProbeJob(job: {
     });
 
     await jobManager.setProgress(job.id, 95, "Queuing proxy");
+    // M45 — poster thumbnail for VIDEO/IMAGE: best-effort single-frame extract
+    // into the deterministic poster path. A thumbnail failure NEVER fails the
+    // probe (the probe's job is metadata; the thumbnail is a view enhancement).
+    if (probe.hasVideo || asset.kind === "IMAGE") {
+      try {
+        await generatePosterThumbnail(asset.storagePath, posterPathFor(asset.id), asset.kind === "IMAGE", probe.durationSec);
+      } catch (err) {
+        console.warn(`[media-analysis] poster thumbnail skipped for ${asset.id}: ${err instanceof Error ? err.message : err}`);
+      }
+    }
     // Images are stills — no proxy, no duration gate; their probe output is
     // the pixel dimensions + container metadata.
     if (asset.kind !== "IMAGE" && proxyEligible({ hasVideo: probe.hasVideo, width: probe.width, height: probe.height, durationSec: probe.durationSec })) {

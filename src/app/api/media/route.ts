@@ -17,6 +17,7 @@ import {
   sniffMatchesClass,
   sha256File,
   hasQuotaFor,
+  posterPathFor,
 } from "@/lib/media-storage";
 import { enqueueMediaJob, JOB_TYPE_MEDIA_PROBE } from "@/lib/job-helpers";
 import { parseSrt } from "@/lib/srt";
@@ -620,8 +621,14 @@ export async function GET() {
     take: 200,
   });
 
+  // M45 — thumbnails: report the poster URL only when the file really exists
+  // (honest absence — the UI falls back to its icon, never a broken image).
+  const posterExists = await Promise.all(
+    assets.map(async (a) => (a.kind === "VIDEO" || a.kind === "IMAGE" ? fs.stat(posterPathFor(a.id)).then(() => true).catch(() => false) : false)),
+  );
+
   return NextResponse.json({
-    media: assets.map((a) => ({
+    media: assets.map((a, i) => ({
       id: a.id,
       originalName: a.originalName,
       kind: a.kind,
@@ -637,6 +644,7 @@ export async function GET() {
       channels: a.channels,
       probeStatus: a.probeStatus,
       proxyStatus: a.proxyStatus,
+      thumbnailUrl: posterExists[i] ? `/api/media/${a.id}/thumbnail` : null,
       role: a.role,
       notes: a.notes,
       createdAt: a.createdAt.toISOString(),
