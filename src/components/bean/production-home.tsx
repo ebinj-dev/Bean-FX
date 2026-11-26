@@ -18,6 +18,7 @@ import {
   Music, Paperclip, Play, RefreshCw, Search, Send, Settings, Sparkles, Users, X, CheckCircle2, AlertCircle,
 } from "lucide-react";
 import { BeanLogo } from "@/components/bean/logo";
+import { validateAudioBase64 } from "@/lib/audio-format";
 import { ProductionCrewPanel, useProductionPolling, type ProductionLite, type StageLite, type StageAction, type TaskLite, type EventLite, type AssetLite as CrewAssetLite, type MediaLite as CrewMediaLite } from "@/components/bean/production-crew";
 import { StudioNav, useStudioShortcuts } from "@/components/bean/studio-nav";
 import { VoiceCapture } from "@/components/bean/voice-capture";
@@ -92,10 +93,27 @@ export function ProductionHome({ user, onLogout }: { user: { name: string | null
       });
       const d = await res.json().catch(() => null);
       if (res.ok && d?.supported && d?.audioBase64) {
-        const audio = new Audio(`data:audio/mpeg;base64,${d.audioBase64}`);
+        // M47.1 §A1 — validate the bytes BEFORE playback and label the data
+        // URL with the MIME the bytes actually carry (never a hardcoded
+        // `audio/mpeg`): the route may return real WAV, MP3 or PCM-wrapped
+        // audio depending on what the provider produced.
+        const v = validateAudioBase64(String(d.audioBase64), d.mimeType);
+        if (!v.ok || !v.mime) {
+          setChatError(v.detail);
+          setSpeaking(false);
+          return;
+        }
+        const audio = new Audio(`data:${v.mime};base64,${d.audioBase64}`);
+        audio.onerror = () => {
+          setChatError(`The returned ${v.format} audio could not be played by this browser — the transcript remains authoritative.`);
+          setSpeaking(false);
+        };
         speakAudioRef.current = audio;
         audio.onended = () => setSpeaking(false);
-        void audio.play().catch(() => setSpeaking(false));
+        void audio.play().catch(() => {
+          setChatError("Browser playback refused the returned audio — the transcript remains authoritative.");
+          setSpeaking(false);
+        });
       } else {
         setChatError(d?.reason ?? "Voice output is not available — the transcript remains authoritative.");
         setSpeaking(false);

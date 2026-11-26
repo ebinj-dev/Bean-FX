@@ -14,6 +14,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getCurrentUser } from "@/lib/auth";
 import { probeModelRegistry } from "@/lib/ai/models";
+import { VOICE_LANGUAGES, voiceLanguageById } from "@/lib/voice-language";
+import { detectScriptMix } from "@/lib/voice-language";
 
 export const runtime = "nodejs";
 
@@ -58,6 +60,16 @@ export async function POST(req: NextRequest) {
     }, { status: 503 });
   }
 
+  // M47.1 §A2 — the requested language is recorded and echoed with its honest
+  // status. The configured gateway documents NO ASR language parameter (the
+  // call takes file_base64 only), so nothing is silently dropped into the
+  // provider call: the transcript comes back as recognised, and Tamil /
+  // Tanglish requests keep their "unverified — needs native-speaker
+  // validation" status instead of a fake language promise.
+  const requestedLanguageRaw = form.get("language");
+  const requestedLanguage = typeof requestedLanguageRaw === "string" && requestedLanguageRaw.trim() ? requestedLanguageRaw.trim() : null;
+  const langInfo = voiceLanguageById(requestedLanguage ?? undefined);
+
   const buf = Buffer.from(await audio.arrayBuffer());
   let transcript = "";
   let language: string | undefined;
@@ -76,18 +88,28 @@ export async function POST(req: NextRequest) {
     }, { status: 502 });
   }
 
+  const scriptMix = detectScriptMix(transcript);
   return NextResponse.json({
     supported: true,
     transcript,
     language,
     confidence,
+    requestedLanguage: langInfo
+      ? { id: langInfo.id, label: langInfo.label, status: langInfo.status, note: langInfo.note }
+      : null,
+    scriptMix: { mix: scriptMix.mix, tamilChars: scriptMix.tamilChars, latinChars: scriptMix.latinChars, disclosure: scriptMix.disclosure },
     provider: "asr-speech (configured gateway)",
-    disclosure: "Audio was processed by the configured server provider for this request only; no audio retention beyond this transcription.",
+    disclosure:
+      "Audio was processed by the configured server provider for this request only; no audio retention beyond this transcription." +
+      (langInfo && langInfo.status !== "verified"
+        ? ` Requested language "${langInfo.label}" is ${langInfo.status} — the configured provider documents no language parameter for ASR, so accuracy needs native-speaker validation.`
+        : ""),
   });
 }
 
 export async function GET() {
-  // Capability probe for the UI (no processing).
+  // Capability probe for the UI (no processing) — includes the truthful
+  // language register so the picker never promises what the provider cannot do.
   const registry = probeModelRegistry();
   const asr = registry.models.find((m) => m.id === "asr-speech");
   return NextResponse.json({
@@ -95,6 +117,7 @@ export async function GET() {
     reason: asr?.readyReason ?? null,
     maxSeconds: 120,
     maxBytes: MAX_BYTES,
+    languages: VOICE_LANGUAGES.map((l) => ({ id: l.id, label: l.label, status: l.status, note: l.note })),
     privacy: "Audio is uploaded only after you activate recording, validated, transcribed, and not retained.",
   });
 }

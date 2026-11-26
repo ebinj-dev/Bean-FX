@@ -15,6 +15,7 @@
  */
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Btn, ErrorNote, StatusBadge } from "@/components/bean/ui";
+import { VOICE_LANGUAGES, detectScriptMix, type ScriptMix } from "@/lib/voice-language";
 
 type Phase = "idle" | "requesting" | "recording" | "processing" | "transcript" | "denied" | "unsupported";
 
@@ -26,7 +27,13 @@ export function VoiceCapture({
   disabled,
   compact = false,
 }: {
-  onTranscript: (transcript: string, meta: { original: string; language?: string; confidence?: number; engine: string }) => void;
+  onTranscript: (transcript: string, meta: {
+    original: string;
+    language?: string;
+    confidence?: number;
+    engine: string;
+    requestedLanguage?: { id: string; label: string; status: string; note: string };
+  }) => void;
   disabled?: boolean;
   compact?: boolean;
 }) {
@@ -39,6 +46,11 @@ export function VoiceCapture({
   const [meta, setMeta] = useState<{ language?: string; confidence?: number; engine: string }>({ engine: "server ASR" });
   const [disclosure, setDisclosure] = useState<string | null>(null);
   const [continuous, setContinuous] = useState(false);
+  // M47.1 §A2 — language selection with truthful status (EN verified live;
+  // Tamil/Tanglish unverified until native-speaker validation).
+  const [language, setLanguage] = useState("auto");
+  const [requestedLang, setRequestedLang] = useState<{ label: string; status: string; note: string } | null>(null);
+  const [scriptMix, setScriptMix] = useState<ScriptMix | null>(null);
 
   const recRef = useRef<MediaRecorder | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
@@ -85,6 +97,7 @@ export function VoiceCapture({
     try {
       const fd = new FormData();
       fd.append("audio", blob, "voice.webm");
+      if (language !== "auto") fd.append("language", language);
       const res = await fetch("/api/my-ai/voice/transcribe", { method: "POST", body: fd });
       const d = await res.json().catch(() => null);
       if (!res.ok || !d?.supported) {
@@ -102,13 +115,15 @@ export function VoiceCapture({
       setOriginal(text);
       setTranscript(text);
       setMeta({ language: d.language ?? undefined, confidence: d.confidence ?? undefined, engine: d.provider ?? "server ASR" });
+      setRequestedLang(d.requestedLanguage ?? null);
+      setScriptMix(d.scriptMix ?? detectScriptMix(text));
       setDisclosure(d.disclosure ?? "Audio was processed by the configured server provider; the audio is not retained beyond this transcription.");
       setPhase("transcript");
     } catch (err) {
       setError(`Transcription network error: ${err instanceof Error ? err.message : "connection failed"}`);
       setPhase("idle");
     }
-  }, [teardown, resetBars]);
+  }, [teardown, resetBars, language]);
 
   const startRecognitionFallback = useCallback(() => {
     // Web Speech API (browser engine) — only offered when actually present.
@@ -155,6 +170,8 @@ export function VoiceCapture({
     setTranscript("");
     setOriginal("");
     setDisclosure(null);
+    setRequestedLang(null);
+    setScriptMix(null);
     setPhase("requesting");
     setContinuous(continuousMode);
     // Permission is requested HERE — only after an explicit user action.
@@ -222,7 +239,14 @@ export function VoiceCapture({
   const submit = useCallback(() => {
     const t = transcript.trim();
     if (!t) return;
-    onTranscript(t, { original, language: meta.language, confidence: meta.confidence, engine: meta.engine });
+    const lang = VOICE_LANGUAGES.find((l) => l.id === language);
+    onTranscript(t, {
+      original,
+      language: meta.language,
+      confidence: meta.confidence,
+      engine: meta.engine,
+      requestedLanguage: lang ? { id: lang.id, label: lang.label, status: lang.status, note: lang.note } : undefined,
+    });
     setPhase("idle");
     setTranscript("");
     setOriginal("");
@@ -230,7 +254,7 @@ export function VoiceCapture({
       // Hands-free continuation stays under user control; one click stops it.
       void startRecording(true);
     }
-  }, [transcript, original, meta, onTranscript, continuous, startRecording]);
+  }, [transcript, original, meta, onTranscript, continuous, startRecording, language]);
 
   const cancel = useCallback(() => {
     hardStop();
@@ -241,10 +265,25 @@ export function VoiceCapture({
   return (
     <div className={`rounded-lg border border-[var(--m47-line)] bg-[var(--m47-bg)] ${compact ? "px-2.5 py-2" : "px-3 py-2.5"}`} aria-label="Voice input">
       {(phase === "idle" || phase === "denied" || phase === "unsupported") && (
-        <div className="flex items-center gap-2">
-          <Btn disabled={disabled} onClick={() => void startRecording(false)} title="Push to talk">🎙 Speak</Btn>
-          <Btn variant="ghost" disabled={disabled} onClick={() => void startRecording(true)} title="Hands-free conversation mode — stays on until you stop it">Hands-free</Btn>
-          <span className="text-[9.5px] text-[var(--m47-ink-dim)]">recording starts only after you activate it · transcript stays editable</span>
+        <div className="space-y-1.5">
+          <div className="flex items-center gap-2">
+            <Btn disabled={disabled} onClick={() => void startRecording(false)} title="Push to talk">🎙 Speak</Btn>
+            <Btn variant="ghost" disabled={disabled} onClick={() => void startRecording(true)} title="Hands-free conversation mode — stays on until you stop it">Hands-free</Btn>
+            <select
+              className="m47-select px-2 py-1.5 text-[11px]"
+              value={language}
+              onChange={(e) => setLanguage(e.target.value)}
+              aria-label="Voice language"
+              title="English is verified live; Tamil and Tanglish need native-speaker validation before production use"
+            >
+              {VOICE_LANGUAGES.map((l) => (
+                <option key={l.id} value={l.id}>{l.label}{l.status === "unverified" ? " ·unverified" : ""}</option>
+              ))}
+            </select>
+          </div>
+          <span className="block text-[9.5px] text-[var(--m47-ink-dim)]">
+            {VOICE_LANGUAGES.find((l) => l.id === language)?.note ?? ""} recording starts only after you activate it · transcript stays editable
+          </span>
         </div>
       )}
 
@@ -269,11 +308,15 @@ export function VoiceCapture({
 
       {phase === "transcript" && (
         <div className="space-y-1.5">
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <span className="text-[9.5px] font-bold uppercase tracking-widest text-[var(--m47-ink-dim)]">Transcript — edit before sending</span>
             {meta.language && <span className="m47-chip">{meta.language}</span>}
             {meta.confidence !== undefined && <span className="m47-chip">confidence {Math.round(meta.confidence * 100)}%</span>}
             <span className="m47-chip m47-chip-gold">{meta.engine}</span>
+            {scriptMix && scriptMix.mix === "mixed" && <span className="m47-chip" title={scriptMix.disclosure}>script mix: Tamil+Latin (heuristic)</span>}
+            {requestedLang && requestedLang.status !== "verified" && (
+              <span className="m47-chip" title={requestedLang.note}>{requestedLang.label} · {requestedLang.status}</span>
+            )}
           </div>
           <textarea
             value={transcript}
@@ -285,6 +328,8 @@ export function VoiceCapture({
           {original !== transcript && (
             <p className="text-[9.5px] text-[var(--m47-ink-dim)]">original preserved: “{original}”</p>
           )}
+          {scriptMix && <p className="text-[9.5px] text-[var(--m47-ink-dim)]">{scriptMix.disclosure}</p>}
+          {requestedLang && requestedLang.status !== "verified" && <p className="text-[9.5px] text-[var(--m47-warn)]">{requestedLang.note}</p>}
           {disclosure && <p className="text-[9.5px] text-[var(--m47-ink-dim)]">{disclosure}</p>}
           <div className="flex gap-2">
             <Btn variant="primary" disabled={!transcript.trim()} onClick={submit}>{continuous ? "Send & keep listening" : "Send"}</Btn>
