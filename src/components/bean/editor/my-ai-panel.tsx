@@ -111,13 +111,19 @@ export function MyAiPanel({ sequence, session, projectId, selectionContext }: { 
     setMessages((m) => [...m, { role: "user", content: msg }]);
     setBusy("chat");
     try {
-      const res = await jfetch<{ conversationId: string; reply: string; mode: string }>("/api/my-ai/chat", {
+      const res = await jfetch<{ conversationId: string; reply: string; mode: string; plan?: PlanSummary }>("/api/my-ai/chat", {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ projectId, conversationId, message: msg.slice(0, 2000) }),
       });
       setConversationId(res.conversationId);
       setMessages((m) => [...m, { role: "assistant", content: res.reply, mode: res.mode }]);
+      // M44 — the chat can now create a structured plan deterministically;
+      // when the response carries one, activate the approval UI immediately.
+      if (res.plan && res.plan.planId) {
+        setPlan(res.plan);
+        if (res.plan.note) setNotice(res.plan.note);
+      }
       void refreshHealth();
     } catch (err) {
       setMessages((m) => [...m, { role: "assistant", content: err instanceof Error ? err.message : "chat failed", mode: "error" }]);

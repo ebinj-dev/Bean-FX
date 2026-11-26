@@ -13,15 +13,20 @@
  *   analysis         — "analyze the clips" → media understanding map (provenance per claim)
  *   scoped-revision  — follow-up on the current edit → plan against the CURRENT revision
  *   history-op       — undo/redo the last AI-approved change (guidance + inverse via editor history)
+ *   command-op       — M44: a DIRECT canonical editing command ("add a marker…", "mute audio 2")
+ *                      → parsed against the M43-B command vocabulary → ONE-STEP approval-gated plan
  *   question         — capability/answer path (honest, no invented facts)
  */
 import { resolveProjectContext } from "@/lib/my-ai/context/resolver";
-import { createPlan } from "@/lib/my-ai/planner/planner";
+import { createPlan, persistPlan } from "@/lib/my-ai/planner/planner";
+import { AIPlanSchema } from "@/lib/my-ai/planner/schema";
+import { newId } from "@/lib/my-ai/ids";
+import { parseCommand, type Command } from "@/lib/editor/commands";
 import { llmHealth } from "@/lib/my-ai/gateway/provider";
 import { matchStyles, styleCapabilities, styleAlternatives, loadStyleRecipes } from "@/lib/ai/styles";
 import { probeModelRegistry } from "@/lib/ai/models";
 
-export type RiisheIntent = "build" | "style-compare" | "analysis" | "scoped-revision" | "history-op" | "question";
+export type RiisheIntent = "build" | "style-compare" | "analysis" | "scoped-revision" | "history-op" | "command-op" | "question";
 
 export interface RiisheChatResult {
   reply: string;
@@ -45,9 +50,85 @@ export function classifyIntent(message: string): RiisheIntent {
   const asksForEdit = /create|make|turn|build|edit|montage|trailer|reel|produce|generate|cut|arrange|apply/.test(m);
   if (/analy(s|z)e|inspect|understand|scene map|what.?s in (the|these|this) (clips?|footage|videos?)/.test(m) && !asksForEdit) return "analysis";
   if (/undo|redo|revert|last change/.test(m)) return "history-op";
+  // M44 — a DIRECT canonical editing command beats generic intent matching:
+  // anchored so "create a montage with markers" stays a build, while
+  // "add a marker named Intro at frame 150" routes to the command registry.
+  if (isDirectCommandPhrase(message)) return "command-op";
   if (/make the (intro|ending|opening)|shorter|longer|instead|warmer|cooler|faster|slower|smaller|bigger|change the|remove the transition|keep the original audio/.test(m)) return "scoped-revision";
   if (/turn|make|create|build|edit|produce|generate/.test(m)) return "build";
   return "question";
+}
+
+/** M44 — anchored detection for DIRECT canonical-command phrases. */
+export function isDirectCommandPhrase(message: string): boolean {
+  return /^(?:please\s+)?(?:add|create|place|put|set)\s+(?:a\s+|an\s+|the\s+)?(?:new\s+)?marker\b/i.test(message)
+    || /^(?:please\s+)?(?:mute|unmute|solo|un-?solo)\b/i.test(message);
+}
+
+export type DirectCommandParse =
+  | { ok: true; commands: Command[]; summary: string; expectedChanges: string[] }
+  | { ok: false; reply: string };
+
+/**
+ * M44 — parse a DIRECT editing request into canonical M1 commands using only
+ * REAL sequence state (fps + actual tracks). Pure: no DB, no LLM. Commands are
+ * schema-validated here, so a bad parse can never become a plan step.
+ */
+export function parseDirectCommand(
+  message: string,
+  fps: number,
+  tracks: Array<{ id: string; kind: string; name: string }>,
+): DirectCommandParse {
+  const markerM = message.match(/^(?:please\s+)?(?:add|create|place|put|set)\s+(?:a\s+|an\s+|the\s+)?(?:new\s+)?marker\b/i);
+  if (markerM) {
+    const rest = message.slice(markerM[0].length);
+    const labelM = rest.match(/\b(?:named|called|label(?:ed|led)?)\s+["'“]?([^"'”]+?)["'”]?(?:\s+(?:at|on)\b|\s*$)/i);
+    const frameM = rest.match(/\bframe\s+(\d{1,7})\b/i);
+    const secM = frameM ? null : rest.match(/\bat\s+(\d{1,7})\s*(?:s\b|sec\b|secs\b|seconds?\b)/i);
+    const bareM = frameM || secM ? null : rest.match(/\bat\s+(\d{1,7})\b/i);
+    if (!frameM && !secM && !bareM) {
+      return { ok: false, reply: "I can add that marker — tell me where: e.g. \u201cadd a marker named Intro at frame 150\u201d or \u201cadd a marker at 5s\u201d." };
+    }
+    const n = Number((frameM ?? secM ?? bareM)![1]);
+    const frame = Math.max(0, Math.round(frameM ? n : n * fps));
+    const label = (labelM?.[1] ?? "").trim().slice(0, 120);
+    const command = parseCommand({ type: "AddMarker", marker: { id: newId("marker"), frame, label } });
+    return {
+      ok: true,
+      commands: [command],
+      summary: `AddMarker @ frame ${frame}${label ? ` (“${label}”)` : ""}${secM ? " (from seconds)" : bareM ? " (interpreted as frames)" : ""}`,
+      expectedChanges: [`A marker appears at frame ${frame} on the timeline`],
+    };
+  }
+
+  const trackM = message.match(/^(?:please\s+)?(mute|unmute|solo|un-?solo)\b/i);
+  if (trackM) {
+    const verb = trackM[1].toLowerCase().replace("-", "");
+    const action = verb === "unmute" ? "unmute" : verb === "unsolo" ? "unsolo" : verb;
+    const numM = message.match(/\b(audio|video)\s+(\d{1,2})\b/i);
+    const kindM = message.match(/\bthe\s+(audio|video)\s+tracks?\b/i) ?? message.match(/\b(audio|video)\s+tracks?\b/i);
+    if (!numM && !kindM) {
+      return { ok: false, reply: "Which track? e.g. \u201cmute audio 2\u201d, \u201cmute the audio track\u201d or \u201csolo video 1\u201d." };
+    }
+    const kind = (numM?.[1] ?? kindM?.[1] ?? "").toUpperCase();
+    const index = numM ? Number(numM[2]) : 1;
+    const candidates = tracks.filter((t) => t.kind === kind);
+    // An explicit index that does not exist must FAIL — never silently
+    // retarget the first track (M44 test: "mute audio 9" must not mute Audio 1).
+    const track = numM ? candidates[index - 1] : candidates[index - 1] ?? candidates[0];
+    if (!track) {
+      return { ok: false, reply: `I could not find a ${kind} track ${index} in this sequence. Current tracks: ${tracks.map((t) => `${t.kind} “${t.name}”`).join(", ")}.` };
+    }
+    const patch = action === "mute" ? { muted: true } : action === "unmute" ? { muted: false } : action === "solo" ? { solo: true } : { solo: false };
+    const command = parseCommand({ type: "UpdateTrack", trackId: track.id, ...patch });
+    return {
+      ok: true,
+      commands: [command],
+      summary: `UpdateTrack ${action} → ${kind} “${track.name}”`,
+      expectedChanges: [`Track “${track.name}” ${action === "mute" ? "is muted" : action === "unmute" ? "is unmuted" : action === "solo" ? "is soloed" : "is no longer soloed"} (playback behavior)`],
+    };
+  }
+  return { ok: false, reply: "I did not recognize a direct editing command. Supported right now: “add a marker [named …] at frame N / at Ns”, “mute/unmute/solo audio|video N”." };
 }
 
 /** Deterministic analysis note for the current authorized media (bounded). */
@@ -122,6 +203,63 @@ export async function riisheChat(
       ].filter(Boolean).join("\n"),
       intent,
       mode,
+      conversationId: conversation,
+      analysisUsed: false,
+    };
+  }
+
+  if (intent === "command-op") {
+    // M44 — route the request through the M43-B canonical command registry:
+    // parse with REAL sequence state, then propose ONE-STEP APPLY_COMMANDS
+    // plan through the EXISTING approval pipeline. Nothing touches the
+    // timeline until the user approves; execution is fully undoable.
+    const parsed = parseDirectCommand(
+      message,
+      ctx.sequence.fps,
+      ctx.sequence.tracks.map((t) => ({ id: t.id, kind: t.kind, name: t.name })),
+    );
+    if (!parsed.ok) {
+      return { reply: parsed.reply, intent, mode, conversationId: conversation, analysisUsed: false };
+    }
+    const contextVersion = `v:${ctx.history.versions[0]?.versionNumber ?? 0}:${ctx.sequence.clipCount}:${ctx.sequence.durationFrames}`;
+    const idempotencyKey = `cmd-${userId.slice(0, 8)}-${projectId.slice(0, 8)}-${Buffer.from(message).toString("base64url").slice(0, 30)}-${contextVersion}`;
+    const plan = AIPlanSchema.parse({
+      schemaVersion: 1,
+      planId: newId("plan"),
+      projectId,
+      requestSummary: message.slice(0, 500),
+      engines: ["RIISHE"],
+      steps: [{
+        id: "s1",
+        operation: "APPLY_COMMANDS",
+        engine: "RIISHE",
+        dependsOn: [],
+        args: { commands: parsed.commands },
+        title: parsed.summary,
+        description: "Single canonical editing command parsed from your request (M44 command routing)",
+        readsAssetIds: [],
+        writesAssetIds: [],
+        affectedRange: null,
+        risk: "timeline",
+      }],
+      expectedChanges: parsed.expectedChanges,
+      warnings: ["Executes only after your approval — fully undoable via the editor history."],
+      estimatedUsage: { llmCalls: 0, generationCalls: 0, note: "Deterministic command routing — no model inference." },
+      contextVersion,
+      idempotencyKey,
+    });
+    const persistedId = await persistPlan(plan, userId, projectId, conversationId ?? null, "deterministic-command");
+    return {
+      reply: [
+        `Parsed your request to one canonical command: **${parsed.summary}**.`,
+        `Proposed as plan ${persistedId} for your approval — it will NOT touch the timeline until you approve, and execution is fully undoable.`,
+        "Review it below: approve to apply, reject to discard, or tell me to adjust it first.",
+      ].join("\n"),
+      intent,
+      mode,
+      planId: persistedId,
+      planMode: "deterministic-command",
+      planNote: `1 command step: ${parsed.summary}`,
       conversationId: conversation,
       analysisUsed: false,
     };

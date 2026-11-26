@@ -13,6 +13,7 @@ import { assertWithinLimit, PlanLimitError, planLimitResponse } from "@/lib/bill
 import { getCurrentUser } from "@/lib/auth";
 import { badRequest, notFound, unauthorized } from "@/lib/process-helpers";
 import { resolveProjectContext } from "@/lib/my-ai/context/resolver";
+import { createPlan } from "@/lib/my-ai/planner/planner";
 import { llmHealth, llmProvider, LLMError } from "@/lib/my-ai/gateway/provider";
 import { recordUsage } from "@/lib/my-ai/gateway/usage";
 
@@ -76,12 +77,20 @@ export async function POST(req: NextRequest) {
     data: { conversationId: convoId, role: "user", content: parsed.data.message, metaJson: ctxSummary ? JSON.stringify({ contextProvided: true }) : null },
   });
 
+  // M44 — chat → structured plan loop. Detection is DETERMINISTIC so a
+  // structured editing plan is reliably proposed regardless of what the LLM
+  // emits in prose. Plans are created through the EXISTING planner
+  // (createPlan) and ride the existing approval/execution surface.
+  const planRequest = await resolvePlanRequest(user.id, convoId, parsed.data.message, projectId);
+
   const health = await llmHealth();
   if (!health.ok) {
     // Honest deterministic assistant answer (no provider): route to panels/plans.
     const text = deterministicAnswer(parsed.data.message, Boolean(projectId), health.detail);
-    await db.conversationMessage.create({ data: { conversationId: convoId, role: "assistant", content: text, metaJson: JSON.stringify({ mode: "deterministic" }) } });
-    return NextResponse.json({ conversationId: convoId, reply: text, mode: "deterministic", providerDetail: health.detail });
+    const attached = planRequest ? await attachPlan(user.id, projectId!, planRequest, convoId, text) : null;
+    const reply = attached ? `${text}\n\n${attached.replyNote}` : text;
+    await db.conversationMessage.create({ data: { conversationId: convoId, role: "assistant", content: reply, metaJson: JSON.stringify({ mode: "deterministic", planId: attached?.planId ?? null }) } });
+    return NextResponse.json({ conversationId: convoId, reply, mode: "deterministic", providerDetail: health.detail, ...(attached?.summary ? { plan: attached.summary } : {}) });
   }
 
   try {
@@ -97,13 +106,84 @@ Answer concisely (≤180 words), concrete and practical. When the user asks for 
     const res = await provider.chat(messages, { purpose: "chat", timeoutMs: 60_000, temperature: 0.4 });
     await recordUsage(user.id, res, "chat");
     const reply = `${res.content}\n\n— mode: LLM (${res.model}); tokens: ${res.usage?.totalTokens ?? "n/a"}`;
-    await db.conversationMessage.create({ data: { conversationId: convoId, role: "assistant", content: reply, metaJson: JSON.stringify({ mode: "llm", model: res.model, usage: res.usage }) } });
-    return NextResponse.json({ conversationId: convoId, reply, mode: "llm", model: res.model, usage: res.usage });
+    const attached = planRequest ? await attachPlan(user.id, projectId!, planRequest, convoId, reply) : null;
+    const finalReply = attached ? `${reply}\n\n${attached.replyNote}` : reply;
+    await db.conversationMessage.create({ data: { conversationId: convoId, role: "assistant", content: finalReply, metaJson: JSON.stringify({ mode: "llm", model: res.model, usage: res.usage, planId: attached?.planId ?? null }) } });
+    return NextResponse.json({ conversationId: convoId, reply: finalReply, mode: "llm", model: res.model, usage: res.usage, ...(attached?.summary ? { plan: attached.summary } : {}) });
   } catch (err) {
     const detail = err instanceof LLMError ? `${err.code}: ${err.message}` : err instanceof Error ? err.message.slice(0, 160) : "unknown";
     const text = deterministicAnswer(parsed.data.message, Boolean(projectId), detail);
-    await db.conversationMessage.create({ data: { conversationId: convoId, role: "assistant", content: text, metaJson: JSON.stringify({ mode: "deterministic", reason: detail }) } });
-    return NextResponse.json({ conversationId: convoId, reply: text, mode: "deterministic", providerDetail: detail });
+    const attached = planRequest ? await attachPlan(user.id, projectId!, planRequest, convoId, text) : null;
+    const finalReply = attached ? `${text}\n\n${attached.replyNote}` : text;
+    await db.conversationMessage.create({ data: { conversationId: convoId, role: "assistant", content: finalReply, metaJson: JSON.stringify({ mode: "deterministic", reason: detail, planId: attached?.planId ?? null }) } });
+    return NextResponse.json({ conversationId: convoId, reply: finalReply, mode: "deterministic", providerDetail: detail, ...(attached?.summary ? { plan: attached.summary } : {}) });
+  }
+}
+
+/** M44 — decide whether this chat turn should produce a structured plan. */
+const PLAN_REQUEST_RE = /\b(?:create|make|build|draft|propose|generate)\b[^.?!]{0,40}\bplan\b/i;
+const PLAN_CONFIRM_RE = /^(?:yes|yeah|yep|ok(?:ay)?|sure|please|go ahead|proceed|do it|confirm)\b/i;
+const EDIT_REQUEST_RE = /\b(?:edit|cut|trim|split|caption|subtitle|b-?roll|thumbnail|montage|reel|trailer|music|audio|volume|marker|transition|title|pacing|tighten|shorten|silence|remove|intro|ending)\b/i;
+const IMPERATIVE_EDIT_RE = /^(?:please\s+)?(?:create|make|build|generate|add|produce|turn|edit|cut|remove|tighten)\b/i;
+
+async function resolvePlanRequest(userId: string, conversationId: string, message: string, projectId: string | null): Promise<string | null> {
+  if (!projectId) return null;
+  if (PLAN_REQUEST_RE.test(message)) return message;
+  if (IMPERATIVE_EDIT_RE.test(message) && EDIT_REQUEST_RE.test(message)) return message;
+  if (PLAN_CONFIRM_RE.test(message)) {
+    // A confirmation ("yes, create the plan") refers to the most recent edit
+    // request in this conversation — find it instead of planning from "yes".
+    const recent = await db.conversationMessage.findMany({
+      where: { conversationId, role: "user" },
+      orderBy: { createdAt: "desc" },
+      take: 12,
+    });
+    // The current message was already persisted — skip it.
+    const prior = recent.filter((row) => row.content !== message);
+    const editRequest = prior.find((row) => EDIT_REQUEST_RE.test(row.content) && !PLAN_CONFIRM_RE.test(row.content.trim()));
+    return editRequest?.content.slice(0, 500) ?? null;
+  }
+  return null;
+}
+
+interface AttachedPlan {
+  planId: string | null;
+  replyNote: string;
+  summary: {
+    planId: string;
+    mode: string;
+    note: string;
+    engines?: string[];
+    steps?: { id: string; operation: string; title: string; risk: string; description: string }[];
+    status?: string;
+    warnings?: string[];
+  } | null;
+}
+
+async function attachPlan(userId: string, projectId: string, request: string, conversationId: string, _replySoFar: string): Promise<AttachedPlan | null> {
+  try {
+    const plan = await createPlan(userId, projectId, request, conversationId);
+    return {
+      planId: plan.plan.planId,
+      replyNote: `📋 Structured plan **${plan.plan.planId}** created (${plan.plan.steps.length} step(s), mode ${plan.mode}). Review it below — approve to apply through the canonical command system (fully undoable), reject to discard, or tell me to adjust it first. A plan is NOT an applied edit until you approve.`,
+      summary: {
+        planId: plan.plan.planId,
+        mode: plan.mode,
+        note: plan.note,
+        engines: plan.plan.engines,
+        steps: plan.plan.steps.map((s) => ({ id: s.id, operation: s.operation, title: s.title, risk: s.risk, description: s.description })),
+        status: "AWAITING_APPROVAL",
+        warnings: plan.plan.warnings,
+      },
+    };
+  } catch (err) {
+    // Honest failure — never pretend a plan exists (summary omitted so the
+    // client never receives an actionable plan row for a failed creation).
+    return {
+      planId: null,
+      replyNote: `⚠️ I tried to create a structured plan but it failed honestly: ${err instanceof Error ? err.message.slice(0, 160) : "unknown error"}. Use the PLAN button with a concrete request to retry.`,
+      summary: null,
+    };
   }
 }
 
