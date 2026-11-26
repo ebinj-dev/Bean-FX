@@ -244,7 +244,12 @@ export type Command = z.infer<typeof CommandSchema>;
 export function parseCommand(input: unknown): Command {
   const result = CommandSchema.safeParse(input);
   if (!result.success) {
-    throw new EditorError("INVALID_COMMAND", `command rejected by schema validation: ${result.error.issues[0]?.message ?? "unknown"}`);
+    // M45 — include the failing field path: callers (API consumers, MCP tools,
+    // the AI executor) must be able to see WHICH field was rejected, not just
+    // that "an object was expected" somewhere.
+    const issue = result.error.issues[0];
+    const where = issue?.path?.length ? issue.path.join(".") : "(command root)";
+    throw new EditorError("INVALID_COMMAND", `command rejected by schema validation at ${where}: ${issue?.message ?? "unknown"}`);
   }
   return result.data;
 }

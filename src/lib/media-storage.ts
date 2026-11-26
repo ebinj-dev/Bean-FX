@@ -32,6 +32,13 @@ export const MAX_CHUNKED_BYTES = 2 * 1024 * 1024 * 1024; // 2 GB
 export const USER_QUOTA_BYTES = Number(process.env.BEANFX_USER_QUOTA_BYTES ?? 5 * 1024 * 1024 * 1024);
 export const PROXIES_DIR = path.join(MEDIA_ROOT, "proxies");
 
+/** M45 — deterministic poster/thumbnail path for a probed VIDEO/IMAGE asset.
+ *  Derived files live in PROXIES_DIR with the asset id as the namespace, so
+ *  no DB column is needed and serving can validate against pathInsideMediaRoot. */
+export function posterPathFor(assetId: string): string {
+  return path.join(PROXIES_DIR, `${assetId}-poster.jpg`);
+}
+
 /** True when `candidate` resolves strictly inside MEDIA_ROOT (symlink-aware). */
 export function isInsideMediaRoot(candidate: string): boolean {
   const resolved = path.resolve(candidate);

@@ -14,6 +14,8 @@ import { Loader2, Sparkles, Wand2, Clapperboard, RotateCcw } from "lucide-react"
 import type { Sequence } from "@/lib/editor/model";
 import type { EditorSession } from "@/hooks/use-editor-session";
 import { NIKKI_TEMPLATES, templateById } from "@/lib/nikki/templates";
+import { VFX_CAPABILITIES } from "@/lib/nikki/vfx-capabilities";
+import type { EffectType } from "@/lib/editor/model";
 import type { NikkiGraphicStyle, NikkiTextAnim } from "@/lib/nikki/types";
 
 interface JobViewLite {
@@ -370,6 +372,153 @@ export function NikkiPanel({ sequence, session }: { sequence: Sequence; session:
       ) : (
         <p className="mt-3 text-[10px] text-[#5a5a55]">Select a graphic clip to edit it, or apply a template at the playhead.</p>
       )}
+
+      {/* ── M45 Unit B — NIIKI VFX workspace ─────────────────────────────── */}
+      <NikkiVfxSection sequence={sequence} session={session} selectedClip={clip} />
+    </div>
+  );
+}
+
+/**
+ * M45 Unit B — VFX controls for the SELECTED VIDEO clip: chroma key, shape
+ * masks, motion blur, and real libvidstab stabilization of the clip's SOURCE
+ * asset. Every edit is a canonical [RemoveEffect, AddEffect] / AddEffect
+ * session command — identical to the inspector's re-parameterization path.
+ * Availability text renders from lib/nikki/vfx-capabilities.ts (honest
+ * statuses; nothing here is decorative).
+ */
+function NikkiVfxSection({ session, selectedClip }: { sequence: Sequence; session: EditorSession; selectedClip: Sequence["clips"][number] | null }) {
+  const videoClip = selectedClip && !selectedClip.graphicStyle && (selectedClip.captionText === null) ? selectedClip : null;
+  const [stabBusy, setStabBusy] = useState(false);
+  const [stabNotice, setStabNotice] = useState<string | null>(null);
+  const [showCaps, setShowCaps] = useState(false);
+
+  const effectOf = useCallback((type: EffectType) => videoClip?.effects.find((e) => e.type === type) ?? null, [videoClip]);
+
+  const applyVfx = useCallback((type: EffectType, params: Record<string, number | string | boolean>) => {
+    if (!videoClip) return;
+    const existing = videoClip.effects.find((e) => e.type === type);
+    const next = { id: existing?.id ?? session.newId("fx"), type, enabled: true, params: { ...existing?.params, ...params } };
+    const ok = existing
+      ? session.apply([
+          { type: "RemoveEffect", clipId: videoClip.id, effectId: existing.id },
+          { type: "AddEffect", clipId: videoClip.id, effect: next },
+        ])
+      : session.apply([{ type: "AddEffect", clipId: videoClip.id, effect: next }]);
+    if (!ok) setStabNotice("The command engine refused the edit (locked track?).");
+  }, [videoClip, session]);
+
+  const removeVfx = useCallback((type: EffectType) => {
+    if (!videoClip) return;
+    const existing = videoClip.effects.find((e) => e.type === type);
+    if (existing) session.apply([{ type: "RemoveEffect", clipId: videoClip.id, effectId: existing.id }]);
+  }, [videoClip, session]);
+
+  const stabilize = useCallback(async () => {
+    if (!videoClip?.sourceAssetId || stabBusy) return;
+    setStabBusy(true);
+    setStabNotice(null);
+    try {
+      const res = await jfetch<{ jobId: string; message: string }>("/api/media/" + videoClip.sourceAssetId + "/stabilize", { method: "POST" });
+      setStabNotice(`${res.message} — the stabilized derivative appears in the media library when the job completes.`);
+    } catch (err) {
+      setStabNotice(err instanceof Error ? err.message : "Stabilization could not be queued.");
+    } finally {
+      setStabBusy(false);
+    }
+  }, [videoClip, stabBusy]);
+
+  const chroma = effectOf("chromaKey");
+  const rect = effectOf("rectMask");
+  const ellipse = effectOf("ellipseMask");
+  const mblur = effectOf("motionBlur");
+  const numParam = (e: ReturnType<typeof effectOf>, key: string, dflt: number) => {
+    const v = e?.params[key];
+    return typeof v === "number" ? v : dflt;
+  };
+  const rangeCls = "w-24 accent-[#d4a017]";
+  const rowCls = "flex items-center gap-1.5 text-[10px] text-[#8f8f8a]";
+  const chipCls = "rounded border border-[#2a2a2a] px-1.5 py-0.5 text-[9px] text-[#d4a017] hover:border-[#d4a017] disabled:opacity-40";
+
+  if (!videoClip) {
+    return (
+      <div className="mt-3 border-t border-[#1c1c1a] pt-2">
+        <h3 className="bean-label text-[9px] text-[#7a7a76]">VFX — SELECT A VIDEO CLIP</h3>
+        <p className="mt-1 text-[10px] text-[#5a5a55]">
+          Chroma key, shape masks, motion blur and stabilization apply to the selected video clip through the canonical effect system.
+        </p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="mt-3 border-t border-[#1c1c1a] pt-2">
+      <div className="flex items-center justify-between">
+        <h3 className="bean-label text-[9px] text-[#7a7a76]">VFX — {videoClip.label || "selected clip"}</h3>
+        <button type="button" onClick={() => setShowCaps((s) => !s)} className="text-[9px] text-[#5a5a55] hover:text-[#8f8f8a]" title="Honest capability list with availability and gates">
+          {showCaps ? "hide capabilities" : "capabilities"}
+        </button>
+      </div>
+
+      {/* Chroma key */}
+      <div className="mt-1.5">
+        <div className={rowCls}>
+          <span className="w-20 shrink-0">Chroma key</span>
+          <input type="color" value={String(chroma?.params.color ?? "#00b140")} onChange={(e) => applyVfx("chromaKey", { color: e.target.value })} className="h-5 w-6 cursor-pointer rounded border border-[#2a2a2a] bg-transparent" title="Key color (green #00b140 / blue #0047bb)" />
+          <input type="range" min={0} max={1} step={0.01} value={numParam(chroma, "similarity", 0.2)} onChange={(e) => applyVfx("chromaKey", { similarity: Number(e.target.value) })} className={rangeCls} title="Similarity — how close to the key color becomes transparent" />
+          <input type="range" min={0} max={1} step={0.01} value={numParam(chroma, "blend", 0.1)} onChange={(e) => applyVfx("chromaKey", { blend: Number(e.target.value) })} className={rangeCls} title="Blend — soft edge width" />
+          {chroma ? <button type="button" onClick={() => removeVfx("chromaKey")} className={chipCls}>remove</button> : null}
+        </div>
+      </div>
+
+      {/* Masks */}
+      <div className="mt-1.5 space-y-1">
+        <div className={rowCls}>
+          <span className="w-20 shrink-0">Rect mask</span>
+          {(["left", "right", "top", "bottom"] as const).map((k) => (
+            <input key={k} type="number" min={0} max={45} value={numParam(rect, k, 10)} onChange={(e) => applyVfx("rectMask", { [k]: Number(e.target.value) })} className="w-11 rounded border border-[#2a2a2a] bg-[#111110] px-1 py-0.5 text-[9px]" title={`${k} inset %`} />
+          ))}
+          <input type="number" min={0} max={50} value={numParam(rect, "feather", 5)} onChange={(e) => applyVfx("rectMask", { feather: Number(e.target.value) })} className="w-11 rounded border border-[#2a2a2a] bg-[#111110] px-1 py-0.5 text-[9px]" title="feather %" />
+          <input type="checkbox" checked={rect?.params.invert === true} onChange={(e) => applyVfx("rectMask", { invert: e.target.checked })} title="invert" />
+          {rect ? <button type="button" onClick={() => removeVfx("rectMask")} className={chipCls}>remove</button> : null}
+        </div>
+        <div className={rowCls}>
+          <span className="w-20 shrink-0">Ellipse mask</span>
+          <input type="number" min={5} max={80} value={numParam(ellipse, "radiusX", 35)} onChange={(e) => applyVfx("ellipseMask", { radiusX: Number(e.target.value) })} className="w-11 rounded border border-[#2a2a2a] bg-[#111110] px-1 py-0.5 text-[9px]" title="radiusX %" />
+          <input type="number" min={5} max={80} value={numParam(ellipse, "radiusY", 35)} onChange={(e) => applyVfx("ellipseMask", { radiusY: Number(e.target.value) })} className="w-11 rounded border border-[#2a2a2a] bg-[#111110] px-1 py-0.5 text-[9px]" title="radiusY %" />
+          <input type="number" min={0} max={50} value={numParam(ellipse, "feather", 10)} onChange={(e) => applyVfx("ellipseMask", { feather: Number(e.target.value) })} className="w-11 rounded border border-[#2a2a2a] bg-[#111110] px-1 py-0.5 text-[9px]" title="feather %" />
+          <input type="checkbox" checked={ellipse?.params.invert === true} onChange={(e) => applyVfx("ellipseMask", { invert: e.target.checked })} title="invert" />
+          {ellipse ? <button type="button" onClick={() => removeVfx("ellipseMask")} className={chipCls}>remove</button> : null}
+        </div>
+      </div>
+
+      {/* Motion blur + stabilization */}
+      <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+        <span className={rowCls + " w-20 shrink-0"}>Motion blur</span>
+        <input type="number" min={2} max={8} value={numParam(mblur, "frames", 3)} onChange={(e) => applyVfx("motionBlur", { frames: Number(e.target.value) })} className="w-11 rounded border border-[#2a2a2a] bg-[#111110] px-1 py-0.5 text-[9px]" title="frames to average (2-8)" />
+        {mblur ? <button type="button" onClick={() => removeVfx("motionBlur")} className={chipCls}>remove</button> : null}
+        <button type="button" onClick={() => void stabilize()} disabled={stabBusy || !videoClip.sourceAssetId} className={chipCls} title="Two-pass libvidstab stabilization of the clip's SOURCE asset (durable job, derivative registered with provenance)">
+          {stabBusy ? <Loader2 className="h-3 w-3 animate-spin" /> : null} STABILIZE SOURCE
+        </button>
+      </div>
+
+      {stabNotice && <p className="mt-1.5 text-[10px] leading-relaxed text-[#a0a09a]">{stabNotice}</p>}
+
+      {showCaps && (
+        <div className="mt-2 max-h-40 space-y-1 overflow-y-auto rounded border border-[#1c1c1a] bg-[#0d0d0c] p-2">
+          {VFX_CAPABILITIES.map((c) => (
+            <div key={c.id} className="text-[9px] leading-relaxed">
+              <span className={c.availability === "IMPLEMENTED" ? "text-[#4cc47f]" : c.availability === "PARTIAL" ? "text-[#d4a017]" : "text-[#c45c4c]"}>
+                ● {c.label}
+              </span>
+              <span className="text-[#5a5a55]"> — {c.availability.toLowerCase()}{c.gate ? ` · ${c.gate}` : ""}</span>
+            </div>
+          ))}
+        </div>
+      )}
+      <p className="mt-1.5 text-[9px] leading-relaxed text-[#5a5a55]">
+        Preview runs the same parameterized ops as the export chain (canvas ≤1280px — preview quality, not export quality). Keyed/masked clips composite over lower tracks in the export graph.
+      </p>
     </div>
   );
 }
