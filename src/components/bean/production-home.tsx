@@ -8,7 +8,7 @@
  * Conversation/ConversationMessage + M44 structured plans), attachments ride
  * the EXISTING /api/media pipeline, video result cards stream REAL renders
  * through the EXISTING owner-validated /api/exports/[id]/file route, and the
- * local project folder rides the File System Access API (lib/local-folder).
+ * local project folder rides the File System Access API (lib/project-folder).
  * No second chat backend, no second render path.
  */
 
@@ -21,7 +21,7 @@ import { BeanLogo } from "@/components/bean/logo";
 import {
   connectAndCreate, reconnect, disconnect, status as folderStatus, verifyFiles, saveDeliverable,
   saveAssetFile, isSupported, type LocalFolderStatus,
-} from "@/lib/local-folder";
+} from "@/lib/project-folder";
 
 type Section = "chat" | "projects" | "assets" | "crew" | "settings";
 
