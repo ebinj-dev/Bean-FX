@@ -13,13 +13,16 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { AlertCircle, CheckCircle2, ChevronRight, CircleDashed, Clock, Loader2, Users } from "lucide-react";
 
+export interface AssetLite { id: string; sceneKey: string | null; category: string; description: string; sourceType: string; status: string; licenseState: string; mediaAssetId: string | null }
+export interface MediaLite { id: string; originalName: string; kind: string; role?: string | null }
 export interface TaskLite {
   id: string; stageKey: string; seq: number; agent: string; roleLabel: string; tool: string;
-  status: string; criteria: string | null; error: string | null; jobId: string | null;
+  status: string; criteria: string | null; error: string | null; jobId: string | null; mode?: string | null; providerNote?: string | null;
   startedAt: string | null; completedAt: string | null;
   input: Record<string, unknown> | null; output: Record<string, unknown> | null;
 }
 export interface EventLite { id: string; kind: string; stageKey: string | null; createdAt: string; detail?: Record<string, unknown> | null }
+export type StageAction = "start" | "approve" | "reject" | "skip" | "retry" | "cancel";
 export interface StageLite {
   key: string;
   state: string;
@@ -89,7 +92,12 @@ export function ProductionCrewPanel({
   stages,
   tasks,
   events,
+  stageError,
+  assets,
+  projectAssets,
   busyAction,
+  onAttachAsset,
+  onDecideAsset,
   onAction,
   onOpenEditor,
 }: {
@@ -97,11 +105,17 @@ export function ProductionCrewPanel({
   stages: StageLite[];
   tasks: TaskLite[];
   events: EventLite[];
+  stageError?: string | null;
+  assets?: AssetLite[];
+  projectAssets?: MediaLite[];
   busyAction: string | null;
-  onAction: (stageKey: string, action: "start" | "approve" | "reject" | "skip") => void;
+  onAttachAsset?: (assetRowId: string, mediaAssetId: string) => void;
+  onDecideAsset?: (assetRowId: string, decision: "APPROVED" | "REJECTED") => void;
+  onAction: (stageKey: string, action: StageAction) => void;
   onOpenEditor: () => void;
 }) {
   const ordered = [...stages].sort((a, b) => a.order - b.order);
+  // M46H §3 — real failures are visible, not swallowed.
   const [logOpen, setLogOpen] = useState(false);
   const [intelOpen, setIntelOpen] = useState(false);
   const [intel, setIntel] = useState<{ coverage: Array<{ scene: string; covered: boolean }>; versions: number; lastVersion: number; traced: Array<{ from: string; via: string; to: string }> } | null>(null);
@@ -196,7 +210,7 @@ export function ProductionCrewPanel({
                 )}
                 {s.state === "FAILED" && (
                   <button
-                    onClick={() => onAction(s.key, "start")}
+                    onClick={() => onAction(s.key, "retry")}
                     disabled={busyAction !== null}
                     className="rounded border border-[#2a2a2a] px-2 py-0.5 text-[10px] text-[#f87171] hover:border-[#f87171] disabled:opacity-40"
                   >
@@ -212,6 +226,40 @@ export function ProductionCrewPanel({
             {actionable.key.replaceAll("_", " ")} is awaiting your approval — RIISHE pauses the crew here.
           </p>
         )}
+        {/* M46H §2 — real asset-selection interface: bind project media to scenes,
+            decide rows; every action hits the validated assets API. */}
+        {assets && assets.length > 0 && (
+          <details className="mt-2 rounded-lg border border-[#1c1c1a] bg-[#101010] px-2.5 py-1.5">
+            <summary className="cursor-pointer text-[10px] font-bold uppercase tracking-wider text-[#8f8f8a]">Asset plan ({assets.length} rows · {assets.filter((a) => a.mediaAssetId).length} bound)</summary>
+            <ul className="mt-1.5 flex max-h-52 flex-col gap-1 overflow-y-auto">
+              {assets.map((a) => (
+                <li key={a.id} className="rounded border border-[#181816] bg-[#0d0d0c] px-2 py-1 text-[10px]">
+                  <span className="text-[#c8c8c2]">{a.sceneKey ?? "music"} · {a.category}</span>
+                  <span className={a.status === "APPROVED" || a.status === "READY" ? "text-[#4cc47f]" : a.status === "REJECTED" ? "text-[#f87171]" : "text-[#d4a017]"}> · {a.status}</span>
+                  {a.mediaAssetId && <span className="text-[#4cc47f]"> · media {a.mediaAssetId.slice(-6)}</span>}
+                  {!a.mediaAssetId && projectAssets && projectAssets.length > 0 && (
+                    <select
+                      className="ml-1 rounded border border-[#2a2a2a] bg-[#111110] px-1 py-0.5 text-[9px] text-[#d8d8d2]"
+                      defaultValue=""
+                      onChange={(e) => { if (e.target.value && onAttachAsset) onAttachAsset(a.id, e.target.value); }}
+                    >
+                      <option value="">attach project media…</option>
+                      {projectAssets.map((m) => (
+                        <option key={m.id} value={m.id}>{m.originalName.slice(0, 28)} ({m.kind})</option>
+                      ))}
+                    </select>
+                  )}
+                  {onDecideAsset && (
+                    <span className="ml-1 inline-flex gap-1">
+                      <button onClick={() => onDecideAsset(a.id, "APPROVED")} disabled={busyAction !== null} className="rounded border border-[#1e3a26] px-1.5 py-0.5 text-[9px] text-[#4cc47f] hover:border-[#4cc47f]">Approve</button>
+                      <button onClick={() => onDecideAsset(a.id, "REJECTED")} disabled={busyAction !== null} className="rounded border border-[#3a1e1e] px-1.5 py-0.5 text-[9px] text-[#f87171] hover:border-[#f87171]">Reject</button>
+                    </span>
+                  )}
+                </li>
+              ))}
+            </ul>
+          </details>
+        )}
         {/* M45-P1 — the latest real task per stage: agent · tool · status · error */}
         {tasks.length > 0 && (
           <details className="mt-2 rounded-lg border border-[#1c1c1a] bg-[#101010] px-2.5 py-1.5">
@@ -221,7 +269,8 @@ export function ProductionCrewPanel({
                 <li key={t.id} className="text-[10px] leading-relaxed">
                   <span className={t.status === "SUCCEEDED" ? "text-[#4cc47f]" : t.status === "FAILED" ? "text-[#f87171]" : "text-[#d4a017]"}>[{t.status}]</span>{" "}
                   <span className="text-[#c8c8c2]">{t.stageKey.replaceAll("_", " ")}</span>
-                  <span className="text-[#6a6a64]"> · {t.agent} · {t.tool}</span>
+                  <span className="text-[#6a6a64]"> · {t.agent} · {t.tool}{t.mode ? ` · ${t.mode}` : ""}</span>
+                  {t.providerNote && <span className="block text-[9px] text-[#55555a]">{t.providerNote}</span>}
                   {t.error && <span className="text-[#f87171]"> · {t.error.slice(0, 90)}</span>}
                 </li>
               ))}
@@ -257,6 +306,9 @@ export function ProductionCrewPanel({
               </div>
             )}
           </details>
+        )}
+        {stageError && (
+          <p className="rounded-lg border border-[#7f1d1d] bg-[#1a0d0d] px-2.5 py-1.5 text-[11px] text-[#f87171]" role="alert">{stageError}</p>
         )}
         <div className="mt-2 flex justify-end">
           <button onClick={onOpenEditor} className="rounded border border-[#2a2a2a] px-2 py-0.5 text-[10px] text-[#d8d8d2] hover:border-[#d4a017] hover:text-[#d4a017]">

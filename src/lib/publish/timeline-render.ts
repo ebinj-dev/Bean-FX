@@ -124,6 +124,8 @@ function emitVisualSegment(
    *  alpha (yuva420p) so the per-clip positioned overlays and the xfade stay
    *  format-consistent. */
   forceAlphaFormat = false,
+  /** M46H — actual input pad to read from (asplit output when shared). */
+  inputPad?: string,
 ): void {
   const fps = seq.fps.num / seq.fps.den;
   const fpsR = { num: seq.fps.num, den: seq.fps.den };
@@ -162,14 +164,14 @@ function emitVisualSegment(
     // render window (enable windows and tpad-free overlays line up).
     const offsetSec = (plan.winStartFrame - renderStartFrame) / fps;
     if (offsetSec > 0) seg.push(`setpts=PTS+${q(offsetSec)}/TB`);
-    parts.push(`[${inputIndex}:v]${seg.join(",")}${outLabel}`);
+    parts.push(`[${inputPad ?? `${inputIndex}:v`}]${seg.join(",")}${outLabel}`);
     return;
   }
   // Piecewise-constant path: split the input once, trim+chain each sub-range,
   // concat. Clip fades apply AFTER the concat (they span the whole clip).
   const bounds = [clipRelWinStart, ...splits, clipRelWinStart + winDurFrames];
   const branches = bounds.slice(0, -1).map((_, i) => `[bs${uid}${i}]`).join("");
-  parts.push(`[${inputIndex}:v]split=${bounds.length - 1}${branches}`);
+  parts.push(`[${inputPad ?? `${inputIndex}:v`}]split=${bounds.length - 1}${branches}`);
   const subLabels: string[] = [];
   for (let i = 0; i < bounds.length - 1; i++) {
     const b0 = bounds[i];
@@ -332,7 +334,10 @@ function planTrackTransitions(seq: Sequence, trackId: string, plans: RenderClipP
   return pairs;
 }
 
-export function buildTimelineGraph(seq: Sequence, startFrame: number, endFrame: number, assetInputs: Map<string, { index: number; isImage: boolean; hasAudio: boolean }>, report?: TransitionPlanReport, opts?: { audioOnly?: boolean }) {
+export function buildTimelineGraph(seq: Sequence, startFrame: number, endFrame: number, assetInputs: Map<string, { index: number; isImage: boolean; hasAudio: boolean }>, report?: TransitionPlanReport, opts?: { audioOnly?: boolean }, planInputs?: Map<RenderClipPlan, { index: number; isImage: boolean; hasAudio: boolean }>) {
+  // M46H — when the caller allocates ONE INPUT PER PLAN OCCURRENCE, every pad
+  // reference is unique and the shared-input pad problem disappears entirely.
+  const inputFor = (plan: RenderClipPlan) => planInputs?.get(plan) ?? assetInputs.get(plan.clip.sourceAssetId)!;
   // M38 fix: audio-only formats build a TRUE audio-only graph. ffmpeg 7.1.5
   // (measured — this bug shipped in M37 and was caught by the M38 live batch
   // suite) REJECTS filter-graph binding when any filter output is
@@ -388,11 +393,29 @@ export function buildTimelineGraph(seq: Sequence, startFrame: number, endFrame: 
         // inputs, exact per-clip position/opacity — measured graph design).
         const runTransformed = run.plans.some((p) => clipHasTransform(p.clip));
         const labels: string[] = [];
+        // M46H — video inputs may also feed several clips (one source across
+        // scenes). asplit each repeated input once, then reference the split
+        // pads per segment (ffmpeg forbids reusing an input pad label).
+        const vSplitCounts = new Map<number, number>();
+        for (const plan of run.plans) {
+          const input = inputFor(plan);
+          vSplitCounts.set(input.index, (vSplitCounts.get(input.index) ?? 0) + 1);
+        }
+        const vSplitCursor = new Map<number, number>();
+        for (const [idx, n] of vSplitCounts) {
+          if (n > 1) {
+            const outs = Array.from({ length: n }, (_, k) => `vin${idx}_${k}`).join("][");
+            parts.push(`[${idx}:v]asplit=${n}[${outs}]`);
+          }
+        }
         for (let i = 0; i < run.plans.length; i++) {
           const plan = run.plans[i];
-          const input = assetInputs.get(plan.clip.sourceAssetId)!;
+          const input = inputFor(plan);
+          const vk = vSplitCursor.get(input.index) ?? 0;
+          vSplitCursor.set(input.index, vk + 1);
+          const vInLabel = (vSplitCounts.get(input.index) ?? 1) > 1 ? `vin${input.index}_${vk}` : `${input.index}:v`;
           const label = `[tseg${segCounter}]`;
-          emitVisualSegment(parts, plan, seq, input.index, input.isImage, label, `s${segCounter}`, startFrame, runTransformed);
+          emitVisualSegment(parts, plan, seq, input.index, input.isImage, label, `s${segCounter}`, startFrame, runTransformed, vInLabel);
           segCounter += 1;
           let streamLabel = label;
           if (runTransformed) {
@@ -476,9 +499,26 @@ export function buildTimelineGraph(seq: Sequence, startFrame: number, endFrame: 
   // Audio: silence bed + every audible segment → amix (no normalize: the
   // clip gains ARE the mix, matching the preview's linear sum).
   const audioLabels: string[] = ["[silence]"];
+  // M46H — one input stream may feed SEVERAL clips (one source covering three
+  // scenes is normal). ffmpeg forbids reusing an input pad label, so asplit
+  // each multi-use input once and reference the split outputs per plan.
+  const splitCounts = new Map<number, number>();
+  const inputIndexOf = (plan: RenderClipPlan) => inputFor(plan).index;
+  for (const plan of audioPlans) splitCounts.set(inputIndexOf(plan), (splitCounts.get(inputIndexOf(plan)) ?? 0) + 1);
+  const splitCursor = new Map<number, number>();
+  for (const [idx, n] of splitCounts) {
+    if (n > 1) {
+      const outs = Array.from({ length: n }, (_, k) => `ain${idx}_${k}`).join("][");
+      parts.push(`[${idx}:a]asplit=${n}[${outs}]`);
+    }
+  }
   for (let i = 0; i < audioPlans.length; i++) {
     const plan = audioPlans[i];
-    const input = assetInputs.get(plan.clip.sourceAssetId)!;
+    const inIdx = inputIndexOf(plan);
+    const k = splitCursor.get(inIdx) ?? 0;
+    splitCursor.set(inIdx, k + 1);
+    const audioInLabel = (splitCounts.get(inIdx) ?? 1) > 1 ? `ain${inIdx}_${k}` : `${inIdx}:a`;
+    const input = inputFor(plan);
     const offsetSec = (plan.winStartFrame - startFrame) / fps;
     const durSec = (plan.winEndFrame - plan.winStartFrame) / fps;
     const gain = Math.min(4, Math.max(0, plan.clip.volume));
@@ -519,7 +559,7 @@ export function buildTimelineGraph(seq: Sequence, startFrame: number, endFrame: 
     seg.push(`adelay=${Math.max(0, Math.round(offsetSec * 1000))}:all=1`);
     if (plan.clip.fadeInFrames > 0) seg.push(`afade=in:st=0:d=${q(plan.clip.fadeInFrames / fps)}`);
     if (plan.clip.fadeOutFrames > 0) seg.push(`afade=out:st=${q(durSec - plan.clip.fadeOutFrames / fps)}:d=${q(plan.clip.fadeOutFrames / fps)}`);
-    parts.push(`[${input.index}:a]${seg.join(",")}[a${i}]`);
+    parts.push(`[${audioInLabel}]${seg.join(",")}[a${i}]`);
     audioLabels.push(`[a${i}]`);
   }
   parts.push(`${audioLabels.join("")}amix=inputs=${audioLabels.length}:normalize=0:duration=longest[mixout]`);
@@ -625,13 +665,17 @@ export async function runTimelineRenderJob(job: { id: string; userId: string; pa
       hasAudioById.set(id, false);
     }
   }
+  // M46H — ONE FFMPEG INPUT PER PLAN OCCURRENCE: the same source covering
+  // several scenes gets listed once per scene, so no input pad is ever shared
+  // between filtergraph branches (the root cause of the 234 render failures).
+  const planInputs = new Map<RenderClipPlan, { index: number; isImage: boolean; hasAudio: boolean }>();
   for (const plan of [...collectVisualPlans(seq, startFrame, endFrame), ...collectAudioPlans(seq, startFrame, endFrame)]) {
     const id = plan.clip.sourceAssetId;
-    if (!id || used.has(id)) continue;
+    if (!id || planInputs.has(plan)) continue;
     const asset = assetById.get(id);
     if (!asset) continue;
     const isImage = asset.kind === "IMAGE";
-    used.set(id, { index: nextIndex, isImage, hasAudio: hasAudioById.get(id) ?? false });
+    planInputs.set(plan, { index: nextIndex, isImage, hasAudio: hasAudioById.get(id) ?? false });
     if (isImage) {
       const win = plan.winEndFrame - plan.winStartFrame;
       inputArgs.push("-loop", "1", "-framerate", String(fps), "-t", q(win / fps), "-i", asset.storagePath);
@@ -791,7 +835,7 @@ export async function runTimelineRenderJob(job: { id: string; userId: string; pa
     return;
   }
 
-  const graph = buildTimelineGraph(seq, startFrame, endFrame, used, transitionReport, { audioOnly: spec.audioOnly });
+  const graph = buildTimelineGraph(seq, startFrame, endFrame, used, transitionReport, { audioOnly: spec.audioOnly }, planInputs);
   // M37: audio-only formats map ONLY the mix. (M38 fix: the graph is now
   // genuinely audio-only — ffmpeg rejects ANY unconnected filter output at
   // bind time, so the unmapped video composite broke WAV/MP3 renders.)

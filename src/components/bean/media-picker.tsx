@@ -13,11 +13,13 @@ export function MediaPicker({
   onSelect,
   refreshKey,
   role,
+  projectId,
 }: {
   kindFilter?: "AUDIO" | "VIDEO";
   selectedId: string | null;
   onSelect: (media: MediaMeta | null) => void;
   refreshKey?: number;
+  projectId?: string | null;
   role?: "BROLL";
 }) {
   const [media, setMedia] = useState<MediaMeta[] | null>(null);
@@ -57,7 +59,11 @@ export function MediaPicker({
           role,
           onProgress: (pct) => setUploadPct(pct),
           signal: controller.signal,
-        });
+          projectId: projectId ?? (typeof location !== "undefined"
+            ? (location.hash.match(/editor\/([a-z0-9]+)/i)?.[1] ?? location.hash.match(/[?&]project=([a-z0-9]+)/i)?.[1] ?? null)
+            : null),
+  productionRole: "SOURCE_FOOTAGE",
+});
         await load();
       } catch (err) {
         setError(err instanceof Error ? err.message : "Upload failed.");

@@ -22,6 +22,7 @@ export async function GET(_req: NextRequest, ctx: { params: Promise<{ id: string
     select: { id: true, title: true, projectId: true },
   });
   if (!conversation) return NextResponse.json({ error: "Conversation not found." }, { status: 404 });
+  const linkedProduction = conversation ? await db.production.findFirst({ where: { conversationId: conversation.id, userId: user.id }, orderBy: { createdAt: "asc" }, select: { id: true } }) : null;
 
   const messages = await db.conversationMessage.findMany({
     where: { conversationId: conversation.id },
@@ -31,7 +32,7 @@ export async function GET(_req: NextRequest, ctx: { params: Promise<{ id: string
   });
 
   return NextResponse.json({
-    conversation,
+    conversation: { ...conversation, productionId: linkedProduction?.id ?? null },
     messages: messages.map((m) => ({
       id: m.id,
       role: m.role,
