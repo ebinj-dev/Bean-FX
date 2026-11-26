@@ -7,7 +7,7 @@ import type { MetadataRoute } from "next";
 const BASE_URL = process.env.PUBLIC_APP_URL ?? "https://beanfx.example.invalid";
 
 export default function sitemap(): MetadataRoute.Sitemap {
-  const routes = ["", "/features", "/pricing", "/about", "/contact", "/faq", "/help", "/privacy", "/terms", "/cookies"];
+  const routes = ["", "/features", "/pricing", "/about", "/contact", "/faq", "/help", "/privacy", "/terms", "/cookies", "/open-source", "/legal", "/legal/ai-processing", "/legal/voice-data", "/legal/acceptable-use", "/legal/copyright"];
   return routes.map((r) => ({
     url: `${BASE_URL}${r}`,
     lastModified: new Date(),
