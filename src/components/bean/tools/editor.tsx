@@ -23,6 +23,10 @@ import { sequenceEndFrame } from "@/lib/editor/preview";
 import { api } from "@/lib/client-api";
 import { effectiveRemovalSec, planRiisheTimelineApply } from "@/lib/riishe-timeline";
 import { useEditorSession } from "@/hooks/use-editor-session";
+import {
+  ESSENTIAL_TOOL_IDS, clampDockWidth, defaultDockWidths,
+  loadWorkspacePrefs, saveWorkspacePrefs, type WorkspaceMode,
+} from "@/lib/editor/workspace";
 import { ProjectPortability } from "@/components/bean/editor/portability-panel";
 import { CollabPanel } from "@/components/bean/editor/collab-panel";
 import { NotificationsBell } from "@/components/bean/notifications-bell";
@@ -63,8 +67,17 @@ export function EditorTool({ user }: { user: { id: string }; onLogout: () => voi
   const [guides, setGuides] = useState(false);
   const [drawer, setDrawer] = useState<Drawer>(null);
   const [leftTab, setLeftTab] = useState<LeftTab>("media");
-  const [leftWidth, setLeftWidth] = useState(260);
-  const [rightWidth, setRightWidth] = useState(300);
+  // M44 — Essentials/Pro workspace + persisted dock sizes. Pure UI state:
+  // switching modes never touches sequence, clip or project data.
+  const [workspaceMode, setWorkspaceMode] = useState<WorkspaceMode>(() => loadWorkspacePrefs()?.mode ?? "essentials");
+  const [leftWidth, setLeftWidth] = useState(() => {
+    const vp = typeof window === "undefined" ? 1440 : window.innerWidth;
+    return loadWorkspacePrefs()?.leftWidth ?? defaultDockWidths(vp).left;
+  });
+  const [rightWidth, setRightWidth] = useState(() => {
+    const vp = typeof window === "undefined" ? 1440 : window.innerWidth;
+    return loadWorkspacePrefs()?.rightWidth ?? defaultDockWidths(vp).right;
+  });
   const [renaming, setRenaming] = useState(false);
   const [renameValue, setRenameValue] = useState("");
 
@@ -371,13 +384,27 @@ export function EditorTool({ user }: { user: { id: string }; onLogout: () => voi
     if (!dragRef.current) return;
     const { side, startX, startWidth } = dragRef.current;
     const delta = side === "left" ? e.clientX - startX : startX - e.clientX;
-    const next = Math.max(200, Math.min(480, startWidth + delta));
+    const next = clampDockWidth(startWidth + delta, window.innerWidth);
     if (side === "left") setLeftWidth(next);
     else setRightWidth(next);
   };
   const onDockUp = () => {
     dragRef.current = null;
   };
+
+  // M44 — persist workspace preferences and re-clamp dock sizes on resize so
+  // the central workspace (monitor + timeline) always keeps usable room.
+  useEffect(() => {
+    saveWorkspacePrefs({ mode: workspaceMode, leftWidth, rightWidth });
+  }, [workspaceMode, leftWidth, rightWidth]);
+  useEffect(() => {
+    const onResize = () => {
+      setLeftWidth((w) => clampDockWidth(w, window.innerWidth));
+      setRightWidth((w) => clampDockWidth(w, window.innerWidth));
+    };
+    window.addEventListener("resize", onResize);
+    return () => window.removeEventListener("resize", onResize);
+  }, []);
 
   // M16: real asset durations (frames at the sequence rate) for roll/slide
   // extension decisions — from the media library's probe data only.
@@ -437,6 +464,28 @@ export function EditorTool({ user }: { user: { id: string }; onLogout: () => voi
         <button type="button" onClick={() => session.undo()} disabled={!session.canUndo} className={toolButton} title="Undo (Ctrl+Z)"><Undo2 className="h-4 w-4" /></button>
         <button type="button" onClick={() => session.redo()} disabled={!session.canRedo} className={toolButton} title="Redo (Ctrl+Shift+Z)"><Redo2 className="h-4 w-4" /></button>
 
+        {/* M44 — workspace selector: Essentials (simple workflow) vs Pro (every control). UI-only switch. */}
+        <span className="mx-1 h-5 w-px bg-[#2a2a2a]" />
+        <div className="flex items-center overflow-hidden rounded border border-[#2a2a2a]" role="group" aria-label="Workspace mode"
+          title="Essentials keeps the primary editing actions up front. Pro reveals every advanced control. Switching never changes your project data.">
+          {(["essentials", "pro"] as const).map((m) => (
+            <button key={m} type="button"
+              onClick={() => {
+                setWorkspaceMode(m);
+                if (m === "essentials") {
+                  setLeftTab("media");
+                  if (drawer === "workflows" || drawer === "presets" || drawer === "mixer") setDrawer(null);
+                  // If a Pro-only tool is active, fall back to Select so the
+                  // visible toolbar never disagrees with the active tool.
+                  if (!(ESSENTIAL_TOOL_IDS as readonly string[]).includes(activeTool)) setActiveTool("select");
+                }
+              }}
+              className={`px-2 py-1 text-[10px] uppercase tracking-wide ${workspaceMode === m ? "bg-[#d4a017]/15 text-[#d4a017]" : "text-[#8f8f8a] hover:text-[#d8d8d2]"}`}>
+              {m}
+            </button>
+          ))}
+        </div>
+
         <span className="mx-1 h-5 w-px bg-[#2a2a2a]" />
         <div className="flex items-center gap-1">
           <input value={newProjectName} onChange={(e) => setNewProjectName(e.target.value.slice(0, 120))} onKeyDown={(e) => e.key === "Enter" && void createProject()} placeholder="New project…" className="w-32 rounded border border-[#2a2a2a] bg-[#111110] px-1.5 py-1 text-xs outline-none placeholder:text-[#5a5a55] focus:border-[#d4a017]" />
@@ -447,15 +496,19 @@ export function EditorTool({ user }: { user: { id: string }; onLogout: () => voi
           <button type="button" onClick={() => setDrawer(drawer === "ai-studio" ? null : "ai-studio")} className={`flex items-center gap-1.5 rounded border px-2.5 py-1.5 text-[11px] ${drawer === "ai-studio" ? "border-[#d4a017] text-[#d4a017]" : "border-[#2a2a2a] text-[#d8d8d2] hover:border-[#d4a017] hover:text-[#d4a017]"}`}>
             <Bot className="h-3.5 w-3.5" /> AI STUDIO
           </button>
-          <button type="button" onClick={() => setDrawer(drawer === "workflows" ? null : "workflows")} className={`flex items-center gap-1.5 rounded border px-2.5 py-1.5 text-[11px] ${drawer === "workflows" ? "border-[#d4a017] text-[#d4a017]" : "border-[#2a2a2a] text-[#d8d8d2] hover:border-[#d4a017] hover:text-[#d4a017]"}`} title="Workflow automation: multi-step production runs with approval gates">
-            WORKFLOWS
-          </button>
-          <button type="button" onClick={() => setDrawer(drawer === "presets" ? null : "presets")} className={`flex items-center gap-1.5 rounded border px-2.5 py-1.5 text-[11px] ${drawer === "presets" ? "border-[#d4a017] text-[#d4a017]" : "border-[#2a2a2a] text-[#d8d8d2] hover:border-[#d4a017] hover:text-[#d4a017]"}`} title="Creative presets: save, apply, rename, duplicate">
-            PRESETS
-          </button>
-          <button type="button" onClick={() => setDrawer(drawer === "mixer" ? null : "mixer")} className={`flex items-center gap-1.5 rounded border px-2.5 py-1.5 text-[11px] ${drawer === "mixer" ? "border-[#d4a017] text-[#d4a017]" : "border-[#2a2a2a] text-[#d8d8d2] hover:border-[#d4a017] hover:text-[#d4a017]"}`} title="Per-track faders with real meters">
-            MIXER
-          </button>
+          {workspaceMode === "pro" && (
+            <>
+              <button type="button" onClick={() => setDrawer(drawer === "workflows" ? null : "workflows")} className={`flex items-center gap-1.5 rounded border px-2.5 py-1.5 text-[11px] ${drawer === "workflows" ? "border-[#d4a017] text-[#d4a017]" : "border-[#2a2a2a] text-[#d8d8d2] hover:border-[#d4a017] hover:text-[#d4a017]"}`} title="Workflow automation: multi-step production runs with approval gates">
+                WORKFLOWS
+              </button>
+              <button type="button" onClick={() => setDrawer(drawer === "presets" ? null : "presets")} className={`flex items-center gap-1.5 rounded border px-2.5 py-1.5 text-[11px] ${drawer === "presets" ? "border-[#d4a017] text-[#d4a017]" : "border-[#2a2a2a] text-[#d8d8d2] hover:border-[#d4a017] hover:text-[#d4a017]"}`} title="Creative presets: save, apply, rename, duplicate">
+                PRESETS
+              </button>
+              <button type="button" onClick={() => setDrawer(drawer === "mixer" ? null : "mixer")} className={`flex items-center gap-1.5 rounded border px-2.5 py-1.5 text-[11px] ${drawer === "mixer" ? "border-[#d4a017] text-[#d4a017]" : "border-[#2a2a2a] text-[#d8d8d2] hover:border-[#d4a017] hover:text-[#d4a017]"}`} title="Per-track faders with real meters">
+                MIXER
+              </button>
+            </>
+          )}
           <button type="button" onClick={() => setDrawer(drawer === "export" ? null : "export")} className={`flex items-center gap-1.5 rounded border px-2.5 py-1.5 text-[11px] ${drawer === "export" ? "border-[#d4a017] text-[#d4a017]" : "border-[#2a2a2a] text-[#d8d8d2] hover:border-[#d4a017] hover:text-[#d4a017]"}`}>
             <Download className="h-3.5 w-3.5" /> EXPORT
           </button>
@@ -482,14 +535,14 @@ export function EditorTool({ user }: { user: { id: string }; onLogout: () => voi
         {/* Left dock */}
         <div className="flex shrink-0 flex-col overflow-hidden border-r border-[#2a2a2a] bg-[#0b0b0a]" style={{ width: leftWidth }}>
           <div className="flex items-center gap-1 border-b border-[#2a2a2a] px-2 py-1.5">
-            {(["media", "effects"] as const).map((t) => (
+          {(["media", ...(workspaceMode === "pro" ? (["effects"] as const) : [])] as const).map((t) => (
               <button key={t} type="button" onClick={() => setLeftTab(t)} className={`rounded px-2 py-1 text-[10px] uppercase tracking-wide ${leftTab === t ? "bg-[#d4a017]/15 text-[#d4a017]" : "text-[#8f8f8a] hover:text-[#d8d8d2]"}`}>
                 {t}
               </button>
             ))}
             <SlidersHorizontal className="ml-auto h-3 w-3 text-[#5a5a55]" />
           </div>
-          {leftTab === "media" ? (
+          {leftTab === "media" || workspaceMode === "essentials" ? (
             <MediaBrowser media={media} onRefresh={refreshMedia} onPlace={(a) => void addMediaAtPlayhead(a)} importing={importing} onImport={(files) => void importFiles(files)} />
           ) : (
             <EffectsBrowser sequence={sequence} session={session} notice={setNotice} />
@@ -520,7 +573,7 @@ export function EditorTool({ user }: { user: { id: string }; onLogout: () => voi
             <span className="font-mono text-[10px] text-[#5a5a55]">{sequence ? `${sequence.width}×${sequence.height} @${sequence.fps.num}/${sequence.fps.den}` : ""}</span>
           </div>
           {/* Editing tools + timeline */}
-          <EditingToolbar activeTool={activeTool} onToolChange={setActiveTool} snap={snap} onSnapChange={setSnap} />
+          <EditingToolbar activeTool={activeTool} onToolChange={setActiveTool} snap={snap} onSnapChange={setSnap} visibleTools={workspaceMode === "essentials" ? [...ESSENTIAL_TOOL_IDS] : undefined} />
           <div className="flex min-h-[220px] flex-1 flex-col p-2 pt-0">
             {sequence ? (
               <EditorTimeline sequence={sequence} playhead={session.playheadFrame} session={session} zoom={zoom} onZoomChange={setZoom} activeTool={activeTool} snap={snap} notice={setNotice} assetDurations={assetFrameDurations} range={range} onRangeChange={setRange} />
@@ -542,7 +595,7 @@ export function EditorTool({ user }: { user: { id: string }; onLogout: () => voi
               {selectedClip.keyframes.length} keyframe(s) — diamonds on the timeline block; edit via NIIKI (AI STUDIO) or effect parameters.
             </div>
           )}
-          {sequence && <StudioPanel onProjectCreated={(id) => setProjectId(id)} />}
+          {sequence && workspaceMode === "pro" && <StudioPanel onProjectCreated={(id) => setProjectId(id)} />}
         </div>
       </div>
 

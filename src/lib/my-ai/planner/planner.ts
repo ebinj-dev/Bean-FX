@@ -264,13 +264,15 @@ export async function createPlan(userId: string, projectId: string, request: str
   }
 }
 
-/** Persist a plan row (DRAFT → AWAITING_APPROVAL immediately: all plans gate). */
-async function persistPlan(
+/** Persist a plan row (DRAFT → AWAITING_APPROVAL immediately: all plans gate).
+ *  Exported for M44 deterministic command routing — a parsed canonical command
+ *  persists through the SAME approval-gated plan pipeline, never a side door. */
+export async function persistPlan(
   plan: AIPlan,
   userId: string,
   projectId: string,
   conversationId: string | null,
-  mode: "llm" | "deterministic-fallback",
+  mode: "llm" | "deterministic-fallback" | "deterministic-command",
   model?: string,
 ): Promise<string> {
   try {
@@ -285,7 +287,7 @@ async function persistPlan(
         requestSummary: plan.requestSummary,
         stepsJson: JSON.stringify(plan.steps),
         contextVersion: plan.contextVersion,
-        plannerMode: mode === "llm" ? `llm:${model ?? "unknown"}` : "deterministic-fallback",
+        plannerMode: mode === "llm" ? `llm:${model ?? "unknown"}` : mode,
         engines: JSON.stringify(plan.engines),
         warningsJson: JSON.stringify(plan.warnings),
         idempotencyKey: plan.idempotencyKey,
