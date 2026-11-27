@@ -46,6 +46,72 @@ interface RenderClipPlan {
   winEndFrame: number;
 }
 
+/** M47.2-A — shape shared by the asset-level map and the plan-occurrence map. */
+export interface RenderInputEntry {
+  index: number;
+  isImage: boolean;
+  hasAudio: boolean;
+}
+
+/**
+ * M47.2-A (M46.1 hotfix) — STABLE PLAN-OCCURRENCE IDENTITY.
+ *
+ * buildTimelineGraph RE-COLLECTS plans from the sequence (fresh objects every
+ * call), so the previous reference-keyed `Map<RenderClipPlan, …>` missed every
+ * lookup in the normal render path and fell back to an asset map the caller
+ * never populated — every visual/audio plan was silently filtered out and the
+ * render produced a valid H.264/AAC container full of black frames and
+ * silence. The identity below is derived from plan CONTENT (clip id + track +
+ * exact window), so the caller's allocation and the graph builder's lookup
+ * agree regardless of object identity.
+ */
+function planOccurrenceKey(plan: RenderClipPlan): string {
+  return `${plan.clip.id}|${plan.trackIndex}|${plan.winStartFrame}|${plan.winEndFrame}`;
+}
+export { planOccurrenceKey };
+
+/**
+ * M47.2-A — ONE deterministic input-allocation routine used by BOTH the
+ * normal (≤240 s) and the long-form windowed render paths: one ffmpeg input
+ * per plan occurrence (images get their own -loop/-t window, so a reused
+ * image always spans its own clip's duration), keyed by planOccurrenceKey.
+ * `usedByAsset` mirrors the first occurrence per asset id so the graph's
+ * asset-level checks (hasAudio gating, missing-asset accounting) keep working
+ * for callers that populate only the asset-level map. Same plans in → same
+ * allocation out; nothing depends on object-reference equality.
+ */
+export function allocateRenderInputs(
+  plans: RenderClipPlan[],
+  assetById: Map<string, { id: string; kind: string; storagePath: string }>,
+  hasAudioById: Map<string, boolean>,
+  fps: number,
+): { inputArgs: string[]; inputByPlanKey: Map<string, RenderInputEntry>; usedByAsset: Map<string, RenderInputEntry> } {
+  const inputArgs: string[] = [];
+  const inputByPlanKey = new Map<string, RenderInputEntry>();
+  const usedByAsset = new Map<string, RenderInputEntry>();
+  let nextIndex = 0;
+  for (const plan of plans) {
+    const id = plan.clip.sourceAssetId;
+    if (!id) continue;
+    const key = planOccurrenceKey(plan);
+    if (inputByPlanKey.has(key)) continue;
+    const asset = assetById.get(id);
+    if (!asset) continue; // pre-flight in the caller fails before this can matter
+    const isImage = asset.kind === "IMAGE";
+    const entry: RenderInputEntry = { index: nextIndex, isImage, hasAudio: hasAudioById.get(id) ?? false };
+    inputByPlanKey.set(key, entry);
+    if (!usedByAsset.has(id)) usedByAsset.set(id, entry);
+    if (isImage) {
+      const win = plan.winEndFrame - plan.winStartFrame;
+      inputArgs.push("-loop", "1", "-framerate", String(fps), "-t", q(Math.max(1, win) / fps), "-i", asset.storagePath);
+    } else {
+      inputArgs.push("-i", asset.storagePath);
+    }
+    nextIndex += 1;
+  }
+  return { inputArgs, inputByPlanKey, usedByAsset };
+}
+
 function collectVisualPlans(seq: Sequence, startFrame: number, endFrame: number): RenderClipPlan[] {
   const plans: RenderClipPlan[] = [];
   seq.tracks.forEach((track, trackIndex) => {
@@ -334,10 +400,18 @@ function planTrackTransitions(seq: Sequence, trackId: string, plans: RenderClipP
   return pairs;
 }
 
-export function buildTimelineGraph(seq: Sequence, startFrame: number, endFrame: number, assetInputs: Map<string, { index: number; isImage: boolean; hasAudio: boolean }>, report?: TransitionPlanReport, opts?: { audioOnly?: boolean }, planInputs?: Map<RenderClipPlan, { index: number; isImage: boolean; hasAudio: boolean }>) {
-  // M46H — when the caller allocates ONE INPUT PER PLAN OCCURRENCE, every pad
-  // reference is unique and the shared-input pad problem disappears entirely.
-  const inputFor = (plan: RenderClipPlan) => planInputs?.get(plan) ?? assetInputs.get(plan.clip.sourceAssetId)!;
+export function buildTimelineGraph(seq: Sequence, startFrame: number, endFrame: number, assetInputs: Map<string, RenderInputEntry>, report?: TransitionPlanReport, opts?: { audioOnly?: boolean }, planInputs?: Map<string, RenderInputEntry>) {
+  // M47.2-A (M46.1 hotfix) — resolve an input by STABLE plan-occurrence key
+  // first (the caller allocates one input per occurrence), then by asset id
+  // (the legacy per-asset map). An unresolved input is an INVARIANT violation:
+  // it must fail loudly here rather than silently producing black/silent media.
+  const inputFor = (plan: RenderClipPlan): RenderInputEntry => {
+    const entry = planInputs?.get(planOccurrenceKey(plan)) ?? assetInputs.get(plan.clip.sourceAssetId!);
+    if (!entry) {
+      throw new Error(`Render graph invariant violated: clip ${plan.clip.id} (track ${plan.trackIndex}, frames ${plan.winStartFrame}–${plan.winEndFrame}) has no allocated ffmpeg input for asset ${plan.clip.sourceAssetId ?? "none"}.`);
+    }
+    return entry;
+  };
   // M38 fix: audio-only formats build a TRUE audio-only graph. ffmpeg 7.1.5
   // (measured — this bug shipped in M37 and was caught by the M38 live batch
   // suite) REJECTS filter-graph binding when any filter output is
@@ -349,8 +423,15 @@ export function buildTimelineGraph(seq: Sequence, startFrame: number, endFrame: 
   const fps = seq.fps.num / seq.fps.den;
   const totalSec = (endFrame - startFrame) / fps;
   const parts: string[] = [];
-  const visualPlans = collectVisualPlans(seq, startFrame, endFrame).filter((p) => assetInputs.has(p.clip.sourceAssetId));
-  const audioPlans = collectAudioPlans(seq, startFrame, endFrame).filter((p) => assetInputs.get(p.clip.sourceAssetId)?.hasAudio);
+  // M47.2-A — plan admission is now consistent with inputFor: a plan is
+  // renderable when EITHER the asset-level map or the plan-occurrence map
+  // resolves it. Missing assets are caught loudly by the caller's pre-flight;
+  // here the filters only gate hasAudio capability (a video-only source has
+  // no audio plan — correct media behavior, not a black-frame bug).
+  const resolves = (plan: RenderClipPlan): boolean => assetInputs.has(plan.clip.sourceAssetId!) || (planInputs?.has(planOccurrenceKey(plan)) ?? false);
+  const hasAudioFor = (plan: RenderClipPlan): boolean => assetInputs.get(plan.clip.sourceAssetId!)?.hasAudio === true || planInputs?.get(planOccurrenceKey(plan))?.hasAudio === true;
+  const visualPlans = collectVisualPlans(seq, startFrame, endFrame).filter(resolves);
+  const audioPlans = collectAudioPlans(seq, startFrame, endFrame).filter(hasAudioFor);
 
   // Silence bed — stable base audio so amix always has ≥1 input.
   parts.push(`anullsrc=r=48000:cl=stereo,atrim=duration=${q(totalSec)},asetpts=PTS-STARTPTS[silence]`);
@@ -569,7 +650,7 @@ export function buildTimelineGraph(seq: Sequence, startFrame: number, endFrame: 
     videoLabel,
     videoPlanCount: audioOnly ? 0 : visualPlans.length,
     audioPlanCount: audioPlans.length,
-    skippedMissing: collectVisualPlans(seq, startFrame, endFrame).filter((p) => !assetInputs.has(p.clip.sourceAssetId)).length,
+    skippedMissing: collectVisualPlans(seq, startFrame, endFrame).filter((p) => !resolves(p)).length,
   };
 }
 
@@ -646,44 +727,51 @@ export async function runTimelineRenderJob(job: { id: string; userId: string; pa
   // would truncate the output and waste the whole encode.
   await assertDiskSpace(MEDIA_ROOT);
 
-  // Distinct assets → ffmpeg inputs.
-  const used = new Map<string, { index: number; isImage: boolean; hasAudio: boolean }>();
-  const inputArgs: string[] = [];
-  let nextIndex = 0;
-  const assets = await db.mediaAsset.findMany({ where: { id: { in: [...new Set(seq.clips.map((c) => c.sourceAssetId).filter(Boolean))] }, userId: job.userId } });
+  // Distinct referenced assets → resolved rows (owned by the caller).
+  const referencedAssetIds = [...new Set(seq.clips.map((c) => c.sourceAssetId).filter(Boolean))] as string[];
+  const assets = await db.mediaAsset.findMany({ where: { id: { in: referencedAssetIds }, userId: job.userId } });
   const assetById = new Map(assets.map((a) => [a.id, a]));
+  // M47.2-A — INVARIANT 1: every referenced asset must resolve to an owned
+  // row BEFORE ffmpeg runs. Skipping used to yield a valid container full of
+  // black frames and silence; now the render fails and names the offenders.
+  const missingAssetIds = referencedAssetIds.filter((id) => !assetById.has(id));
+  if (missingAssetIds.length > 0) {
+    const samples = seq.clips
+      .filter((c) => c.sourceAssetId && missingAssetIds.includes(c.sourceAssetId))
+      .slice(0, 5)
+      .map((c) => `clip ${c.id} → asset ${c.sourceAssetId}`);
+    throw new Error(`Render aborted — ${missingAssetIds.length} referenced asset(s) could not be resolved for this user (e.g. ${samples.join("; ")}). Nothing was rendered: relink or fix the missing media instead of publishing black output.`);
+  }
+  // M47.2-A — INVARIANT 2: the source FILE must exist on disk. A present row
+  // with a vanished file is an invalid input — fail clearly, never black.
+  for (const id of referencedAssetIds) {
+    const asset = assetById.get(id)!;
+    let exists = false;
+    try {
+      exists = (await stat(asset.storagePath)).isFile();
+    } catch {
+      exists = false;
+    }
+    if (!exists) throw new Error(`Render aborted — the source file for asset ${id} is missing on disk (${asset.storagePath}). Nothing was rendered; relink the media and retry.`);
+  }
   // One real ffprobe per distinct asset decides whether an audio stream can
   // be referenced in the graph (video files may be video-only).
   const hasAudioById = new Map<string, boolean>();
-  for (const id of [...new Set(seq.clips.map((c) => c.sourceAssetId).filter(Boolean))]) {
-    const asset = assetById.get(id);
-    if (!asset) continue;
+  for (const id of referencedAssetIds) {
     try {
-      const probe = await probeMediaDeep(asset.storagePath);
+      const probe = await probeMediaDeep(assetById.get(id)!.storagePath);
       hasAudioById.set(id, probe.hasAudio);
     } catch {
       hasAudioById.set(id, false);
     }
   }
-  // M46H — ONE FFMPEG INPUT PER PLAN OCCURRENCE: the same source covering
-  // several scenes gets listed once per scene, so no input pad is ever shared
-  // between filtergraph branches (the root cause of the 234 render failures).
-  const planInputs = new Map<RenderClipPlan, { index: number; isImage: boolean; hasAudio: boolean }>();
-  for (const plan of [...collectVisualPlans(seq, startFrame, endFrame), ...collectAudioPlans(seq, startFrame, endFrame)]) {
-    const id = plan.clip.sourceAssetId;
-    if (!id || planInputs.has(plan)) continue;
-    const asset = assetById.get(id);
-    if (!asset) continue;
-    const isImage = asset.kind === "IMAGE";
-    planInputs.set(plan, { index: nextIndex, isImage, hasAudio: hasAudioById.get(id) ?? false });
-    if (isImage) {
-      const win = plan.winEndFrame - plan.winStartFrame;
-      inputArgs.push("-loop", "1", "-framerate", String(fps), "-t", q(win / fps), "-i", asset.storagePath);
-    } else {
-      inputArgs.push("-i", asset.storagePath);
-    }
-    nextIndex += 1;
-  }
+  // M47.2-A — the SAME allocation routine as the long-form path: one ffmpeg
+  // input per plan occurrence, keyed by stable plan identity, with the
+  // asset-level mirror for the graph's hasAudio/missing checks. (The M46H
+  // reference-keyed map silently missed every lookup here because the graph
+  // builder re-collects plans — the root cause of the black/silence output.)
+  const allPlans = [...collectVisualPlans(seq, startFrame, endFrame), ...collectAudioPlans(seq, startFrame, endFrame)];
+  const { inputArgs, inputByPlanKey, usedByAsset: used } = allocateRenderInputs(allPlans, assetById, hasAudioById, fps);
 
   const transitionReport: TransitionPlanReport = { applied: [], skipped: [] };
   const outPath = pathInsideMediaRoot("timeline-renders", `u_${job.userId}`, `seq_${projectId}_${Date.now().toString(36)}.${spec.extension}`);
@@ -722,30 +810,14 @@ export async function runTimelineRenderJob(job: { id: string; userId: string; pa
       }
       const winSec = (windowEndFrame - windowStartFrame) / fps;
       if (winSec <= 0) break;
-      // M20 §3: bound this window's ffmpeg inputs to the assets its plans
-      // actually reference. Deterministic two-pass: collect the same plans
-      // the graph builder will collect, gather distinct assets from them.
+      // M47.2-A — the SAME allocation routine as the normal path (one input
+      // per plan occurrence, stable content keys, asset-level mirror). Image
+      // inputs now carry their own clip's -t window instead of the first
+      // plan's, so a reused image can never fall short mid-clip.
       const wPlans = [...collectVisualPlans(seq, windowStartFrame, windowEndFrame), ...collectAudioPlans(seq, windowStartFrame, windowEndFrame)];
-      const wAssetIds = [...new Set(wPlans.map((p) => p.clip.sourceAssetId).filter(Boolean))] as string[];
-      const used = new Map<string, { index: number; isImage: boolean; hasAudio: boolean }>();
-      const winInputArgs: string[] = [];
-      let winIndex = 0;
-      for (const id of wAssetIds) {
-        const asset = assetById.get(id);
-        if (!asset) continue;
-        const plan = wPlans.find((p) => p.clip.sourceAssetId === id);
-        const isImage = asset.kind === "IMAGE";
-        used.set(id, { index: winIndex, isImage, hasAudio: hasAudioById.get(id) ?? false });
-        if (isImage) {
-          const win = (plan?.winEndFrame ?? windowEndFrame) - (plan?.winStartFrame ?? windowStartFrame);
-          winInputArgs.push("-loop", "1", "-framerate", String(fps), "-t", q(Math.max(1, win) / fps), "-i", asset.storagePath);
-        } else {
-          winInputArgs.push("-i", asset.storagePath);
-        }
-        winIndex += 1;
-      }
+      const { inputArgs: winInputArgs, inputByPlanKey: wInputByPlanKey, usedByAsset: wUsed } = allocateRenderInputs(wPlans, assetById, hasAudioById, fps);
       const wReport = w === 0 ? transitionReport : { applied: [], skipped: [] };
-      const wGraph = buildTimelineGraph(seq, windowStartFrame, windowEndFrame, used, wReport);
+      const wGraph = buildTimelineGraph(seq, windowStartFrame, windowEndFrame, wUsed, wReport, undefined, wInputByPlanKey);
       const segPath = pathInsideMediaRoot("timeline-renders", `u_${job.userId}`, `seg_${projectId}_${w}_${Date.now().toString(36)}.${spec.extension}`);
       segPaths.push(segPath);
       const winArgs = [
@@ -835,7 +907,14 @@ export async function runTimelineRenderJob(job: { id: string; userId: string; pa
     return;
   }
 
-  const graph = buildTimelineGraph(seq, startFrame, endFrame, used, transitionReport, { audioOnly: spec.audioOnly }, planInputs);
+  const graph = buildTimelineGraph(seq, startFrame, endFrame, used, transitionReport, { audioOnly: spec.audioOnly }, inputByPlanKey);
+  // M47.2-A — INVARIANT 3 (defense in depth): if any intended visual plan
+  // still resolves to no input, abort BEFORE ffmpeg runs. The pre-flight
+  // checks above should make this unreachable; if it ever fires, the render
+  // fails loudly instead of publishing a black, silent container.
+  if (graph.skippedMissing > 0) {
+    throw new Error(`Render aborted — ${graph.skippedMissing} visual clip(s) could not be resolved to actual media inputs. Nothing was rendered; fix or relink the timeline's missing media.`);
+  }
   // M37: audio-only formats map ONLY the mix. (M38 fix: the graph is now
   // genuinely audio-only — ffmpeg rejects ANY unconnected filter output at
   // bind time, so the unmapped video composite broke WAV/MP3 renders.)
