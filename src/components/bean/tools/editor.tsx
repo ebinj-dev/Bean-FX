@@ -84,6 +84,20 @@ export function EditorTool({ user }: { user: { id: string }; onLogout: () => voi
   });
   const [renaming, setRenaming] = useState(false);
   const [renameValue, setRenameValue] = useState("");
+  // M48-F2 — responsive workspace: track the viewport so narrow screens get
+  // stacked docks instead of a squeezed desktop shell. Desktop (≥900px) keeps
+  // the exact same resizable-dock experience.
+  const [viewportW, setViewportW] = useState(() => (typeof window === "undefined" ? 1440 : window.innerWidth));
+  useEffect(() => {
+    const onResize = () => setViewportW(window.innerWidth);
+    window.addEventListener("resize", onResize);
+    return () => window.removeEventListener("resize", onResize);
+  }, []);
+  const workspaceStacked = viewportW < 900;
+  const workspaceMobile = viewportW < 640;
+  // Clamp persisted dock widths so the center column always keeps usable space.
+  const effectiveLeftWidth = workspaceStacked ? Math.min(leftWidth, Math.round(viewportW * 0.42)) : leftWidth;
+  const effectiveRightWidth = workspaceStacked ? Math.min(rightWidth, Math.round(viewportW * 0.36)) : rightWidth;
   // M48-C — Source Monitor (three-point editing) visibility + loaded source.
   const [sourceOpen, setSourceOpen] = useState(false);
   const [sourceAssetId, setSourceAssetId] = useState<string | null>(null);
@@ -551,9 +565,12 @@ export function EditorTool({ user }: { user: { id: string }; onLogout: () => voi
       )}
 
       {/* ── Main workspace: browser · monitor · inspector ─────────────── */}
-      <div className="flex min-h-0 flex-1">
+      <div className={`flex min-h-0 flex-1 ${workspaceStacked ? "flex-col" : ""}`}>
         {/* Left dock */}
-        <div className="flex shrink-0 flex-col overflow-hidden border-r border-[#2a2a2a] bg-[#0b0b0a]" style={{ width: leftWidth }}>
+        <div
+          className={`flex shrink-0 flex-col overflow-hidden bg-[#0b0b0a] ${workspaceStacked ? "max-h-[38vh] w-full border-b border-[#2a2a2a]" : "border-r border-[#2a2a2a]"}`}
+          style={workspaceStacked ? undefined : { width: leftWidth }}
+        >
           <div className="flex items-center gap-1 border-b border-[#2a2a2a] px-2 py-1.5">
           {(["media", ...(workspaceMode === "pro" ? (["effects"] as const) : [])] as const).map((t) => (
               <button key={t} type="button" onClick={() => setLeftTab(t)} className={`rounded px-2 py-1 text-[10px] uppercase tracking-wide ${leftTab === t ? "bg-[#d4a017]/15 text-[#d4a017]" : "text-[#8f8f8a] hover:text-[#d8d8d2]"}`}>
@@ -568,11 +585,14 @@ export function EditorTool({ user }: { user: { id: string }; onLogout: () => voi
             <EffectsBrowser sequence={sequence} session={session} notice={setNotice} />
           )}
         </div>
-        <div className="w-1 cursor-col-resize bg-transparent transition-colors hover:bg-[#d4a017]/30" onPointerDown={onDockDown("left")} onPointerMove={onDockMove} onPointerUp={onDockUp} />
+        {!workspaceStacked && <div className="w-1 cursor-col-resize bg-transparent transition-colors hover:bg-[#d4a017]/30" onPointerDown={onDockDown("left")} onPointerMove={onDockMove} onPointerUp={onDockUp} />}
 
         {/* Center: monitor + transport + timeline */}
         <div className="flex min-w-0 flex-1 flex-col">
           <div className="relative flex min-h-0 flex-1">
+            {sourceOpen && sequence && (
+              <SourceMonitor key={sourceAssetId ?? "none"} session={session} assets={media ?? []} onNotice={setNotice} initialAssetId={sourceAssetId} />
+            )}
             <ProgramMonitor sequence={sequence} playhead={session.playheadFrame} playing={playing} onPlayhead={session.setPlayhead} onPlayingChange={setPlaying} session={session} activeTool={activeTool} guides={guides} snapEnabled={snap} onDecodeError={setNotice} />
             {scopesOpen && sequence && <ScopesPanel sequence={sequence} playhead={session.playheadFrame} />}
           </div>
@@ -606,9 +626,12 @@ export function EditorTool({ user }: { user: { id: string }; onLogout: () => voi
           </div>
         </div>
 
-        <div className="w-1 cursor-col-resize bg-transparent transition-colors hover:bg-[#d4a017]/30" onPointerDown={onDockDown("right")} onPointerMove={onDockMove} onPointerUp={onDockUp} />
+        {!workspaceStacked && <div className="w-1 cursor-col-resize bg-transparent transition-colors hover:bg-[#d4a017]/30" onPointerDown={onDockDown("right")} onPointerMove={onDockMove} onPointerUp={onDockUp} />}
         {/* Right dock: inspector */}
-        <div className="flex shrink-0 flex-col overflow-y-auto border-l border-[#2a2a2a] bg-[#0b0b0a]" style={{ width: rightWidth }}>
+        <div
+          className={`flex shrink-0 flex-col overflow-y-auto bg-[#0b0b0a] ${workspaceStacked ? "w-full border-t border-[#2a2a2a]" : "border-l border-[#2a2a2a]"}`}
+          style={workspaceStacked ? undefined : { width: rightWidth }}
+        >
           {/* M47 — persistent AI dock: knows the project + live timeline context;
               every proposal goes through the canonical approval-gated planner. */}
           {projectId && (
@@ -653,9 +676,6 @@ export function EditorTool({ user }: { user: { id: string }; onLogout: () => voi
               <button type="button" onClick={() => setDrawer(null)} className="text-[#8f8f8a] hover:text-[#d8d8d2]">✕</button>
             </div>
             <PublishingPanel projectId={projectId} />
-            {sourceOpen && (
-              <SourceMonitor key={sourceAssetId ?? "none"} session={session} assets={media ?? []} onNotice={setNotice} initialAssetId={sourceAssetId} />
-            )}
             <TimelineRenderPanel projectId={projectId} onNotice={setNotice} fps={sequence?.fps ?? null} range={range} />
             <BatchExportPanel projectId={projectId} onNotice={setNotice} />
           </div>
