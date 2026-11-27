@@ -20,7 +20,9 @@ export const metadata: Metadata = {
 interface AuditEntry {
   name: string;
   version: string;
-  scope: "direct" | "transitive";
+  scope: string;
+  nesting: string;
+  lockfilePath: string;
   license: string | null;
   licenseSource: string | null;
   classification: string;
@@ -29,8 +31,19 @@ interface AuditEntry {
 
 interface Audit {
   generatedAt: string;
-  counts: { total: number; direct: number; transitive: number; byClassification: Record<string, number> };
+  counts: {
+    lockfileEntries: number;
+    productionInstances: number;
+    developmentInstances: number;
+    uniqueProductionPackageNames: number;
+    uniqueProductionVersions: number;
+    nestedProductionInstances: number;
+    nestedVersionInstancesDifferingFromTopLevel: number;
+    byClassification: Record<string, number>;
+    declaredButNotInLockfile?: string[];
+  };
   npmPackages: AuditEntry[];
+  devPackages?: AuditEntry[];
 }
 
 function loadAudit(): { audit: Audit | null; error: string | null } {
@@ -83,8 +96,9 @@ export default function OpenSourcePage() {
             <p className="mt-2 text-[12.5px] leading-relaxed text-[#a8a7a1]">
               Audited {audit.generatedAt.slice(0, 10)} from <code className="text-[#dcc27e]">package.json</code> +
               <code className="text-[#dcc27e]"> package-lock.json</code> + installed package metadata:{" "}
-              <strong className="text-white">{audit.counts.total} npm packages</strong> ({audit.counts.direct} direct,{" "}
-              {audit.counts.transitive} transitive). Classification:{" "}
+              <strong className="text-white">{audit.counts.lockfileEntries} lockfile entries → {audit.counts.productionInstances} production instances</strong>{" "}
+              ({audit.counts.uniqueProductionPackageNames} unique package names, {audit.counts.nestedProductionInstances} nested —{" "}
+              {audit.counts.nestedVersionInstancesDifferingFromTopLevel} at versions differing from the top-level copy; {audit.counts.developmentInstances} dev-only instances enumerated separately). Classification of production instances:{" "}
               {Object.entries(audit.counts.byClassification).map(([k, v]) => (
                 <span key={k} className={`mr-2 ${CLASS_TONE[k] ?? ""}`}>
                   {k}={v}
@@ -92,7 +106,7 @@ export default function OpenSourcePage() {
               ))}
             </p>
 
-            <h3 className="mt-6 text-[12px] font-bold uppercase tracking-[0.14em] text-[#dcc27e]">Direct dependencies</h3>
+            <h3 className="mt-6 text-[12px] font-bold uppercase tracking-[0.14em] text-[#dcc27e]">Direct production dependency instances</h3>
             <div className="mt-3 overflow-x-auto">
               <table className="w-full min-w-[640px] border-collapse text-left text-[12px]">
                 <thead>
@@ -116,11 +130,8 @@ export default function OpenSourcePage() {
                           {e.licenseSource === "README" && <span className="block text-[10px] text-[#6e6d68]">declared in README</span>}
                         </td>
                         <td className={`py-1.5 pr-3 ${CLASS_TONE[e.classification] ?? ""}`}>{e.classification}</td>
-                        <td className="py-1.5 text-[#8f8f8a]">
-                          {e.repository ? (
-                            <a href={e.repository} className="break-all hover:text-[#d4a017]" rel="nofollow noreferrer">{e.repository.replace(/^git\+/, "").replace(/\.git$/, "")}</a>
-                          ) : "—"}
-                        </td>
+                        <td className="py-1.5 text-[#8f8f8a]">{e.licenseSource ?? "unresolved"}</td>
+                        <td className="py-1.5 text-[#8f8f8a] break-all">{e.lockfilePath}</td>
                       </tr>
                     ))}
                 </tbody>
@@ -129,13 +140,13 @@ export default function OpenSourcePage() {
 
             <details className="mt-5 rounded-lg border border-[#242424] bg-[#0d0d0d] p-4">
               <summary className="cursor-pointer text-[12px] font-bold uppercase tracking-[0.12em] text-[#a8a7a1]">
-                Full transitive dependency list ({audit.counts.transitive} packages)
+                All other production instances ({audit.counts.productionInstances - audit.npmPackages.filter((e) => e.scope === "direct").length}, transitive + nested)
               </summary>
               <div className="mt-4 max-h-96 overflow-y-auto">
                 <table className="w-full border-collapse text-left text-[11px]">
                   <tbody>
                     {audit.npmPackages
-                      .filter((e) => e.scope === "transitive")
+                      .filter((e) => e.scope !== "direct")
                       .map((e) => (
                         <tr key={e.name} className="border-b border-[#141414]">
                           <td className="py-1 pr-3 text-[#c9c7c2]">{e.name}</td>
@@ -229,7 +240,7 @@ export default function OpenSourcePage() {
               The repository ships the complete record: <code className="text-[#dcc27e]">THIRD_PARTY_NOTICES.md</code>{" "}
               (required notices, per license class), full license copies for direct dependencies under{" "}
               <code className="text-[#dcc27e]">docs/legal/licenses/</code>, a CycloneDX SBOM at{" "}
-              <code className="text-[#dcc27e]">docs/legal/sbom.cdx.json</code> (<span id="sbom" />537 components), the
+              <code className="text-[#dcc27e]">docs/legal/sbom.cdx.json</code> (<span id="sbom" />{audit.counts.productionInstances + (audit.counts.developmentInstances ?? 0)} components — one per install-path instance; dev instances scoped "excluded"), the
               machine-readable audit, and a license-risk report at{" "}
               <code className="text-[#dcc27e]">docs/legal/LICENSE_RISK_REPORT.md</code>.
             </p>
@@ -240,7 +251,7 @@ export default function OpenSourcePage() {
                 <li><strong className="text-white">@codesandbox/nodebox</strong> (transitive via @mdxeditor/editor → sandpack) — &ldquo;Sustainable Use License&rdquo; restricts paid/commercial use. Excluded from commercial distribution until resolved or removed.</li>
                 <li><strong className="text-white">libvips prebuilds</strong> (sharp&apos;s @img/* packages) — LGPL-3.0-or-later; fine for linked/server use with notices included.</li>
                 <li><strong className="text-white">Fonts</strong> — Noto Sans, Noto Sans Tamil (bundled) and Geist/Geist Mono (build-time) are OFL-1.1; redistribution keeps the license text with the fonts.</li>
-                <li><strong className="text-white">Everything else</strong> — {audit.counts.byClassification.PERMISSIVE} packages with permissive licenses (MIT, ISC, Apache-2.0, BSD). No UNKNOWN-license packages remain in the tree.</li>
+                <li><strong className="text-white">Everything else</strong> — {audit.counts.byClassification.PERMISSIVE} production instances with permissive licenses (MIT, ISC, Apache-2.0, BSD), each with installed-package or exact-version registry evidence.{(audit.counts.declaredButNotInLockfile ?? []).length > 0 && <> <strong className="text-[#f87171]">Open integrity item:</strong> declared-but-uninstalled dependencies ({(audit.counts.declaredButNotInLockfile ?? []).join(", ")}) — flagged for owner review (npm ci reproducibility).</>}</li>
               </ul>
               <p className="mt-4 text-[11px] leading-relaxed text-[#6e6d68]">
                 Engineering assessment, not legal advice. Browsing this credits page never requires you to accept any

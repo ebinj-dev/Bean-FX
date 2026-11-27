@@ -1,577 +1,637 @@
 # OPEN SOURCE INVENTORY — BEAN FX
 
-Audit of actual third-party material in this repository. Generated 2026-11-26T16:52:56.925Z by `scripts/generate-open-source-audit.mjs`. Regenerate after dependency changes. Classification rules: **never guessed** — a package with no declared license and no license file is UNKNOWN and is excluded from commercial distribution until resolved.
+Audit of the dependencies ACTUALLY INSTALLED by this repository's lockfile — every install path (instance), not just convenient top-level packages. Generated 2026-11-27T09:27:50.919Z by `scripts/generate-open-source-audit.mjs`. Regenerate after dependency changes. Classification rules: never guessed — an instance whose license cannot be confidently established is labeled UNRESOLVED and excluded from commercial distribution until resolved.
 
-## 1. Integrated dependencies (npm)
+## Model — entries vs instances vs unique packages
 
-| Package | Version | Scope | License | Classification | Upstream |
+| Measure | Count |
+|---|---|
+| Lockfile entries (node_modules/** paths) | 995 |
+| Production instances (installed for the product) | 577 |
+| Development-only instances (dev tooling, scope `excluded`) | 418 |
+| Unique production package NAMES | 540 |
+| Unique production name@version pairs | 563 |
+| Nested production instances | 40 |
+| Nested instances whose version differs from the top-level copy | 40 |
+| Instances with UNRESOLVED license evidence | 0 |
+
+Why these differ: npm's lockfile records one entry per INSTALL PATH. A package can be installed several times at different versions under different parents (e.g. `react-is@17.0.2` nested under @codesandbox/sandpack-react while the top level carries 18.3.1). A complete inventory must describe the instances actually installed — collapsing by name would hide version conflicts that matter for licenses and security.
+
+## 1. Integrated dependencies — production instances
+
+| Instance (name@version) | Install path | Scope | License | Evidence | Classification |
 |---|---|---|---|---|---|
-| @babel/runtime | 7.28.6 | transitive | MIT | PERMISSIVE | https://github.com/babel/babel.git |
-| @codemirror/autocomplete | 6.20.0 | transitive | MIT | PERMISSIVE | https://github.com/codemirror/autocomplete.git |
-| @codemirror/commands | 6.10.1 | transitive | MIT | PERMISSIVE | https://github.com/codemirror/commands.git |
-| @codemirror/lang-angular | 0.1.4 | transitive | MIT | PERMISSIVE | https://github.com/codemirror/lang-angular.git |
-| @codemirror/lang-cpp | 6.0.3 | transitive | MIT | PERMISSIVE | https://github.com/codemirror/lang-cpp.git |
-| @codemirror/lang-css | 6.3.1 | transitive | MIT | PERMISSIVE | https://github.com/codemirror/lang-css.git |
-| @codemirror/lang-go | 6.0.1 | transitive | MIT | PERMISSIVE | https://github.com/codemirror/lang-go.git |
-| @codemirror/lang-html | 6.4.11 | transitive | MIT | PERMISSIVE | https://github.com/codemirror/lang-html.git |
-| @codemirror/lang-java | 6.0.2 | transitive | MIT | PERMISSIVE | https://github.com/codemirror/lang-java.git |
-| @codemirror/lang-javascript | 6.2.4 | transitive | MIT | PERMISSIVE | https://github.com/codemirror/lang-javascript.git |
-| @codemirror/lang-jinja | 6.0.0 | transitive | MIT | PERMISSIVE | https://github.com/codemirror/lang-jinja.git |
-| @codemirror/lang-json | 6.0.2 | transitive | MIT | PERMISSIVE | https://github.com/codemirror/lang-json.git |
-| @codemirror/lang-less | 6.0.2 | transitive | MIT | PERMISSIVE | https://github.com/codemirror/lang-less.git |
-| @codemirror/lang-liquid | 6.3.1 | transitive | MIT | PERMISSIVE | https://github.com/codemirror/lang-liquid.git |
-| @codemirror/lang-markdown | 6.5.0 | transitive | MIT | PERMISSIVE | https://github.com/codemirror/lang-markdown.git |
-| @codemirror/lang-php | 6.0.2 | transitive | MIT | PERMISSIVE | https://github.com/codemirror/lang-php.git |
-| @codemirror/lang-python | 6.2.1 | transitive | MIT | PERMISSIVE | https://github.com/codemirror/lang-python.git |
-| @codemirror/lang-rust | 6.0.2 | transitive | MIT | PERMISSIVE | https://github.com/codemirror/lang-rust.git |
-| @codemirror/lang-sass | 6.0.2 | transitive | MIT | PERMISSIVE | https://github.com/codemirror/lang-sass.git |
-| @codemirror/lang-sql | 6.10.0 | transitive | MIT | PERMISSIVE | https://github.com/codemirror/lang-sql.git |
-| @codemirror/lang-vue | 0.1.3 | transitive | MIT | PERMISSIVE | https://github.com/codemirror/lang-vue.git |
-| @codemirror/lang-wast | 6.0.2 | transitive | MIT | PERMISSIVE | https://github.com/codemirror/lang-wast.git |
-| @codemirror/lang-xml | 6.1.0 | transitive | MIT | PERMISSIVE | https://github.com/codemirror/lang-xml.git |
-| @codemirror/lang-yaml | 6.1.2 | transitive | MIT | PERMISSIVE | git+https://github.com/codemirror/lang-yaml.git |
-| @codemirror/language | 6.12.1 | transitive | MIT | PERMISSIVE | https://github.com/codemirror/language.git |
-| @codemirror/language-data | 6.5.2 | transitive | MIT | PERMISSIVE | https://github.com/codemirror/language-data.git |
-| @codemirror/legacy-modes | 6.5.2 | transitive | MIT | PERMISSIVE | https://github.com/codemirror/legacy-modes.git |
-| @codemirror/lint | 6.9.2 | transitive | MIT | PERMISSIVE | https://github.com/codemirror/lint.git |
-| @codemirror/merge | 6.11.2 | transitive | MIT | PERMISSIVE | https://github.com/codemirror/merge.git |
-| @codemirror/search | 6.6.0 | transitive | MIT | PERMISSIVE | git+https://github.com/codemirror/search.git |
-| @codemirror/state | 6.5.4 | transitive | MIT | PERMISSIVE | git+https://github.com/codemirror/state.git |
-| @codemirror/view | 6.39.11 | transitive | MIT | PERMISSIVE | git+https://github.com/codemirror/view.git |
-| @codesandbox/nodebox | 0.1.8 | transitive | SEE LICENSE IN ./LICENSE | NON-STANDARD | https://github.com/codesandbox/nodebox-runtime |
-| @codesandbox/sandpack-client | 2.19.8 | transitive | Apache-2.0 | PERMISSIVE | https://github.com/codesandbox/sandpack |
-| @codesandbox/sandpack-react | 2.20.0 | transitive | Apache-2.0 | PERMISSIVE | https://github.com/codesandbox/sandpack |
-| @date-fns/tz | 1.4.1 | transitive | MIT | PERMISSIVE | git+https://github.com/date-fns/tz.git |
-| @dnd-kit/accessibility | 3.1.1 | transitive | MIT | PERMISSIVE | git+https://github.com/clauderic/dnd-kit.git |
-| @dnd-kit/core | 6.3.1 | direct | MIT | PERMISSIVE | git+https://github.com/clauderic/dnd-kit.git |
-| @dnd-kit/sortable | 10.0.0 | direct | MIT | PERMISSIVE | git+https://github.com/clauderic/dnd-kit.git |
-| @dnd-kit/utilities | 3.2.2 | direct | MIT | PERMISSIVE | git+https://github.com/clauderic/dnd-kit.git |
-| @emnapi/runtime | 1.11.3 | transitive | MIT | PERMISSIVE | https://registry.npmjs.org/@emnapi/runtime/-/runtime-1.11.3.tgz |
-| @floating-ui/core | 1.7.3 | transitive | MIT | PERMISSIVE | https://github.com/floating-ui/floating-ui.git |
-| @floating-ui/dom | 1.7.4 | transitive | MIT | PERMISSIVE | https://github.com/floating-ui/floating-ui.git |
-| @floating-ui/react | 0.27.16 | transitive | MIT | PERMISSIVE | https://github.com/floating-ui/floating-ui.git |
-| @floating-ui/react-dom | 2.1.6 | transitive | MIT | PERMISSIVE | https://github.com/floating-ui/floating-ui.git |
-| @floating-ui/utils | 0.2.10 | transitive | MIT | PERMISSIVE | https://github.com/floating-ui/floating-ui.git |
-| @formatjs/ecma402-abstract | 2.3.6 | transitive | MIT | PERMISSIVE | — |
-| @formatjs/fast-memoize | 2.2.7 | transitive | MIT | PERMISSIVE | formatjs/formatjs.git |
-| @formatjs/icu-messageformat-parser | 2.11.4 | transitive | MIT | PERMISSIVE | https://github.com/formatjs/formatjs.git |
-| @formatjs/icu-skeleton-parser | 1.8.16 | transitive | MIT | PERMISSIVE | https://github.com/formatjs/formatjs.git |
-| @formatjs/intl-localematcher | 0.5.10 | transitive | MIT | PERMISSIVE | formatjs/formatjs.git |
-| @hookform/resolvers | 5.2.2 | direct | MIT | PERMISSIVE | git+https://github.com/react-hook-form/resolvers.git |
-| @img/colour | 1.0.0 | transitive | MIT | PERMISSIVE | git+https://github.com/lovell/colour.git |
-| @img/sharp-darwin-arm64 | 0.34.5 | transitive | Apache-2.0 | PERMISSIVE | https://registry.npmjs.org/@img/sharp-darwin-arm64/-/sharp-darwin-arm64-0.34.5.tgz |
-| @img/sharp-darwin-x64 | 0.34.5 | transitive | Apache-2.0 | PERMISSIVE | https://registry.npmjs.org/@img/sharp-darwin-x64/-/sharp-darwin-x64-0.34.5.tgz |
-| @img/sharp-libvips-darwin-arm64 | 1.2.4 | transitive | LGPL-3.0-or-later | COPYLEFT-WEAK | https://registry.npmjs.org/@img/sharp-libvips-darwin-arm64/-/sharp-libvips-darwin-arm64-1.2.4.tgz |
-| @img/sharp-libvips-darwin-x64 | 1.2.4 | transitive | LGPL-3.0-or-later | COPYLEFT-WEAK | https://registry.npmjs.org/@img/sharp-libvips-darwin-x64/-/sharp-libvips-darwin-x64-1.2.4.tgz |
-| @img/sharp-libvips-linux-arm | 1.2.4 | transitive | LGPL-3.0-or-later | COPYLEFT-WEAK | https://registry.npmjs.org/@img/sharp-libvips-linux-arm/-/sharp-libvips-linux-arm-1.2.4.tgz |
-| @img/sharp-libvips-linux-arm64 | 1.2.4 | transitive | LGPL-3.0-or-later | COPYLEFT-WEAK | https://registry.npmjs.org/@img/sharp-libvips-linux-arm64/-/sharp-libvips-linux-arm64-1.2.4.tgz |
-| @img/sharp-libvips-linux-ppc64 | 1.2.4 | transitive | LGPL-3.0-or-later | COPYLEFT-WEAK | https://registry.npmjs.org/@img/sharp-libvips-linux-ppc64/-/sharp-libvips-linux-ppc64-1.2.4.tgz |
-| @img/sharp-libvips-linux-riscv64 | 1.2.4 | transitive | LGPL-3.0-or-later | COPYLEFT-WEAK | https://registry.npmjs.org/@img/sharp-libvips-linux-riscv64/-/sharp-libvips-linux-riscv64-1.2.4.tgz |
-| @img/sharp-libvips-linux-s390x | 1.2.4 | transitive | LGPL-3.0-or-later | COPYLEFT-WEAK | https://registry.npmjs.org/@img/sharp-libvips-linux-s390x/-/sharp-libvips-linux-s390x-1.2.4.tgz |
-| @img/sharp-libvips-linux-x64 | 1.2.4 | transitive | LGPL-3.0-or-later | COPYLEFT-WEAK | git+https://github.com/lovell/sharp-libvips.git |
-| @img/sharp-libvips-linuxmusl-arm64 | 1.2.4 | transitive | LGPL-3.0-or-later | COPYLEFT-WEAK | https://registry.npmjs.org/@img/sharp-libvips-linuxmusl-arm64/-/sharp-libvips-linuxmusl-arm64-1.2.4.tgz |
-| @img/sharp-libvips-linuxmusl-x64 | 1.2.4 | transitive | LGPL-3.0-or-later | COPYLEFT-WEAK | git+https://github.com/lovell/sharp-libvips.git |
-| @img/sharp-linux-arm | 0.34.5 | transitive | Apache-2.0 | PERMISSIVE | https://registry.npmjs.org/@img/sharp-linux-arm/-/sharp-linux-arm-0.34.5.tgz |
-| @img/sharp-linux-arm64 | 0.34.5 | transitive | Apache-2.0 | PERMISSIVE | https://registry.npmjs.org/@img/sharp-linux-arm64/-/sharp-linux-arm64-0.34.5.tgz |
-| @img/sharp-linux-ppc64 | 0.34.5 | transitive | Apache-2.0 | PERMISSIVE | https://registry.npmjs.org/@img/sharp-linux-ppc64/-/sharp-linux-ppc64-0.34.5.tgz |
-| @img/sharp-linux-riscv64 | 0.34.5 | transitive | Apache-2.0 | PERMISSIVE | https://registry.npmjs.org/@img/sharp-linux-riscv64/-/sharp-linux-riscv64-0.34.5.tgz |
-| @img/sharp-linux-s390x | 0.34.5 | transitive | Apache-2.0 | PERMISSIVE | https://registry.npmjs.org/@img/sharp-linux-s390x/-/sharp-linux-s390x-0.34.5.tgz |
-| @img/sharp-linux-x64 | 0.34.5 | transitive | Apache-2.0 | PERMISSIVE | git+https://github.com/lovell/sharp.git |
-| @img/sharp-linuxmusl-arm64 | 0.34.5 | transitive | Apache-2.0 | PERMISSIVE | https://registry.npmjs.org/@img/sharp-linuxmusl-arm64/-/sharp-linuxmusl-arm64-0.34.5.tgz |
-| @img/sharp-linuxmusl-x64 | 0.34.5 | transitive | Apache-2.0 | PERMISSIVE | git+https://github.com/lovell/sharp.git |
-| @img/sharp-wasm32 | 0.34.5 | transitive | Apache-2.0 AND LGPL-3.0-or-later AND MIT | COPYLEFT-WEAK | https://registry.npmjs.org/@img/sharp-wasm32/-/sharp-wasm32-0.34.5.tgz |
-| @img/sharp-win32-arm64 | 0.34.5 | transitive | Apache-2.0 AND LGPL-3.0-or-later | COPYLEFT-WEAK | https://registry.npmjs.org/@img/sharp-win32-arm64/-/sharp-win32-arm64-0.34.5.tgz |
-| @img/sharp-win32-ia32 | 0.34.5 | transitive | Apache-2.0 AND LGPL-3.0-or-later | COPYLEFT-WEAK | https://registry.npmjs.org/@img/sharp-win32-ia32/-/sharp-win32-ia32-0.34.5.tgz |
-| @img/sharp-win32-x64 | 0.34.5 | transitive | Apache-2.0 AND LGPL-3.0-or-later | COPYLEFT-WEAK | https://registry.npmjs.org/@img/sharp-win32-x64/-/sharp-win32-x64-0.34.5.tgz |
-| @lexical/clipboard | 0.35.0 | transitive | MIT | PERMISSIVE | https://github.com/facebook/lexical |
-| @lexical/code | 0.35.0 | transitive | MIT | PERMISSIVE | https://github.com/facebook/lexical |
-| @lexical/devtools-core | 0.35.0 | transitive | MIT | PERMISSIVE | https://github.com/facebook/lexical |
-| @lexical/dragon | 0.35.0 | transitive | MIT | PERMISSIVE | https://github.com/facebook/lexical |
-| @lexical/hashtag | 0.35.0 | transitive | MIT | PERMISSIVE | https://github.com/facebook/lexical |
-| @lexical/history | 0.35.0 | transitive | MIT | PERMISSIVE | https://github.com/facebook/lexical |
-| @lexical/html | 0.35.0 | transitive | MIT | PERMISSIVE | https://github.com/facebook/lexical |
-| @lexical/link | 0.35.0 | transitive | MIT | PERMISSIVE | https://github.com/facebook/lexical |
-| @lexical/list | 0.35.0 | transitive | MIT | PERMISSIVE | https://github.com/facebook/lexical |
-| @lexical/mark | 0.35.0 | transitive | MIT | PERMISSIVE | https://github.com/facebook/lexical |
-| @lexical/markdown | 0.35.0 | transitive | MIT | PERMISSIVE | https://github.com/facebook/lexical |
-| @lexical/offset | 0.35.0 | transitive | MIT | PERMISSIVE | https://github.com/facebook/lexical |
-| @lexical/overflow | 0.35.0 | transitive | MIT | PERMISSIVE | https://github.com/facebook/lexical |
-| @lexical/plain-text | 0.35.0 | transitive | MIT | PERMISSIVE | https://github.com/facebook/lexical |
-| @lexical/react | 0.35.0 | transitive | MIT | PERMISSIVE | https://github.com/facebook/lexical |
-| @lexical/rich-text | 0.35.0 | transitive | MIT | PERMISSIVE | https://github.com/facebook/lexical |
-| @lexical/selection | 0.35.0 | transitive | MIT | PERMISSIVE | https://github.com/facebook/lexical |
-| @lexical/table | 0.35.0 | transitive | MIT | PERMISSIVE | https://github.com/facebook/lexical |
-| @lexical/text | 0.35.0 | transitive | MIT | PERMISSIVE | https://github.com/facebook/lexical |
-| @lexical/utils | 0.35.0 | transitive | MIT | PERMISSIVE | https://github.com/facebook/lexical |
-| @lexical/yjs | 0.35.0 | transitive | MIT | PERMISSIVE | https://github.com/facebook/lexical |
-| @lezer/common | 1.5.0 | transitive | MIT | PERMISSIVE | https://github.com/lezer-parser/common.git |
-| @lezer/cpp | 1.1.5 | transitive | MIT | PERMISSIVE | https://github.com/lezer-parser/cpp.git |
-| @lezer/css | 1.3.0 | transitive | MIT | PERMISSIVE | https://github.com/lezer-parser/css.git |
-| @lezer/go | 1.0.1 | transitive | MIT | PERMISSIVE | https://github.com/lezer-parser/go.git |
-| @lezer/highlight | 1.2.3 | transitive | MIT | PERMISSIVE | https://github.com/lezer-parser/highlight.git |
-| @lezer/html | 1.3.13 | transitive | MIT | PERMISSIVE | https://github.com/lezer-parser/html.git |
-| @lezer/java | 1.1.3 | transitive | MIT | PERMISSIVE | https://github.com/lezer-parser/java.git |
-| @lezer/javascript | 1.5.4 | transitive | MIT | PERMISSIVE | https://github.com/lezer-parser/javascript.git |
-| @lezer/json | 1.0.3 | transitive | MIT | PERMISSIVE | https://github.com/lezer-parser/json.git |
-| @lezer/lr | 1.4.7 | transitive | MIT | PERMISSIVE | https://github.com/lezer-parser/lr.git |
-| @lezer/markdown | 1.6.3 | transitive | MIT | PERMISSIVE | https://github.com/lezer-parser/markdown.git |
-| @lezer/php | 1.0.5 | transitive | MIT | PERMISSIVE | https://github.com/lezer-parser/php.git |
-| @lezer/python | 1.1.18 | transitive | MIT | PERMISSIVE | https://github.com/lezer-parser/python.git |
-| @lezer/rust | 1.0.2 | transitive | MIT | PERMISSIVE | https://github.com/lezer-parser/rust.git |
-| @lezer/sass | 1.1.0 | transitive | MIT | PERMISSIVE | https://github.com/lezer-parser/sass.git |
-| @lezer/xml | 1.0.6 | transitive | MIT | PERMISSIVE | https://github.com/lezer-parser/xml.git |
-| @lezer/yaml | 1.0.3 | transitive | MIT | PERMISSIVE | https://github.com/lezer-parser/yaml.git |
-| @marijn/find-cluster-break | 1.0.2 | transitive | MIT | PERMISSIVE | git+https://github.com/marijnh/find-cluster-break.git |
-| @mdxeditor/editor | 3.52.3 | direct | MIT | PERMISSIVE | https://github.com/mdx-editor/editor.git |
-| @mdxeditor/gurx | 1.2.4 | transitive | MIT | PERMISSIVE | https://github.com/mdx-editor/gurx.git |
-| @microsoft/fetch-event-source | 2.0.1 | transitive | MIT | PERMISSIVE | https://github.com/Azure/fetch-event-source#readme |
-| @next/env | 16.1.3 | transitive | MIT | PERMISSIVE | https://github.com/vercel/next.js |
-| @next/swc-darwin-arm64 | 16.1.3 | transitive | MIT | PERMISSIVE | https://registry.npmjs.org/@next/swc-darwin-arm64/-/swc-darwin-arm64-16.1.3.tgz |
-| @next/swc-darwin-x64 | 16.1.3 | transitive | MIT | PERMISSIVE | https://registry.npmjs.org/@next/swc-darwin-x64/-/swc-darwin-x64-16.1.3.tgz |
-| @next/swc-linux-arm64-gnu | 16.1.3 | transitive | MIT | PERMISSIVE | https://registry.npmjs.org/@next/swc-linux-arm64-gnu/-/swc-linux-arm64-gnu-16.1.3.tgz |
-| @next/swc-linux-arm64-musl | 16.1.3 | transitive | MIT | PERMISSIVE | https://registry.npmjs.org/@next/swc-linux-arm64-musl/-/swc-linux-arm64-musl-16.1.3.tgz |
-| @next/swc-linux-x64-gnu | 16.1.3 | transitive | MIT | PERMISSIVE | https://github.com/vercel/next.js |
-| @next/swc-linux-x64-musl | 16.1.3 | transitive | MIT | PERMISSIVE | https://github.com/vercel/next.js |
-| @next/swc-win32-arm64-msvc | 16.1.3 | transitive | MIT | PERMISSIVE | https://registry.npmjs.org/@next/swc-win32-arm64-msvc/-/swc-win32-arm64-msvc-16.1.3.tgz |
-| @next/swc-win32-x64-msvc | 16.1.3 | transitive | MIT | PERMISSIVE | https://registry.npmjs.org/@next/swc-win32-x64-msvc/-/swc-win32-x64-msvc-16.1.3.tgz |
-| @open-draft/deferred-promise | 2.2.0 | transitive | MIT | PERMISSIVE | https://github.com/open-draft/deferred-promise |
-| @panva/hkdf | 1.2.1 | transitive | MIT | PERMISSIVE | https://github.com/panva/hkdf |
-| @parcel/watcher | 2.5.4 | transitive | MIT | PERMISSIVE | https://github.com/parcel-bundler/watcher.git |
-| @parcel/watcher-android-arm64 | 2.5.4 | transitive | MIT | PERMISSIVE | https://registry.npmjs.org/@parcel/watcher-android-arm64/-/watcher-android-arm64-2.5.4.tgz |
-| @parcel/watcher-darwin-arm64 | 2.5.4 | transitive | MIT | PERMISSIVE | https://registry.npmjs.org/@parcel/watcher-darwin-arm64/-/watcher-darwin-arm64-2.5.4.tgz |
-| @parcel/watcher-darwin-x64 | 2.5.4 | transitive | MIT | PERMISSIVE | https://registry.npmjs.org/@parcel/watcher-darwin-x64/-/watcher-darwin-x64-2.5.4.tgz |
-| @parcel/watcher-freebsd-x64 | 2.5.4 | transitive | MIT | PERMISSIVE | https://registry.npmjs.org/@parcel/watcher-freebsd-x64/-/watcher-freebsd-x64-2.5.4.tgz |
-| @parcel/watcher-linux-arm-glibc | 2.5.4 | transitive | MIT | PERMISSIVE | https://registry.npmjs.org/@parcel/watcher-linux-arm-glibc/-/watcher-linux-arm-glibc-2.5.4.tgz |
-| @parcel/watcher-linux-arm-musl | 2.5.4 | transitive | MIT | PERMISSIVE | https://registry.npmjs.org/@parcel/watcher-linux-arm-musl/-/watcher-linux-arm-musl-2.5.4.tgz |
-| @parcel/watcher-linux-arm64-glibc | 2.5.4 | transitive | MIT | PERMISSIVE | https://registry.npmjs.org/@parcel/watcher-linux-arm64-glibc/-/watcher-linux-arm64-glibc-2.5.4.tgz |
-| @parcel/watcher-linux-arm64-musl | 2.5.4 | transitive | MIT | PERMISSIVE | https://registry.npmjs.org/@parcel/watcher-linux-arm64-musl/-/watcher-linux-arm64-musl-2.5.4.tgz |
-| @parcel/watcher-linux-x64-glibc | 2.5.4 | transitive | MIT | PERMISSIVE | https://github.com/parcel-bundler/watcher.git |
-| @parcel/watcher-linux-x64-musl | 2.5.4 | transitive | MIT | PERMISSIVE | https://github.com/parcel-bundler/watcher.git |
-| @parcel/watcher-win32-arm64 | 2.5.4 | transitive | MIT | PERMISSIVE | https://registry.npmjs.org/@parcel/watcher-win32-arm64/-/watcher-win32-arm64-2.5.4.tgz |
-| @parcel/watcher-win32-ia32 | 2.5.4 | transitive | MIT | PERMISSIVE | https://registry.npmjs.org/@parcel/watcher-win32-ia32/-/watcher-win32-ia32-2.5.4.tgz |
-| @parcel/watcher-win32-x64 | 2.5.4 | transitive | MIT | PERMISSIVE | https://registry.npmjs.org/@parcel/watcher-win32-x64/-/watcher-win32-x64-2.5.4.tgz |
-| @prisma/client | 6.19.2 | direct | Apache-2.0 | PERMISSIVE | https://github.com/prisma/prisma.git |
-| @prisma/config | 6.19.2 | transitive | Apache-2.0 | PERMISSIVE | https://github.com/prisma/prisma.git |
-| @prisma/debug | 6.19.2 | transitive | Apache-2.0 | PERMISSIVE | https://github.com/prisma/prisma.git |
-| @prisma/engines | 6.19.2 | transitive | Apache-2.0 | PERMISSIVE | https://github.com/prisma/prisma.git |
-| @prisma/engines-version | 7.1.1-3.c2990dca591cba766e3b7ef5d9e8a84796e47ab7 | transitive | Apache-2.0 | PERMISSIVE | https://github.com/prisma/engines-wrapper.git |
-| @prisma/fetch-engine | 6.19.2 | transitive | Apache-2.0 | PERMISSIVE | https://github.com/prisma/prisma.git |
-| @prisma/get-platform | 6.19.2 | transitive | Apache-2.0 | PERMISSIVE | https://github.com/prisma/prisma.git |
-| @radix-ui/colors | 3.0.0 | transitive | MIT | PERMISSIVE | — |
-| @radix-ui/number | 1.1.1 | transitive | MIT | PERMISSIVE | git+https://github.com/radix-ui/primitives.git |
-| @radix-ui/primitive | 1.1.3 | transitive | MIT | PERMISSIVE | git+https://github.com/radix-ui/primitives.git |
-| @radix-ui/react-accordion | 1.2.12 | direct | MIT | PERMISSIVE | git+https://github.com/radix-ui/primitives.git |
-| @radix-ui/react-alert-dialog | 1.1.15 | direct | MIT | PERMISSIVE | git+https://github.com/radix-ui/primitives.git |
-| @radix-ui/react-arrow | 1.1.7 | transitive | MIT | PERMISSIVE | git+https://github.com/radix-ui/primitives.git |
-| @radix-ui/react-aspect-ratio | 1.1.8 | direct | MIT | PERMISSIVE | git+https://github.com/radix-ui/primitives.git |
-| @radix-ui/react-avatar | 1.1.11 | direct | MIT | PERMISSIVE | git+https://github.com/radix-ui/primitives.git |
-| @radix-ui/react-checkbox | 1.3.3 | direct | MIT | PERMISSIVE | git+https://github.com/radix-ui/primitives.git |
-| @radix-ui/react-collapsible | 1.1.12 | direct | MIT | PERMISSIVE | git+https://github.com/radix-ui/primitives.git |
-| @radix-ui/react-collection | 1.1.7 | transitive | MIT | PERMISSIVE | git+https://github.com/radix-ui/primitives.git |
-| @radix-ui/react-compose-refs | 1.1.2 | transitive | MIT | PERMISSIVE | git+https://github.com/radix-ui/primitives.git |
-| @radix-ui/react-context | 1.1.2 | transitive | MIT | PERMISSIVE | git+https://github.com/radix-ui/primitives.git |
-| @radix-ui/react-context-menu | 2.2.16 | direct | MIT | PERMISSIVE | git+https://github.com/radix-ui/primitives.git |
-| @radix-ui/react-dialog | 1.1.15 | direct | MIT | PERMISSIVE | git+https://github.com/radix-ui/primitives.git |
-| @radix-ui/react-direction | 1.1.1 | transitive | MIT | PERMISSIVE | git+https://github.com/radix-ui/primitives.git |
-| @radix-ui/react-dismissable-layer | 1.1.11 | transitive | MIT | PERMISSIVE | git+https://github.com/radix-ui/primitives.git |
-| @radix-ui/react-dropdown-menu | 2.1.16 | direct | MIT | PERMISSIVE | git+https://github.com/radix-ui/primitives.git |
-| @radix-ui/react-focus-guards | 1.1.3 | transitive | MIT | PERMISSIVE | git+https://github.com/radix-ui/primitives.git |
-| @radix-ui/react-focus-scope | 1.1.7 | transitive | MIT | PERMISSIVE | git+https://github.com/radix-ui/primitives.git |
-| @radix-ui/react-hover-card | 1.1.15 | direct | MIT | PERMISSIVE | git+https://github.com/radix-ui/primitives.git |
-| @radix-ui/react-icons | 1.3.2 | transitive | MIT | PERMISSIVE | — |
-| @radix-ui/react-id | 1.1.1 | transitive | MIT | PERMISSIVE | git+https://github.com/radix-ui/primitives.git |
-| @radix-ui/react-label | 2.1.8 | direct | MIT | PERMISSIVE | git+https://github.com/radix-ui/primitives.git |
-| @radix-ui/react-menu | 2.1.16 | transitive | MIT | PERMISSIVE | git+https://github.com/radix-ui/primitives.git |
-| @radix-ui/react-menubar | 1.1.16 | direct | MIT | PERMISSIVE | git+https://github.com/radix-ui/primitives.git |
-| @radix-ui/react-navigation-menu | 1.2.14 | direct | MIT | PERMISSIVE | git+https://github.com/radix-ui/primitives.git |
-| @radix-ui/react-popover | 1.1.15 | direct | MIT | PERMISSIVE | git+https://github.com/radix-ui/primitives.git |
-| @radix-ui/react-popper | 1.2.8 | transitive | MIT | PERMISSIVE | git+https://github.com/radix-ui/primitives.git |
-| @radix-ui/react-portal | 1.1.9 | transitive | MIT | PERMISSIVE | git+https://github.com/radix-ui/primitives.git |
-| @radix-ui/react-presence | 1.1.5 | transitive | MIT | PERMISSIVE | git+https://github.com/radix-ui/primitives.git |
-| @radix-ui/react-primitive | 2.1.3 | transitive | MIT | PERMISSIVE | git+https://github.com/radix-ui/primitives.git |
-| @radix-ui/react-progress | 1.1.8 | direct | MIT | PERMISSIVE | git+https://github.com/radix-ui/primitives.git |
-| @radix-ui/react-radio-group | 1.3.8 | direct | MIT | PERMISSIVE | git+https://github.com/radix-ui/primitives.git |
-| @radix-ui/react-roving-focus | 1.1.11 | transitive | MIT | PERMISSIVE | git+https://github.com/radix-ui/primitives.git |
-| @radix-ui/react-scroll-area | 1.2.10 | direct | MIT | PERMISSIVE | git+https://github.com/radix-ui/primitives.git |
-| @radix-ui/react-select | 2.2.6 | direct | MIT | PERMISSIVE | git+https://github.com/radix-ui/primitives.git |
-| @radix-ui/react-separator | 1.1.8 | direct | MIT | PERMISSIVE | git+https://github.com/radix-ui/primitives.git |
-| @radix-ui/react-slider | 1.3.6 | direct | MIT | PERMISSIVE | git+https://github.com/radix-ui/primitives.git |
-| @radix-ui/react-slot | 1.2.4 | direct | MIT | PERMISSIVE | git+https://github.com/radix-ui/primitives.git |
-| @radix-ui/react-switch | 1.2.6 | direct | MIT | PERMISSIVE | git+https://github.com/radix-ui/primitives.git |
-| @radix-ui/react-tabs | 1.1.13 | direct | MIT | PERMISSIVE | git+https://github.com/radix-ui/primitives.git |
-| @radix-ui/react-toast | 1.2.15 | direct | MIT | PERMISSIVE | git+https://github.com/radix-ui/primitives.git |
-| @radix-ui/react-toggle | 1.1.10 | direct | MIT | PERMISSIVE | git+https://github.com/radix-ui/primitives.git |
-| @radix-ui/react-toggle-group | 1.1.11 | direct | MIT | PERMISSIVE | git+https://github.com/radix-ui/primitives.git |
-| @radix-ui/react-toolbar | 1.1.11 | transitive | MIT | PERMISSIVE | git+https://github.com/radix-ui/primitives.git |
-| @radix-ui/react-tooltip | 1.2.8 | direct | MIT | PERMISSIVE | git+https://github.com/radix-ui/primitives.git |
-| @radix-ui/react-use-callback-ref | 1.1.1 | transitive | MIT | PERMISSIVE | git+https://github.com/radix-ui/primitives.git |
-| @radix-ui/react-use-controllable-state | 1.2.2 | transitive | MIT | PERMISSIVE | git+https://github.com/radix-ui/primitives.git |
-| @radix-ui/react-use-effect-event | 0.0.2 | transitive | MIT | PERMISSIVE | git+https://github.com/radix-ui/primitives.git |
-| @radix-ui/react-use-escape-keydown | 1.1.1 | transitive | MIT | PERMISSIVE | git+https://github.com/radix-ui/primitives.git |
-| @radix-ui/react-use-is-hydrated | 0.1.0 | transitive | MIT | PERMISSIVE | git+https://github.com/radix-ui/primitives.git |
-| @radix-ui/react-use-layout-effect | 1.1.1 | transitive | MIT | PERMISSIVE | git+https://github.com/radix-ui/primitives.git |
-| @radix-ui/react-use-previous | 1.1.1 | transitive | MIT | PERMISSIVE | git+https://github.com/radix-ui/primitives.git |
-| @radix-ui/react-use-rect | 1.1.1 | transitive | MIT | PERMISSIVE | git+https://github.com/radix-ui/primitives.git |
-| @radix-ui/react-use-size | 1.1.1 | transitive | MIT | PERMISSIVE | git+https://github.com/radix-ui/primitives.git |
-| @radix-ui/react-visually-hidden | 1.2.3 | transitive | MIT | PERMISSIVE | git+https://github.com/radix-ui/primitives.git |
-| @radix-ui/rect | 1.1.1 | transitive | MIT | PERMISSIVE | git+https://github.com/radix-ui/primitives.git |
-| @react-hook/intersection-observer | 3.1.2 | transitive | MIT | PERMISSIVE | https://github.com/jaredLunde/react-hook/tree/master/packages/intersection-observer#readme |
-| @react-hook/passive-layout-effect | 1.2.1 | transitive | MIT | PERMISSIVE | https://github.com/jaredLunde/react-hook/tree/master/packages/passive-layout-effect#readme |
-| @reactuses/core | 6.1.9 | direct | Unlicense | PERMISSIVE | git+https://github.com/childrentime/reactuse.git |
-| @schummar/icu-type-parser | 1.21.5 | transitive | MIT | PERMISSIVE | — |
-| @standard-schema/spec | 1.1.0 | transitive | MIT | PERMISSIVE | https://github.com/standard-schema/standard-schema |
-| @standard-schema/utils | 0.3.0 | transitive | MIT | PERMISSIVE | https://github.com/standard-schema/standard-schema |
-| @stitches/core | 1.2.8 | transitive | MIT | PERMISSIVE | https://stitches.dev/ |
-| @swc/core | 1.15.8 | transitive | Apache-2.0 | PERMISSIVE | git+https://github.com/swc-project/swc.git |
-| @swc/core-darwin-arm64 | 1.15.8 | transitive | Apache-2.0 AND MIT | PERMISSIVE | https://registry.npmjs.org/@swc/core-darwin-arm64/-/core-darwin-arm64-1.15.8.tgz |
-| @swc/core-darwin-x64 | 1.15.8 | transitive | Apache-2.0 AND MIT | PERMISSIVE | https://registry.npmjs.org/@swc/core-darwin-x64/-/core-darwin-x64-1.15.8.tgz |
-| @swc/core-linux-arm-gnueabihf | 1.15.8 | transitive | Apache-2.0 | PERMISSIVE | https://registry.npmjs.org/@swc/core-linux-arm-gnueabihf/-/core-linux-arm-gnueabihf-1.15.8.tgz |
-| @swc/core-linux-arm64-gnu | 1.15.8 | transitive | Apache-2.0 AND MIT | PERMISSIVE | https://registry.npmjs.org/@swc/core-linux-arm64-gnu/-/core-linux-arm64-gnu-1.15.8.tgz |
-| @swc/core-linux-arm64-musl | 1.15.8 | transitive | Apache-2.0 AND MIT | PERMISSIVE | https://registry.npmjs.org/@swc/core-linux-arm64-musl/-/core-linux-arm64-musl-1.15.8.tgz |
-| @swc/core-linux-x64-gnu | 1.15.8 | transitive | Apache-2.0 AND MIT | PERMISSIVE | git+https://github.com/swc-project/swc.git |
-| @swc/core-linux-x64-musl | 1.15.8 | transitive | Apache-2.0 AND MIT | PERMISSIVE | git+https://github.com/swc-project/swc.git |
-| @swc/core-win32-arm64-msvc | 1.15.8 | transitive | Apache-2.0 AND MIT | PERMISSIVE | https://registry.npmjs.org/@swc/core-win32-arm64-msvc/-/core-win32-arm64-msvc-1.15.8.tgz |
-| @swc/core-win32-ia32-msvc | 1.15.8 | transitive | Apache-2.0 AND MIT | PERMISSIVE | https://registry.npmjs.org/@swc/core-win32-ia32-msvc/-/core-win32-ia32-msvc-1.15.8.tgz |
-| @swc/core-win32-x64-msvc | 1.15.8 | transitive | Apache-2.0 AND MIT | PERMISSIVE | https://registry.npmjs.org/@swc/core-win32-x64-msvc/-/core-win32-x64-msvc-1.15.8.tgz |
-| @swc/counter | 0.1.3 | transitive | Apache-2.0 | PERMISSIVE | git+https://github.com/swc-project/pkgs.git |
-| @swc/types | 0.1.25 | transitive | Apache-2.0 | PERMISSIVE | git+https://github.com/swc-project/swc.git |
-| @tanstack/query-core | 5.90.19 | transitive | MIT | PERMISSIVE | git+https://github.com/TanStack/query.git |
-| @tanstack/react-query | 5.90.19 | direct | MIT | PERMISSIVE | git+https://github.com/TanStack/query.git |
-| @tanstack/react-table | 8.21.3 | direct | MIT | PERMISSIVE | https://github.com/TanStack/table.git |
-| @tanstack/table-core | 8.21.3 | transitive | MIT | PERMISSIVE | https://github.com/TanStack/table.git |
-| @types/d3-array | 3.2.2 | transitive | MIT | PERMISSIVE | https://github.com/DefinitelyTyped/DefinitelyTyped.git |
-| @types/d3-color | 3.1.3 | transitive | MIT | PERMISSIVE | https://github.com/DefinitelyTyped/DefinitelyTyped.git |
-| @types/d3-ease | 3.0.2 | transitive | MIT | PERMISSIVE | https://github.com/DefinitelyTyped/DefinitelyTyped.git |
-| @types/d3-interpolate | 3.0.4 | transitive | MIT | PERMISSIVE | https://github.com/DefinitelyTyped/DefinitelyTyped.git |
-| @types/d3-path | 3.1.1 | transitive | MIT | PERMISSIVE | https://github.com/DefinitelyTyped/DefinitelyTyped.git |
-| @types/d3-scale | 4.0.9 | transitive | MIT | PERMISSIVE | https://github.com/DefinitelyTyped/DefinitelyTyped.git |
-| @types/d3-shape | 3.1.8 | transitive | MIT | PERMISSIVE | https://github.com/DefinitelyTyped/DefinitelyTyped.git |
-| @types/d3-time | 3.0.4 | transitive | MIT | PERMISSIVE | https://github.com/DefinitelyTyped/DefinitelyTyped.git |
-| @types/d3-timer | 3.0.2 | transitive | MIT | PERMISSIVE | https://github.com/DefinitelyTyped/DefinitelyTyped.git |
-| @types/debug | 4.1.12 | transitive | MIT | PERMISSIVE | https://github.com/DefinitelyTyped/DefinitelyTyped.git |
-| @types/estree | 1.0.8 | transitive | MIT | PERMISSIVE | https://github.com/DefinitelyTyped/DefinitelyTyped.git |
-| @types/estree-jsx | 1.0.5 | transitive | MIT | PERMISSIVE | https://github.com/DefinitelyTyped/DefinitelyTyped.git |
-| @types/hast | 3.0.4 | transitive | MIT | PERMISSIVE | https://github.com/DefinitelyTyped/DefinitelyTyped.git |
-| @types/mdast | 4.0.4 | transitive | MIT | PERMISSIVE | https://github.com/DefinitelyTyped/DefinitelyTyped.git |
-| @types/ms | 2.1.0 | transitive | MIT | PERMISSIVE | https://github.com/DefinitelyTyped/DefinitelyTyped.git |
-| @types/react | 19.2.8 | direct | MIT | PERMISSIVE | https://github.com/DefinitelyTyped/DefinitelyTyped.git |
-| @types/react-dom | 19.2.3 | direct | MIT | PERMISSIVE | https://github.com/DefinitelyTyped/DefinitelyTyped.git |
-| @types/unist | 3.0.3 | transitive | MIT | PERMISSIVE | https://github.com/DefinitelyTyped/DefinitelyTyped.git |
-| @ungap/structured-clone | 1.3.0 | transitive | ISC | PERMISSIVE | git+https://github.com/ungap/structured-clone.git |
-| acorn | 8.15.0 | transitive | MIT | PERMISSIVE | git+https://github.com/acornjs/acorn.git |
-| acorn-jsx | 5.3.2 | transitive | MIT | PERMISSIVE | https://github.com/acornjs/acorn-jsx |
-| anser | 2.3.5 | transitive | MIT | PERMISSIVE | git://github.com/IonicaBizau/anser.git |
-| argparse | 2.0.1 | transitive | Python-2.0 | PERMISSIVE | — |
-| aria-hidden | 1.2.6 | transitive | MIT | PERMISSIVE | git+https://github.com/theKashey/aria-hidden.git |
-| bail | 2.0.2 | transitive | MIT | PERMISSIVE | — |
-| base64-js | 1.5.1 | transitive | MIT | PERMISSIVE | git://github.com/beatgammit/base64-js.git |
-| baseline-browser-mapping | 2.9.15 | transitive | Apache-2.0 | PERMISSIVE | git+https://github.com/web-platform-dx/baseline-browser-mapping.git |
-| buffer | 6.0.3 | transitive | MIT | PERMISSIVE | git://github.com/feross/buffer.git |
-| c12 | 3.1.0 | transitive | MIT | PERMISSIVE | — |
-| caniuse-lite | 1.0.30001764 | transitive | CC-BY-4.0 | PERMISSIVE | — |
-| ccount | 2.0.1 | transitive | MIT | PERMISSIVE | — |
-| character-entities | 2.0.2 | transitive | MIT | PERMISSIVE | — |
-| character-entities-html4 | 2.1.0 | transitive | MIT | PERMISSIVE | — |
-| character-entities-legacy | 3.0.0 | transitive | MIT | PERMISSIVE | — |
-| character-reference-invalid | 2.0.1 | transitive | MIT | PERMISSIVE | — |
-| chokidar | 4.0.3 | transitive | MIT | PERMISSIVE | git+https://github.com/paulmillr/chokidar.git |
-| citty | 0.1.6 | transitive | MIT | PERMISSIVE | — |
-| class-variance-authority | 0.7.1 | direct | Apache-2.0 | PERMISSIVE | https://github.com/joe-bell/cva#readme |
-| classnames | 2.5.1 | transitive | MIT | PERMISSIVE | git+https://github.com/JedWatson/classnames.git |
-| clean-set | 1.1.2 | transitive | MIT | PERMISSIVE | git+https://github.com/fwilkerson/clean-set.git |
-| client-only | 0.0.1 | transitive | MIT | PERMISSIVE | https://reactjs.org/ |
-| clsx | 2.1.1 | direct | MIT | PERMISSIVE | — |
-| cm6-theme-basic-light | 0.2.0 | transitive | MIT | PERMISSIVE | https://github.com/craftzdog/cm6-themes.git |
-| cmdk | 1.1.1 | direct | MIT | PERMISSIVE | git+https://github.com/pacocoursey/cmdk.git |
-| codemirror | 6.0.2 | transitive | MIT | PERMISSIVE | https://github.com/codemirror/basic-setup.git |
-| comma-separated-tokens | 2.0.3 | transitive | MIT | PERMISSIVE | — |
-| compute-scroll-into-view | 2.0.4 | transitive | MIT | PERMISSIVE | git+https://github.com/scroll-into-view/compute-scroll-into-view.git |
-| confbox | 0.2.2 | transitive | MIT | PERMISSIVE | — |
-| consola | 3.4.2 | transitive | MIT | PERMISSIVE | — |
-| cookie | 0.7.2 | transitive | MIT | PERMISSIVE | — |
-| crelt | 1.0.6 | transitive | MIT | PERMISSIVE | git+https://github.com/marijnh/crelt.git |
-| csstype | 3.2.3 | transitive | MIT | PERMISSIVE | — |
-| d | 1.0.2 | transitive | ISC | PERMISSIVE | — |
-| d3-array | 3.2.4 | transitive | ISC | PERMISSIVE | https://github.com/d3/d3-array.git |
-| d3-color | 3.1.0 | transitive | ISC | PERMISSIVE | https://github.com/d3/d3-color.git |
-| d3-ease | 3.0.1 | transitive | BSD-3-Clause | PERMISSIVE | https://github.com/d3/d3-ease.git |
-| d3-format | 3.1.2 | transitive | ISC | PERMISSIVE | https://github.com/d3/d3-format.git |
-| d3-interpolate | 3.0.1 | transitive | ISC | PERMISSIVE | https://github.com/d3/d3-interpolate.git |
-| d3-path | 3.1.0 | transitive | ISC | PERMISSIVE | https://github.com/d3/d3-path.git |
-| d3-scale | 4.0.2 | transitive | ISC | PERMISSIVE | https://github.com/d3/d3-scale.git |
-| d3-shape | 3.2.0 | transitive | ISC | PERMISSIVE | https://github.com/d3/d3-shape.git |
-| d3-time | 3.1.0 | transitive | ISC | PERMISSIVE | https://github.com/d3/d3-time.git |
-| d3-time-format | 4.1.0 | transitive | ISC | PERMISSIVE | https://github.com/d3/d3-time-format.git |
-| d3-timer | 3.0.1 | transitive | ISC | PERMISSIVE | https://github.com/d3/d3-timer.git |
-| date-fns | 4.1.0 | direct | MIT | PERMISSIVE | — |
-| date-fns-jalali | 4.1.0-0 | transitive | MIT | PERMISSIVE | — |
-| debug | 4.4.3 | transitive | MIT | PERMISSIVE | git://github.com/debug-js/debug.git |
-| decimal.js | 10.6.0 | transitive | MIT | PERMISSIVE | — |
-| decimal.js-light | 2.5.1 | transitive | MIT | PERMISSIVE | https://github.com/MikeMcl/decimal.js-light.git |
-| decode-named-character-reference | 1.2.0 | transitive | MIT | PERMISSIVE | — |
-| deepmerge-ts | 7.1.5 | transitive | BSD-3-Clause | PERMISSIVE | git+https://github.com/RebeccaStevens/deepmerge-ts.git |
-| defu | 6.1.4 | transitive | MIT | PERMISSIVE | — |
-| dequal | 2.0.3 | transitive | MIT | PERMISSIVE | — |
-| destr | 2.0.5 | transitive | MIT | PERMISSIVE | — |
-| detect-libc | 2.1.2 | transitive | Apache-2.0 | PERMISSIVE | git://github.com/lovell/detect-libc.git |
-| detect-node-es | 1.1.0 | transitive | MIT | PERMISSIVE | https://github.com/thekashey/detect-node |
-| devlop | 1.1.0 | transitive | MIT | PERMISSIVE | — |
-| diff | 5.2.0 | transitive | BSD-3-Clause | PERMISSIVE | git://github.com/kpdecker/jsdiff.git |
-| dom-helpers | 5.2.1 | transitive | MIT | PERMISSIVE | git+https://github.com/react-bootstrap/dom-helpers.git |
-| dotenv | 16.6.1 | transitive | BSD-2-Clause | PERMISSIVE | git://github.com/motdotla/dotenv.git |
-| downshift | 7.6.2 | transitive | MIT | PERMISSIVE | https://github.com/downshift-js/downshift.git |
-| effect | 3.18.4 | transitive | MIT | PERMISSIVE | https://github.com/Effect-TS/effect.git |
-| embla-carousel | 8.6.0 | transitive | MIT | PERMISSIVE | git+https://github.com/davidjerleke/embla-carousel |
-| embla-carousel-react | 8.6.0 | direct | MIT | PERMISSIVE | git+https://github.com/davidjerleke/embla-carousel |
-| embla-carousel-reactive-utils | 8.6.0 | transitive | MIT | PERMISSIVE | git+https://github.com/davidjerleke/embla-carousel |
-| empathic | 2.0.0 | transitive | MIT | PERMISSIVE | — |
-| es5-ext | 0.10.64 | transitive | ISC | PERMISSIVE | — |
-| es6-iterator | 2.0.3 | transitive | MIT | PERMISSIVE | git://github.com/medikoo/es6-iterator.git |
-| es6-symbol | 3.1.4 | transitive | ISC | PERMISSIVE | — |
-| escape-carriage | 1.3.1 | transitive | MIT | PERMISSIVE | git+https://github.com/lgeiger/escape-carriage.git |
-| esniff | 2.0.1 | transitive | ISC | PERMISSIVE | — |
-| estree-util-is-identifier-name | 3.0.0 | transitive | MIT | PERMISSIVE | — |
-| estree-util-visit | 2.0.0 | transitive | MIT | PERMISSIVE | — |
-| event-emitter | 0.3.5 | transitive | MIT | PERMISSIVE | git://github.com/medikoo/event-emitter.git |
-| eventemitter3 | 4.0.7 | transitive | MIT | PERMISSIVE | git://github.com/primus/eventemitter3.git |
-| exsolve | 1.0.8 | transitive | MIT | PERMISSIVE | — |
-| ext | 1.7.0 | transitive | ISC | PERMISSIVE | https://github.com/medikoo/es5-ext#ext |
-| extend | 3.0.2 | transitive | MIT | PERMISSIVE | https://github.com/justmoon/node-extend.git |
-| fast-check | 3.23.2 | transitive | MIT | PERMISSIVE | git+https://github.com/dubzzz/fast-check.git |
-| fast-equals | 5.4.0 | transitive | MIT | PERMISSIVE | git+https://github.com/planttheidea/fast-equals.git |
-| fault | 2.0.1 | transitive | MIT | PERMISSIVE | — |
-| format | 0.2.2 | transitive | MIT (declared in package README; package.json omits the field) | PERMISSIVE | git://github.com/samsonjs/format.git |
-| framer-motion | 12.26.2 | direct | MIT | PERMISSIVE | — |
-| get-nonce | 1.0.1 | transitive | MIT | PERMISSIVE | https://github.com/theKashey/get-nonce |
-| giget | 2.0.0 | transitive | MIT | PERMISSIVE | — |
-| hast-util-parse-selector | 2.2.5 | transitive | MIT | PERMISSIVE | — |
-| hast-util-to-jsx-runtime | 2.3.6 | transitive | MIT | PERMISSIVE | — |
-| hast-util-whitespace | 3.0.0 | transitive | MIT | PERMISSIVE | — |
-| hastscript | 6.0.0 | transitive | MIT | PERMISSIVE | — |
-| highlight.js | 10.7.3 | transitive | BSD-3-Clause | PERMISSIVE | git://github.com/highlightjs/highlight.js.git |
-| highlightjs-vue | 1.0.0 | transitive | CC0-1.0 | PERMISSIVE | git+https://github.com/highlightjs/highlightjs-vue.git |
-| html-url-attributes | 3.0.1 | transitive | MIT | PERMISSIVE | — |
-| ieee754 | 1.2.1 | transitive | BSD-3-Clause | PERMISSIVE | git://github.com/feross/ieee754.git |
-| inline-style-parser | 0.2.7 | transitive | MIT | PERMISSIVE | git+https://github.com/remarkablemark/inline-style-parser.git |
-| input-otp | 1.4.2 | direct | MIT | PERMISSIVE | git+https://github.com/guilhermerodz/input-otp.git |
-| internmap | 2.0.3 | transitive | ISC | PERMISSIVE | https://github.com/mbostock/internmap.git |
-| intersection-observer | 0.10.0 | transitive | W3C-20150513 | NON-STANDARD | git@github.com:w3c/IntersectionObserver.git |
-| intl-messageformat | 10.7.18 | transitive | BSD-3-Clause | PERMISSIVE | git@github.com:formatjs/formatjs.git |
-| is-alphabetical | 2.0.1 | transitive | MIT | PERMISSIVE | — |
-| is-alphanumerical | 2.0.1 | transitive | MIT | PERMISSIVE | — |
-| is-decimal | 2.0.1 | transitive | MIT | PERMISSIVE | — |
-| is-extglob | 2.1.1 | transitive | MIT | PERMISSIVE | https://github.com/jonschlinkert/is-extglob |
-| is-glob | 4.0.3 | transitive | MIT | PERMISSIVE | https://github.com/micromatch/is-glob |
-| is-hexadecimal | 2.0.1 | transitive | MIT | PERMISSIVE | — |
-| is-plain-obj | 4.1.0 | transitive | MIT | PERMISSIVE | — |
-| isomorphic.js | 0.2.5 | transitive | MIT | PERMISSIVE | git+https://github.com/dmonad/isomorphic.js.git |
-| jiti | 2.6.1 | transitive | MIT | PERMISSIVE | — |
-| jose | 4.15.9 | transitive | MIT | PERMISSIVE | https://github.com/panva/jose |
-| js-cookie | 3.0.5 | transitive | MIT | PERMISSIVE | git://github.com/js-cookie/js-cookie.git |
-| js-tokens | 4.0.0 | transitive | MIT | PERMISSIVE | — |
-| js-yaml | 4.1.1 | transitive | MIT | PERMISSIVE | — |
-| kleur | 4.1.5 | transitive | MIT | PERMISSIVE | — |
-| lexical | 0.35.0 | transitive | MIT | PERMISSIVE | https://github.com/facebook/lexical |
-| lib0 | 0.2.117 | transitive | MIT | PERMISSIVE | git+https://github.com/dmonad/lib0.git |
-| lodash | 4.17.21 | transitive | MIT | PERMISSIVE | https://lodash.com/ |
-| lodash-es | 4.17.22 | transitive | MIT | PERMISSIVE | https://lodash.com/custom-builds |
-| longest-streak | 3.1.0 | transitive | MIT | PERMISSIVE | — |
-| loose-envify | 1.4.0 | transitive | MIT | PERMISSIVE | git://github.com/zertosh/loose-envify.git |
-| lowlight | 1.20.0 | transitive | MIT | PERMISSIVE | — |
-| lru-cache | 6.0.0 | transitive | ISC | PERMISSIVE | — |
-| lucide-react | 0.525.0 | direct | ISC | PERMISSIVE | https://github.com/lucide-icons/lucide.git |
-| lz-string | 1.5.0 | transitive | MIT | PERMISSIVE | https://github.com/pieroxy/lz-string.git |
-| markdown-table | 3.0.4 | transitive | MIT | PERMISSIVE | — |
-| mdast-util-directive | 3.1.0 | transitive | MIT | PERMISSIVE | — |
-| mdast-util-from-markdown | 2.0.2 | transitive | MIT | PERMISSIVE | — |
-| mdast-util-frontmatter | 2.0.1 | transitive | MIT | PERMISSIVE | — |
-| mdast-util-gfm-strikethrough | 2.0.0 | transitive | MIT | PERMISSIVE | — |
-| mdast-util-gfm-table | 2.0.0 | transitive | MIT | PERMISSIVE | — |
-| mdast-util-gfm-task-list-item | 2.0.0 | transitive | MIT | PERMISSIVE | — |
-| mdast-util-highlight-mark | 1.2.2 | transitive | MIT | PERMISSIVE | — |
-| mdast-util-mdx | 3.0.0 | transitive | MIT | PERMISSIVE | — |
-| mdast-util-mdx-expression | 2.0.1 | transitive | MIT | PERMISSIVE | — |
-| mdast-util-mdx-jsx | 3.2.0 | transitive | MIT | PERMISSIVE | — |
-| mdast-util-mdxjs-esm | 2.0.1 | transitive | MIT | PERMISSIVE | — |
-| mdast-util-phrasing | 4.1.0 | transitive | MIT | PERMISSIVE | — |
-| mdast-util-to-hast | 13.2.1 | transitive | MIT | PERMISSIVE | — |
-| mdast-util-to-markdown | 2.1.2 | transitive | MIT | PERMISSIVE | — |
-| mdast-util-to-string | 4.0.0 | transitive | MIT | PERMISSIVE | — |
-| micromark | 4.0.2 | transitive | MIT | PERMISSIVE | — |
-| micromark-core-commonmark | 2.0.3 | transitive | MIT | PERMISSIVE | — |
-| micromark-extension-directive | 3.0.2 | transitive | MIT | PERMISSIVE | — |
-| micromark-extension-frontmatter | 2.0.0 | transitive | MIT | PERMISSIVE | — |
-| micromark-extension-gfm-strikethrough | 2.1.0 | transitive | MIT | PERMISSIVE | — |
-| micromark-extension-gfm-table | 2.1.1 | transitive | MIT | PERMISSIVE | — |
-| micromark-extension-gfm-task-list-item | 2.1.0 | transitive | MIT | PERMISSIVE | — |
-| micromark-extension-highlight-mark | 1.2.0 | transitive | MIT | PERMISSIVE | — |
-| micromark-extension-mdx-expression | 3.0.1 | transitive | MIT | PERMISSIVE | — |
-| micromark-extension-mdx-jsx | 3.0.2 | transitive | MIT | PERMISSIVE | — |
-| micromark-extension-mdx-md | 2.0.0 | transitive | MIT | PERMISSIVE | — |
-| micromark-extension-mdxjs | 3.0.0 | transitive | MIT | PERMISSIVE | — |
-| micromark-extension-mdxjs-esm | 3.0.0 | transitive | MIT | PERMISSIVE | — |
-| micromark-factory-destination | 2.0.1 | transitive | MIT | PERMISSIVE | — |
-| micromark-factory-label | 2.0.1 | transitive | MIT | PERMISSIVE | — |
-| micromark-factory-mdx-expression | 2.0.3 | transitive | MIT | PERMISSIVE | — |
-| micromark-factory-space | 2.0.1 | transitive | MIT | PERMISSIVE | — |
-| micromark-factory-title | 2.0.1 | transitive | MIT | PERMISSIVE | — |
-| micromark-factory-whitespace | 2.0.1 | transitive | MIT | PERMISSIVE | — |
-| micromark-util-character | 2.1.1 | transitive | MIT | PERMISSIVE | — |
-| micromark-util-chunked | 2.0.1 | transitive | MIT | PERMISSIVE | — |
-| micromark-util-classify-character | 2.0.1 | transitive | MIT | PERMISSIVE | — |
-| micromark-util-combine-extensions | 2.0.1 | transitive | MIT | PERMISSIVE | — |
-| micromark-util-decode-numeric-character-reference | 2.0.2 | transitive | MIT | PERMISSIVE | — |
-| micromark-util-decode-string | 2.0.1 | transitive | MIT | PERMISSIVE | — |
-| micromark-util-encode | 2.0.1 | transitive | MIT | PERMISSIVE | — |
-| micromark-util-events-to-acorn | 2.0.3 | transitive | MIT | PERMISSIVE | — |
-| micromark-util-html-tag-name | 2.0.1 | transitive | MIT | PERMISSIVE | — |
-| micromark-util-normalize-identifier | 2.0.1 | transitive | MIT | PERMISSIVE | — |
-| micromark-util-resolve-all | 2.0.1 | transitive | MIT | PERMISSIVE | — |
-| micromark-util-sanitize-uri | 2.0.1 | transitive | MIT | PERMISSIVE | — |
-| micromark-util-subtokenize | 2.1.0 | transitive | MIT | PERMISSIVE | — |
-| micromark-util-symbol | 2.0.1 | transitive | MIT | PERMISSIVE | — |
-| micromark-util-types | 2.0.2 | transitive | MIT | PERMISSIVE | — |
-| mime-db | 1.54.0 | transitive | MIT | PERMISSIVE | — |
-| motion-dom | 12.26.2 | transitive | MIT | PERMISSIVE | — |
-| motion-utils | 12.24.10 | transitive | MIT | PERMISSIVE | — |
-| mri | 1.2.0 | transitive | MIT | PERMISSIVE | — |
-| ms | 2.1.3 | transitive | MIT | PERMISSIVE | — |
-| nanoid | 3.3.11 | transitive | MIT | PERMISSIVE | — |
-| negotiator | 1.0.0 | transitive | MIT | PERMISSIVE | — |
-| next | 16.1.3 | direct | MIT | PERMISSIVE | https://nextjs.org |
-| next-auth | 4.24.13 | direct | ISC | PERMISSIVE | https://authjs.dev |
-| next-intl | 4.7.0 | direct | MIT | PERMISSIVE | git+https://github.com/amannn/next-intl.git |
-| next-intl-swc-plugin-extractor | 4.7.0 | transitive | MIT | PERMISSIVE | git+https://github.com/amannn/next-intl.git |
-| next-themes | 0.4.6 | direct | MIT | PERMISSIVE | https://github.com/pacocoursey/next-themes.git |
-| next-tick | 1.1.0 | transitive | ISC | PERMISSIVE | git://github.com/medikoo/next-tick.git |
-| node-addon-api | 7.1.1 | transitive | MIT | PERMISSIVE | git://github.com/nodejs/node-addon-api.git |
-| node-fetch-native | 1.6.7 | transitive | MIT | PERMISSIVE | — |
-| nypm | 0.6.2 | transitive | MIT | PERMISSIVE | — |
-| oauth | 0.9.15 | transitive | MIT | PERMISSIVE | http://github.com/ciaranj/node-oauth.git |
-| object-assign | 4.1.1 | transitive | MIT | PERMISSIVE | — |
-| object-hash | 2.2.0 | transitive | MIT | PERMISSIVE | https://github.com/puleos/object-hash |
-| ohash | 2.0.11 | transitive | MIT | PERMISSIVE | — |
-| oidc-token-hash | 5.2.0 | transitive | MIT | PERMISSIVE | https://github.com/panva/oidc-token-hash |
-| openid-client | 5.7.1 | transitive | MIT | PERMISSIVE | https://github.com/panva/openid-client |
-| outvariant | 1.4.0 | transitive | MIT | PERMISSIVE | https://github.com/open-draft/outvariant |
-| parse-entities | 4.0.2 | transitive | MIT | PERMISSIVE | — |
-| pathe | 2.0.3 | transitive | MIT | PERMISSIVE | — |
-| perfect-debounce | 1.0.0 | transitive | MIT | PERMISSIVE | — |
-| picocolors | 1.1.1 | transitive | ISC | PERMISSIVE | — |
-| picomatch | 4.0.3 | transitive | MIT | PERMISSIVE | https://github.com/micromatch/picomatch |
-| pkg-types | 2.3.0 | transitive | MIT | PERMISSIVE | — |
-| po-parser | 2.1.1 | transitive | MIT | PERMISSIVE | git@github.com:amannn/po-parser.git |
-| preact | 10.28.2 | transitive | MIT | PERMISSIVE | https://preactjs.com |
-| preact-render-to-string | 5.2.6 | transitive | MIT | PERMISSIVE | https://github.com/developit/preact-render-to-string |
-| pretty-format | 3.8.0 | transitive | MIT | PERMISSIVE | https://github.com/thejameskle/pretty-format |
-| prisma | 6.19.2 | direct | Apache-2.0 | PERMISSIVE | https://github.com/prisma/prisma.git |
-| prismjs | 1.30.0 | transitive | MIT | PERMISSIVE | git+https://github.com/PrismJS/prism.git |
-| prop-types | 15.8.1 | transitive | MIT | PERMISSIVE | https://facebook.github.io/react/ |
-| property-information | 7.1.0 | transitive | MIT | PERMISSIVE | — |
-| pure-rand | 6.1.0 | transitive | MIT | PERMISSIVE | git+https://github.com/dubzzz/pure-rand.git |
-| rc9 | 2.1.2 | transitive | MIT | PERMISSIVE | — |
-| react | 19.2.3 | direct | MIT | PERMISSIVE | https://github.com/facebook/react.git |
-| react-day-picker | 9.13.0 | direct | MIT | PERMISSIVE | https://github.com/gpbl/react-day-picker |
-| react-devtools-inline | 4.4.0 | transitive | MIT | PERMISSIVE | https://github.com/facebook/react.git |
-| react-dom | 19.2.3 | direct | MIT | PERMISSIVE | https://github.com/facebook/react.git |
-| react-error-boundary | 3.1.4 | transitive | MIT | PERMISSIVE | https://github.com/bvaughn/react-error-boundary |
-| react-hook-form | 7.71.1 | direct | MIT | PERMISSIVE | https://github.com/react-hook-form/react-hook-form |
-| react-is | 18.3.1 | transitive | MIT | PERMISSIVE | https://github.com/facebook/react.git |
-| react-markdown | 10.1.0 | direct | MIT | PERMISSIVE | — |
-| react-remove-scroll | 2.7.2 | transitive | MIT | PERMISSIVE | — |
-| react-remove-scroll-bar | 2.3.8 | transitive | MIT | PERMISSIVE | — |
-| react-resizable-panels | 3.0.6 | direct | MIT | PERMISSIVE | git+https://github.com/bvaughn/react-resizable-panels.git |
-| react-smooth | 4.0.4 | transitive | MIT | PERMISSIVE | https://github.com/recharts/react-smooth.git |
-| react-style-singleton | 2.2.3 | transitive | MIT | PERMISSIVE | https://github.com/theKashey/react-style-singleton |
-| react-syntax-highlighter | 15.6.6 | direct | MIT | PERMISSIVE | git+https://github.com/react-syntax-highlighter/react-syntax-highlighter.git |
-| react-transition-group | 4.4.5 | transitive | BSD-3-Clause | PERMISSIVE | https://github.com/reactjs/react-transition-group.git |
-| readdirp | 4.1.2 | transitive | MIT | PERMISSIVE | git://github.com/paulmillr/readdirp.git |
-| recharts | 2.15.4 | direct | MIT | PERMISSIVE | git+https://github.com/recharts/recharts.git |
-| recharts-scale | 0.4.5 | transitive | MIT | PERMISSIVE | https://github.com/recharts/recharts-scale.git |
-| refractor | 3.6.0 | transitive | MIT | PERMISSIVE | — |
-| remark-parse | 11.0.0 | transitive | MIT | PERMISSIVE | https://remark.js.org |
-| remark-rehype | 11.1.2 | transitive | MIT | PERMISSIVE | — |
-| sade | 1.8.1 | transitive | MIT | PERMISSIVE | — |
-| scheduler | 0.27.0 | transitive | MIT | PERMISSIVE | https://github.com/facebook/react.git |
-| screenfull | 5.2.0 | transitive | MIT | PERMISSIVE | — |
-| semver | 7.7.3 | transitive | ISC | PERMISSIVE | git+https://github.com/npm/node-semver.git |
-| sharp | 0.34.5 | direct | Apache-2.0 | PERMISSIVE | git+https://github.com/lovell/sharp.git |
-| sonner | 2.0.7 | direct | MIT | PERMISSIVE | git+https://github.com/emilkowalski/sonner.git |
-| source-map-js | 1.2.1 | transitive | BSD-3-Clause | PERMISSIVE | https://github.com/7rulnik/source-map-js |
-| space-separated-tokens | 2.0.2 | transitive | MIT | PERMISSIVE | — |
-| static-browser-server | 1.0.3 | transitive | Apache-2.0 | PERMISSIVE | — |
-| strict-event-emitter | 0.4.6 | transitive | MIT | PERMISSIVE | — |
-| stringify-entities | 4.0.4 | transitive | MIT | PERMISSIVE | — |
-| style-mod | 4.1.3 | transitive | MIT | PERMISSIVE | git+https://github.com/marijnh/style-mod.git |
-| style-to-js | 1.1.21 | transitive | MIT | PERMISSIVE | git+https://github.com/remarkablemark/style-to-js.git |
-| style-to-object | 1.0.14 | transitive | MIT | PERMISSIVE | git+https://github.com/remarkablemark/style-to-object.git |
-| styled-jsx | 5.1.6 | transitive | MIT | PERMISSIVE | — |
-| tabbable | 6.4.0 | transitive | MIT | PERMISSIVE | git+https://github.com/focus-trap/tabbable.git |
-| tailwind-merge | 3.4.0 | direct | MIT | PERMISSIVE | https://github.com/dcastil/tailwind-merge.git |
-| tailwindcss | 4.1.18 | direct | MIT | PERMISSIVE | https://github.com/tailwindlabs/tailwindcss.git |
-| tailwindcss-animate | 1.0.7 | direct | MIT | PERMISSIVE | — |
-| tiny-invariant | 1.3.3 | transitive | MIT | PERMISSIVE | https://github.com/alexreardon/tiny-invariant.git |
-| tinyexec | 1.0.2 | transitive | MIT | PERMISSIVE | git+https://github.com/tinylibs/tinyexec.git |
-| trim-lines | 3.0.1 | transitive | MIT | PERMISSIVE | — |
-| trough | 2.2.0 | transitive | MIT | PERMISSIVE | — |
-| tslib | 2.8.1 | transitive | 0BSD | PERMISSIVE | https://github.com/Microsoft/tslib.git |
-| type | 2.7.3 | transitive | ISC | PERMISSIVE | — |
-| typescript | 5.9.3 | direct | Apache-2.0 | PERMISSIVE | https://github.com/microsoft/TypeScript.git |
-| unidiff | 1.0.4 | transitive | MIT | PERMISSIVE | https://github.com/mvoss9000/unidiff.git |
-| unified | 11.0.5 | transitive | MIT | PERMISSIVE | https://unifiedjs.com |
-| unist-util-is | 6.0.1 | transitive | MIT | PERMISSIVE | — |
-| unist-util-position | 5.0.0 | transitive | MIT | PERMISSIVE | — |
-| unist-util-position-from-estree | 2.0.0 | transitive | MIT | PERMISSIVE | — |
-| unist-util-stringify-position | 4.0.0 | transitive | MIT | PERMISSIVE | — |
-| unist-util-visit | 5.0.0 | transitive | MIT | PERMISSIVE | — |
-| unist-util-visit-parents | 6.0.2 | transitive | MIT | PERMISSIVE | — |
-| use-callback-ref | 1.3.3 | transitive | MIT | PERMISSIVE | — |
-| use-intl | 4.7.0 | transitive | MIT | PERMISSIVE | git+https://github.com/amannn/next-intl.git |
-| use-sidecar | 1.1.3 | transitive | MIT | PERMISSIVE | https://github.com/theKashey/use-sidecar |
-| use-sync-external-store | 1.6.0 | transitive | MIT | PERMISSIVE | https://github.com/facebook/react.git |
-| uuid | 11.1.0 | direct | MIT | PERMISSIVE | https://github.com/uuidjs/uuid.git |
-| uvu | 0.5.6 | transitive | MIT | PERMISSIVE | — |
-| vaul | 1.1.2 | direct | MIT | PERMISSIVE | https://github.com/emilkowalski/vaul.git |
-| vfile | 6.0.3 | transitive | MIT | PERMISSIVE | — |
-| vfile-message | 4.0.3 | transitive | MIT | PERMISSIVE | — |
-| victory-vendor | 36.9.2 | transitive | MIT AND ISC | PERMISSIVE | https://github.com/FormidableLabs/victory |
-| w3c-keyname | 2.2.8 | transitive | MIT | PERMISSIVE | git+https://github.com/marijnh/w3c-keyname.git |
-| xtend | 4.0.2 | transitive | MIT | PERMISSIVE | https://github.com/Raynos/xtend |
-| yallist | 4.0.0 | transitive | ISC | PERMISSIVE | git+https://github.com/isaacs/yallist.git |
-| yjs | 13.6.29 | transitive | MIT | PERMISSIVE | https://github.com/yjs/yjs.git |
-| z-ai-web-dev-sdk | 0.0.18 | direct | ISC | PERMISSIVE |  |
-| zod | 4.3.5 | direct | MIT | PERMISSIVE | git+https://github.com/colinhacks/zod.git |
-| zustand | 5.0.10 | direct | MIT | PERMISSIVE | git+https://github.com/pmndrs/zustand.git |
-| zwitch | 2.0.4 | transitive | MIT | PERMISSIVE | — |
+| @babel/runtime@7.28.6 | node_modules/@babel/runtime | transitive | MIT | installed-package | PERMISSIVE |
+| @codemirror/autocomplete@6.20.0 | node_modules/@codemirror/autocomplete | transitive | MIT | installed-package | PERMISSIVE |
+| @codemirror/commands@6.10.1 | node_modules/@codemirror/commands | transitive | MIT | installed-package | PERMISSIVE |
+| @codemirror/lang-angular@0.1.4 | node_modules/@codemirror/lang-angular | transitive | MIT | installed-package | PERMISSIVE |
+| @codemirror/lang-cpp@6.0.3 | node_modules/@codemirror/lang-cpp | transitive | MIT | installed-package | PERMISSIVE |
+| @codemirror/lang-css@6.3.1 | node_modules/@codemirror/lang-css | transitive | MIT | installed-package | PERMISSIVE |
+| @codemirror/lang-go@6.0.1 | node_modules/@codemirror/lang-go | transitive | MIT | installed-package | PERMISSIVE |
+| @codemirror/lang-html@6.4.11 | node_modules/@codemirror/lang-html | transitive | MIT | installed-package | PERMISSIVE |
+| @codemirror/lang-java@6.0.2 | node_modules/@codemirror/lang-java | transitive | MIT | installed-package | PERMISSIVE |
+| @codemirror/lang-javascript@6.2.4 | node_modules/@codemirror/lang-javascript | transitive | MIT | installed-package | PERMISSIVE |
+| @codemirror/lang-jinja@6.0.0 | node_modules/@codemirror/lang-jinja | transitive | MIT | installed-package | PERMISSIVE |
+| @codemirror/lang-json@6.0.2 | node_modules/@codemirror/lang-json | transitive | MIT | installed-package | PERMISSIVE |
+| @codemirror/lang-less@6.0.2 | node_modules/@codemirror/lang-less | transitive | MIT | installed-package | PERMISSIVE |
+| @codemirror/lang-liquid@6.3.1 | node_modules/@codemirror/lang-liquid | transitive | MIT | installed-package | PERMISSIVE |
+| @codemirror/lang-markdown@6.5.0 | node_modules/@codemirror/lang-markdown | transitive | MIT | installed-package | PERMISSIVE |
+| @codemirror/lang-php@6.0.2 | node_modules/@codemirror/lang-php | transitive | MIT | installed-package | PERMISSIVE |
+| @codemirror/lang-python@6.2.1 | node_modules/@codemirror/lang-python | transitive | MIT | installed-package | PERMISSIVE |
+| @codemirror/lang-rust@6.0.2 | node_modules/@codemirror/lang-rust | transitive | MIT | installed-package | PERMISSIVE |
+| @codemirror/lang-sass@6.0.2 | node_modules/@codemirror/lang-sass | transitive | MIT | installed-package | PERMISSIVE |
+| @codemirror/lang-sql@6.10.0 | node_modules/@codemirror/lang-sql | transitive | MIT | installed-package | PERMISSIVE |
+| @codemirror/lang-vue@0.1.3 | node_modules/@codemirror/lang-vue | transitive | MIT | installed-package | PERMISSIVE |
+| @codemirror/lang-wast@6.0.2 | node_modules/@codemirror/lang-wast | transitive | MIT | installed-package | PERMISSIVE |
+| @codemirror/lang-xml@6.1.0 | node_modules/@codemirror/lang-xml | transitive | MIT | installed-package | PERMISSIVE |
+| @codemirror/lang-yaml@6.1.2 | node_modules/@codemirror/lang-yaml | transitive | MIT | installed-package | PERMISSIVE |
+| @codemirror/language@6.12.1 | node_modules/@codemirror/language | transitive | MIT | installed-package | PERMISSIVE |
+| @codemirror/language-data@6.5.2 | node_modules/@codemirror/language-data | transitive | MIT | installed-package | PERMISSIVE |
+| @codemirror/legacy-modes@6.5.2 | node_modules/@codemirror/legacy-modes | transitive | MIT | installed-package | PERMISSIVE |
+| @codemirror/lint@6.9.2 | node_modules/@codemirror/lint | transitive | MIT | installed-package | PERMISSIVE |
+| @codemirror/merge@6.11.2 | node_modules/@codemirror/merge | transitive | MIT | installed-package | PERMISSIVE |
+| @codemirror/search@6.6.0 | node_modules/@codemirror/search | transitive | MIT | installed-package | PERMISSIVE |
+| @codemirror/state@6.5.4 | node_modules/@codemirror/state | transitive | MIT | installed-package | PERMISSIVE |
+| @codemirror/view@6.39.11 | node_modules/@codemirror/view | transitive | MIT | installed-package | PERMISSIVE |
+| @codesandbox/nodebox@0.1.8 | node_modules/@codesandbox/nodebox | transitive | SEE LICENSE IN ./LICENSE | installed-package | NON-STANDARD |
+| @codesandbox/sandpack-client@2.19.8 | node_modules/@codesandbox/sandpack-client | transitive | Apache-2.0 | installed-package | PERMISSIVE |
+| @codesandbox/sandpack-react@2.20.0 | node_modules/@codesandbox/sandpack-react | transitive | Apache-2.0 | installed-package | PERMISSIVE |
+| react-is@17.0.2 | node_modules/@codesandbox/sandpack-react/node_modules/react-is | transitive | MIT | npm-registry | PERMISSIVE |
+| @date-fns/tz@1.4.1 | node_modules/@date-fns/tz | transitive | MIT | installed-package | PERMISSIVE |
+| @dnd-kit/accessibility@3.1.1 | node_modules/@dnd-kit/accessibility | transitive | MIT | installed-package | PERMISSIVE |
+| @dnd-kit/core@6.3.1 | node_modules/@dnd-kit/core | direct | MIT | installed-package | PERMISSIVE |
+| @dnd-kit/sortable@10.0.0 | node_modules/@dnd-kit/sortable | direct | MIT | installed-package | PERMISSIVE |
+| @dnd-kit/utilities@3.2.2 | node_modules/@dnd-kit/utilities | direct | MIT | installed-package | PERMISSIVE |
+| @emnapi/runtime@1.11.3 | node_modules/@emnapi/runtime | transitive (optional) | MIT | npm-registry | PERMISSIVE |
+| @floating-ui/core@1.7.3 | node_modules/@floating-ui/core | transitive | MIT | installed-package | PERMISSIVE |
+| @floating-ui/dom@1.7.4 | node_modules/@floating-ui/dom | transitive | MIT | installed-package | PERMISSIVE |
+| @floating-ui/react@0.27.16 | node_modules/@floating-ui/react | transitive | MIT | installed-package | PERMISSIVE |
+| @floating-ui/react-dom@2.1.6 | node_modules/@floating-ui/react-dom | transitive | MIT | installed-package | PERMISSIVE |
+| @floating-ui/utils@0.2.10 | node_modules/@floating-ui/utils | transitive | MIT | installed-package | PERMISSIVE |
+| @formatjs/ecma402-abstract@2.3.6 | node_modules/@formatjs/ecma402-abstract | transitive | MIT | npm-registry | PERMISSIVE |
+| @formatjs/intl-localematcher@0.6.2 | node_modules/@formatjs/ecma402-abstract/node_modules/@formatjs/intl-localematcher | transitive | MIT | npm-registry | PERMISSIVE |
+| @formatjs/fast-memoize@2.2.7 | node_modules/@formatjs/fast-memoize | transitive | MIT | npm-registry | PERMISSIVE |
+| @formatjs/icu-messageformat-parser@2.11.4 | node_modules/@formatjs/icu-messageformat-parser | transitive | MIT | npm-registry | PERMISSIVE |
+| @formatjs/icu-skeleton-parser@1.8.16 | node_modules/@formatjs/icu-skeleton-parser | transitive | MIT | npm-registry | PERMISSIVE |
+| @formatjs/intl-localematcher@0.5.10 | node_modules/@formatjs/intl-localematcher | transitive | MIT | npm-registry | PERMISSIVE |
+| @hookform/resolvers@5.2.2 | node_modules/@hookform/resolvers | direct | MIT | installed-package | PERMISSIVE |
+| @img/colour@1.0.0 | node_modules/@img/colour | transitive | MIT | npm-registry | PERMISSIVE |
+| @img/sharp-darwin-arm64@0.34.5 | node_modules/@img/sharp-darwin-arm64 | transitive (optional) | Apache-2.0 | npm-registry | PERMISSIVE |
+| @img/sharp-darwin-x64@0.34.5 | node_modules/@img/sharp-darwin-x64 | transitive (optional) | Apache-2.0 | npm-registry | PERMISSIVE |
+| @img/sharp-libvips-darwin-arm64@1.2.4 | node_modules/@img/sharp-libvips-darwin-arm64 | transitive (optional) | LGPL-3.0-or-later | npm-registry | COPYLEFT-WEAK |
+| @img/sharp-libvips-darwin-x64@1.2.4 | node_modules/@img/sharp-libvips-darwin-x64 | transitive (optional) | LGPL-3.0-or-later | npm-registry | COPYLEFT-WEAK |
+| @img/sharp-libvips-linux-arm@1.2.4 | node_modules/@img/sharp-libvips-linux-arm | transitive (optional) | LGPL-3.0-or-later | npm-registry | COPYLEFT-WEAK |
+| @img/sharp-libvips-linux-arm64@1.2.4 | node_modules/@img/sharp-libvips-linux-arm64 | transitive (optional) | LGPL-3.0-or-later | npm-registry | COPYLEFT-WEAK |
+| @img/sharp-libvips-linux-ppc64@1.2.4 | node_modules/@img/sharp-libvips-linux-ppc64 | transitive (optional) | LGPL-3.0-or-later | npm-registry | COPYLEFT-WEAK |
+| @img/sharp-libvips-linux-riscv64@1.2.4 | node_modules/@img/sharp-libvips-linux-riscv64 | transitive (optional) | LGPL-3.0-or-later | npm-registry | COPYLEFT-WEAK |
+| @img/sharp-libvips-linux-s390x@1.2.4 | node_modules/@img/sharp-libvips-linux-s390x | transitive (optional) | LGPL-3.0-or-later | npm-registry | COPYLEFT-WEAK |
+| @img/sharp-libvips-linux-x64@1.2.4 | node_modules/@img/sharp-libvips-linux-x64 | transitive (optional) | LGPL-3.0-or-later | npm-registry | COPYLEFT-WEAK |
+| @img/sharp-libvips-linuxmusl-arm64@1.2.4 | node_modules/@img/sharp-libvips-linuxmusl-arm64 | transitive (optional) | LGPL-3.0-or-later | npm-registry | COPYLEFT-WEAK |
+| @img/sharp-libvips-linuxmusl-x64@1.2.4 | node_modules/@img/sharp-libvips-linuxmusl-x64 | transitive (optional) | LGPL-3.0-or-later | npm-registry | COPYLEFT-WEAK |
+| @img/sharp-linux-arm@0.34.5 | node_modules/@img/sharp-linux-arm | transitive (optional) | Apache-2.0 | npm-registry | PERMISSIVE |
+| @img/sharp-linux-arm64@0.34.5 | node_modules/@img/sharp-linux-arm64 | transitive (optional) | Apache-2.0 | npm-registry | PERMISSIVE |
+| @img/sharp-linux-ppc64@0.34.5 | node_modules/@img/sharp-linux-ppc64 | transitive (optional) | Apache-2.0 | npm-registry | PERMISSIVE |
+| @img/sharp-linux-riscv64@0.34.5 | node_modules/@img/sharp-linux-riscv64 | transitive (optional) | Apache-2.0 | npm-registry | PERMISSIVE |
+| @img/sharp-linux-s390x@0.34.5 | node_modules/@img/sharp-linux-s390x | transitive (optional) | Apache-2.0 | npm-registry | PERMISSIVE |
+| @img/sharp-linux-x64@0.34.5 | node_modules/@img/sharp-linux-x64 | transitive (optional) | Apache-2.0 | npm-registry | PERMISSIVE |
+| @img/sharp-linuxmusl-arm64@0.34.5 | node_modules/@img/sharp-linuxmusl-arm64 | transitive (optional) | Apache-2.0 | npm-registry | PERMISSIVE |
+| @img/sharp-linuxmusl-x64@0.34.5 | node_modules/@img/sharp-linuxmusl-x64 | transitive (optional) | Apache-2.0 | npm-registry | PERMISSIVE |
+| @img/sharp-wasm32@0.34.5 | node_modules/@img/sharp-wasm32 | transitive (optional) | Apache-2.0 AND LGPL-3.0-or-later AND MIT | npm-registry | COPYLEFT-WEAK |
+| @img/sharp-win32-arm64@0.34.5 | node_modules/@img/sharp-win32-arm64 | transitive (optional) | Apache-2.0 AND LGPL-3.0-or-later | npm-registry | COPYLEFT-WEAK |
+| @img/sharp-win32-ia32@0.34.5 | node_modules/@img/sharp-win32-ia32 | transitive (optional) | Apache-2.0 AND LGPL-3.0-or-later | npm-registry | COPYLEFT-WEAK |
+| @img/sharp-win32-x64@0.34.5 | node_modules/@img/sharp-win32-x64 | transitive (optional) | Apache-2.0 AND LGPL-3.0-or-later | npm-registry | COPYLEFT-WEAK |
+| @lexical/clipboard@0.35.0 | node_modules/@lexical/clipboard | transitive | MIT | installed-package | PERMISSIVE |
+| @lexical/code@0.35.0 | node_modules/@lexical/code | transitive | MIT | installed-package | PERMISSIVE |
+| @lexical/devtools-core@0.35.0 | node_modules/@lexical/devtools-core | transitive | MIT | installed-package | PERMISSIVE |
+| @lexical/dragon@0.35.0 | node_modules/@lexical/dragon | transitive | MIT | installed-package | PERMISSIVE |
+| @lexical/hashtag@0.35.0 | node_modules/@lexical/hashtag | transitive | MIT | installed-package | PERMISSIVE |
+| @lexical/history@0.35.0 | node_modules/@lexical/history | transitive | MIT | installed-package | PERMISSIVE |
+| @lexical/html@0.35.0 | node_modules/@lexical/html | transitive | MIT | installed-package | PERMISSIVE |
+| @lexical/link@0.35.0 | node_modules/@lexical/link | transitive | MIT | installed-package | PERMISSIVE |
+| @lexical/list@0.35.0 | node_modules/@lexical/list | transitive | MIT | installed-package | PERMISSIVE |
+| @lexical/mark@0.35.0 | node_modules/@lexical/mark | transitive | MIT | installed-package | PERMISSIVE |
+| @lexical/markdown@0.35.0 | node_modules/@lexical/markdown | transitive | MIT | installed-package | PERMISSIVE |
+| @lexical/offset@0.35.0 | node_modules/@lexical/offset | transitive | MIT | installed-package | PERMISSIVE |
+| @lexical/overflow@0.35.0 | node_modules/@lexical/overflow | transitive | MIT | installed-package | PERMISSIVE |
+| @lexical/plain-text@0.35.0 | node_modules/@lexical/plain-text | transitive | MIT | installed-package | PERMISSIVE |
+| @lexical/react@0.35.0 | node_modules/@lexical/react | transitive | MIT | installed-package | PERMISSIVE |
+| @lexical/rich-text@0.35.0 | node_modules/@lexical/rich-text | transitive | MIT | installed-package | PERMISSIVE |
+| @lexical/selection@0.35.0 | node_modules/@lexical/selection | transitive | MIT | installed-package | PERMISSIVE |
+| @lexical/table@0.35.0 | node_modules/@lexical/table | transitive | MIT | installed-package | PERMISSIVE |
+| @lexical/text@0.35.0 | node_modules/@lexical/text | transitive | MIT | installed-package | PERMISSIVE |
+| @lexical/utils@0.35.0 | node_modules/@lexical/utils | transitive | MIT | installed-package | PERMISSIVE |
+| @lexical/yjs@0.35.0 | node_modules/@lexical/yjs | transitive | MIT | installed-package | PERMISSIVE |
+| @lezer/common@1.5.0 | node_modules/@lezer/common | transitive | MIT | installed-package | PERMISSIVE |
+| @lezer/cpp@1.1.5 | node_modules/@lezer/cpp | transitive | MIT | installed-package | PERMISSIVE |
+| @lezer/css@1.3.0 | node_modules/@lezer/css | transitive | MIT | installed-package | PERMISSIVE |
+| @lezer/go@1.0.1 | node_modules/@lezer/go | transitive | MIT | installed-package | PERMISSIVE |
+| @lezer/highlight@1.2.3 | node_modules/@lezer/highlight | transitive | MIT | installed-package | PERMISSIVE |
+| @lezer/html@1.3.13 | node_modules/@lezer/html | transitive | MIT | installed-package | PERMISSIVE |
+| @lezer/java@1.1.3 | node_modules/@lezer/java | transitive | MIT | installed-package | PERMISSIVE |
+| @lezer/javascript@1.5.4 | node_modules/@lezer/javascript | transitive | MIT | installed-package | PERMISSIVE |
+| @lezer/json@1.0.3 | node_modules/@lezer/json | transitive | MIT | installed-package | PERMISSIVE |
+| @lezer/lr@1.4.7 | node_modules/@lezer/lr | transitive | MIT | installed-package | PERMISSIVE |
+| @lezer/markdown@1.6.3 | node_modules/@lezer/markdown | transitive | MIT | installed-package | PERMISSIVE |
+| @lezer/php@1.0.5 | node_modules/@lezer/php | transitive | MIT | installed-package | PERMISSIVE |
+| @lezer/python@1.1.18 | node_modules/@lezer/python | transitive | MIT | installed-package | PERMISSIVE |
+| @lezer/rust@1.0.2 | node_modules/@lezer/rust | transitive | MIT | installed-package | PERMISSIVE |
+| @lezer/sass@1.1.0 | node_modules/@lezer/sass | transitive | MIT | installed-package | PERMISSIVE |
+| @lezer/xml@1.0.6 | node_modules/@lezer/xml | transitive | MIT | installed-package | PERMISSIVE |
+| @lezer/yaml@1.0.3 | node_modules/@lezer/yaml | transitive | MIT | installed-package | PERMISSIVE |
+| @marijn/find-cluster-break@1.0.2 | node_modules/@marijn/find-cluster-break | transitive | MIT | installed-package | PERMISSIVE |
+| @mdxeditor/editor@3.52.3 | node_modules/@mdxeditor/editor | direct | MIT | installed-package | PERMISSIVE |
+| @mdxeditor/gurx@1.2.4 | node_modules/@mdxeditor/gurx | transitive | MIT | installed-package | PERMISSIVE |
+| @microsoft/fetch-event-source@2.0.1 | node_modules/@microsoft/fetch-event-source | transitive | MIT | installed-package | PERMISSIVE |
+| @next/env@16.1.3 | node_modules/@next/env | transitive | MIT | npm-registry | PERMISSIVE |
+| @next/swc-darwin-arm64@16.1.3 | node_modules/@next/swc-darwin-arm64 | transitive (optional) | MIT | npm-registry | PERMISSIVE |
+| @next/swc-darwin-x64@16.1.3 | node_modules/@next/swc-darwin-x64 | transitive (optional) | MIT | npm-registry | PERMISSIVE |
+| @next/swc-linux-arm64-gnu@16.1.3 | node_modules/@next/swc-linux-arm64-gnu | transitive (optional) | MIT | npm-registry | PERMISSIVE |
+| @next/swc-linux-arm64-musl@16.1.3 | node_modules/@next/swc-linux-arm64-musl | transitive (optional) | MIT | npm-registry | PERMISSIVE |
+| @next/swc-linux-x64-gnu@16.1.3 | node_modules/@next/swc-linux-x64-gnu | transitive (optional) | MIT | npm-registry | PERMISSIVE |
+| @next/swc-linux-x64-musl@16.1.3 | node_modules/@next/swc-linux-x64-musl | transitive (optional) | MIT | npm-registry | PERMISSIVE |
+| @next/swc-win32-arm64-msvc@16.1.3 | node_modules/@next/swc-win32-arm64-msvc | transitive (optional) | MIT | npm-registry | PERMISSIVE |
+| @next/swc-win32-x64-msvc@16.1.3 | node_modules/@next/swc-win32-x64-msvc | transitive (optional) | MIT | npm-registry | PERMISSIVE |
+| @open-draft/deferred-promise@2.2.0 | node_modules/@open-draft/deferred-promise | transitive | MIT | installed-package | PERMISSIVE |
+| @panva/hkdf@1.2.1 | node_modules/@panva/hkdf | transitive | MIT | installed-package | PERMISSIVE |
+| @parcel/watcher@2.5.4 | node_modules/@parcel/watcher | transitive | MIT | installed-package | PERMISSIVE |
+| @parcel/watcher-android-arm64@2.5.4 | node_modules/@parcel/watcher-android-arm64 | transitive (optional) | MIT | npm-registry | PERMISSIVE |
+| @parcel/watcher-darwin-arm64@2.5.4 | node_modules/@parcel/watcher-darwin-arm64 | transitive (optional) | MIT | npm-registry | PERMISSIVE |
+| @parcel/watcher-darwin-x64@2.5.4 | node_modules/@parcel/watcher-darwin-x64 | transitive (optional) | MIT | npm-registry | PERMISSIVE |
+| @parcel/watcher-freebsd-x64@2.5.4 | node_modules/@parcel/watcher-freebsd-x64 | transitive (optional) | MIT | npm-registry | PERMISSIVE |
+| @parcel/watcher-linux-arm-glibc@2.5.4 | node_modules/@parcel/watcher-linux-arm-glibc | transitive (optional) | MIT | npm-registry | PERMISSIVE |
+| @parcel/watcher-linux-arm-musl@2.5.4 | node_modules/@parcel/watcher-linux-arm-musl | transitive (optional) | MIT | npm-registry | PERMISSIVE |
+| @parcel/watcher-linux-arm64-glibc@2.5.4 | node_modules/@parcel/watcher-linux-arm64-glibc | transitive (optional) | MIT | npm-registry | PERMISSIVE |
+| @parcel/watcher-linux-arm64-musl@2.5.4 | node_modules/@parcel/watcher-linux-arm64-musl | transitive (optional) | MIT | npm-registry | PERMISSIVE |
+| @parcel/watcher-linux-x64-glibc@2.5.4 | node_modules/@parcel/watcher-linux-x64-glibc | transitive (optional) | MIT | installed-package | PERMISSIVE |
+| @parcel/watcher-linux-x64-musl@2.5.4 | node_modules/@parcel/watcher-linux-x64-musl | transitive (optional) | MIT | installed-package | PERMISSIVE |
+| @parcel/watcher-win32-arm64@2.5.4 | node_modules/@parcel/watcher-win32-arm64 | transitive (optional) | MIT | npm-registry | PERMISSIVE |
+| @parcel/watcher-win32-ia32@2.5.4 | node_modules/@parcel/watcher-win32-ia32 | transitive (optional) | MIT | npm-registry | PERMISSIVE |
+| @parcel/watcher-win32-x64@2.5.4 | node_modules/@parcel/watcher-win32-x64 | transitive (optional) | MIT | npm-registry | PERMISSIVE |
+| @prisma/client@6.19.2 | node_modules/@prisma/client | direct | Apache-2.0 | installed-package | PERMISSIVE |
+| @prisma/config@6.19.2 | node_modules/@prisma/config | transitive | Apache-2.0 | installed-package | PERMISSIVE |
+| @prisma/debug@6.19.2 | node_modules/@prisma/debug | transitive | Apache-2.0 | installed-package | PERMISSIVE |
+| @prisma/engines@6.19.2 | node_modules/@prisma/engines | transitive | Apache-2.0 | installed-package | PERMISSIVE |
+| @prisma/engines-version@7.1.1-3.c2990dca591cba766e3b7ef5d9e8a84796e47ab7 | node_modules/@prisma/engines-version | transitive | Apache-2.0 | installed-package | PERMISSIVE |
+| @prisma/fetch-engine@6.19.2 | node_modules/@prisma/fetch-engine | transitive | Apache-2.0 | installed-package | PERMISSIVE |
+| @prisma/get-platform@6.19.2 | node_modules/@prisma/get-platform | transitive | Apache-2.0 | installed-package | PERMISSIVE |
+| @radix-ui/colors@3.0.0 | node_modules/@radix-ui/colors | transitive | MIT | installed-package | PERMISSIVE |
+| @radix-ui/number@1.1.1 | node_modules/@radix-ui/number | transitive | MIT | installed-package | PERMISSIVE |
+| @radix-ui/primitive@1.1.3 | node_modules/@radix-ui/primitive | transitive | MIT | installed-package | PERMISSIVE |
+| @radix-ui/react-accordion@1.2.12 | node_modules/@radix-ui/react-accordion | direct | MIT | installed-package | PERMISSIVE |
+| @radix-ui/react-alert-dialog@1.1.15 | node_modules/@radix-ui/react-alert-dialog | direct | MIT | installed-package | PERMISSIVE |
+| @radix-ui/react-slot@1.2.3 | node_modules/@radix-ui/react-alert-dialog/node_modules/@radix-ui/react-slot | transitive | MIT | npm-registry | PERMISSIVE |
+| @radix-ui/react-arrow@1.1.7 | node_modules/@radix-ui/react-arrow | transitive | MIT | installed-package | PERMISSIVE |
+| @radix-ui/react-aspect-ratio@1.1.8 | node_modules/@radix-ui/react-aspect-ratio | direct | MIT | installed-package | PERMISSIVE |
+| @radix-ui/react-primitive@2.1.4 | node_modules/@radix-ui/react-aspect-ratio/node_modules/@radix-ui/react-primitive | transitive | MIT | npm-registry | PERMISSIVE |
+| @radix-ui/react-avatar@1.1.11 | node_modules/@radix-ui/react-avatar | direct | MIT | installed-package | PERMISSIVE |
+| @radix-ui/react-context@1.1.3 | node_modules/@radix-ui/react-avatar/node_modules/@radix-ui/react-context | transitive | MIT | npm-registry | PERMISSIVE |
+| @radix-ui/react-primitive@2.1.4 | node_modules/@radix-ui/react-avatar/node_modules/@radix-ui/react-primitive | transitive | MIT | npm-registry | PERMISSIVE |
+| @radix-ui/react-checkbox@1.3.3 | node_modules/@radix-ui/react-checkbox | direct | MIT | installed-package | PERMISSIVE |
+| @radix-ui/react-collapsible@1.1.12 | node_modules/@radix-ui/react-collapsible | direct | MIT | installed-package | PERMISSIVE |
+| @radix-ui/react-collection@1.1.7 | node_modules/@radix-ui/react-collection | transitive | MIT | installed-package | PERMISSIVE |
+| @radix-ui/react-slot@1.2.3 | node_modules/@radix-ui/react-collection/node_modules/@radix-ui/react-slot | transitive | MIT | npm-registry | PERMISSIVE |
+| @radix-ui/react-compose-refs@1.1.2 | node_modules/@radix-ui/react-compose-refs | transitive | MIT | installed-package | PERMISSIVE |
+| @radix-ui/react-context@1.1.2 | node_modules/@radix-ui/react-context | transitive | MIT | installed-package | PERMISSIVE |
+| @radix-ui/react-context-menu@2.2.16 | node_modules/@radix-ui/react-context-menu | direct | MIT | installed-package | PERMISSIVE |
+| @radix-ui/react-dialog@1.1.15 | node_modules/@radix-ui/react-dialog | direct | MIT | installed-package | PERMISSIVE |
+| @radix-ui/react-slot@1.2.3 | node_modules/@radix-ui/react-dialog/node_modules/@radix-ui/react-slot | transitive | MIT | npm-registry | PERMISSIVE |
+| @radix-ui/react-direction@1.1.1 | node_modules/@radix-ui/react-direction | transitive | MIT | installed-package | PERMISSIVE |
+| @radix-ui/react-dismissable-layer@1.1.11 | node_modules/@radix-ui/react-dismissable-layer | transitive | MIT | installed-package | PERMISSIVE |
+| @radix-ui/react-dropdown-menu@2.1.16 | node_modules/@radix-ui/react-dropdown-menu | direct | MIT | installed-package | PERMISSIVE |
+| @radix-ui/react-focus-guards@1.1.3 | node_modules/@radix-ui/react-focus-guards | transitive | MIT | installed-package | PERMISSIVE |
+| @radix-ui/react-focus-scope@1.1.7 | node_modules/@radix-ui/react-focus-scope | transitive | MIT | installed-package | PERMISSIVE |
+| @radix-ui/react-hover-card@1.1.15 | node_modules/@radix-ui/react-hover-card | direct | MIT | installed-package | PERMISSIVE |
+| @radix-ui/react-icons@1.3.2 | node_modules/@radix-ui/react-icons | transitive | MIT | installed-package | PERMISSIVE |
+| @radix-ui/react-id@1.1.1 | node_modules/@radix-ui/react-id | transitive | MIT | installed-package | PERMISSIVE |
+| @radix-ui/react-label@2.1.8 | node_modules/@radix-ui/react-label | direct | MIT | installed-package | PERMISSIVE |
+| @radix-ui/react-primitive@2.1.4 | node_modules/@radix-ui/react-label/node_modules/@radix-ui/react-primitive | transitive | MIT | npm-registry | PERMISSIVE |
+| @radix-ui/react-menu@2.1.16 | node_modules/@radix-ui/react-menu | transitive | MIT | installed-package | PERMISSIVE |
+| @radix-ui/react-slot@1.2.3 | node_modules/@radix-ui/react-menu/node_modules/@radix-ui/react-slot | transitive | MIT | npm-registry | PERMISSIVE |
+| @radix-ui/react-menubar@1.1.16 | node_modules/@radix-ui/react-menubar | direct | MIT | installed-package | PERMISSIVE |
+| @radix-ui/react-navigation-menu@1.2.14 | node_modules/@radix-ui/react-navigation-menu | direct | MIT | installed-package | PERMISSIVE |
+| @radix-ui/react-popover@1.1.15 | node_modules/@radix-ui/react-popover | direct | MIT | installed-package | PERMISSIVE |
+| @radix-ui/react-slot@1.2.3 | node_modules/@radix-ui/react-popover/node_modules/@radix-ui/react-slot | transitive | MIT | npm-registry | PERMISSIVE |
+| @radix-ui/react-popper@1.2.8 | node_modules/@radix-ui/react-popper | transitive | MIT | installed-package | PERMISSIVE |
+| @radix-ui/react-portal@1.1.9 | node_modules/@radix-ui/react-portal | transitive | MIT | installed-package | PERMISSIVE |
+| @radix-ui/react-presence@1.1.5 | node_modules/@radix-ui/react-presence | transitive | MIT | installed-package | PERMISSIVE |
+| @radix-ui/react-primitive@2.1.3 | node_modules/@radix-ui/react-primitive | transitive | MIT | installed-package | PERMISSIVE |
+| @radix-ui/react-slot@1.2.3 | node_modules/@radix-ui/react-primitive/node_modules/@radix-ui/react-slot | transitive | MIT | npm-registry | PERMISSIVE |
+| @radix-ui/react-progress@1.1.8 | node_modules/@radix-ui/react-progress | direct | MIT | installed-package | PERMISSIVE |
+| @radix-ui/react-context@1.1.3 | node_modules/@radix-ui/react-progress/node_modules/@radix-ui/react-context | transitive | MIT | npm-registry | PERMISSIVE |
+| @radix-ui/react-primitive@2.1.4 | node_modules/@radix-ui/react-progress/node_modules/@radix-ui/react-primitive | transitive | MIT | npm-registry | PERMISSIVE |
+| @radix-ui/react-radio-group@1.3.8 | node_modules/@radix-ui/react-radio-group | direct | MIT | installed-package | PERMISSIVE |
+| @radix-ui/react-roving-focus@1.1.11 | node_modules/@radix-ui/react-roving-focus | transitive | MIT | installed-package | PERMISSIVE |
+| @radix-ui/react-scroll-area@1.2.10 | node_modules/@radix-ui/react-scroll-area | direct | MIT | installed-package | PERMISSIVE |
+| @radix-ui/react-select@2.2.6 | node_modules/@radix-ui/react-select | direct | MIT | installed-package | PERMISSIVE |
+| @radix-ui/react-slot@1.2.3 | node_modules/@radix-ui/react-select/node_modules/@radix-ui/react-slot | transitive | MIT | npm-registry | PERMISSIVE |
+| @radix-ui/react-separator@1.1.8 | node_modules/@radix-ui/react-separator | direct | MIT | installed-package | PERMISSIVE |
+| @radix-ui/react-primitive@2.1.4 | node_modules/@radix-ui/react-separator/node_modules/@radix-ui/react-primitive | transitive | MIT | npm-registry | PERMISSIVE |
+| @radix-ui/react-slider@1.3.6 | node_modules/@radix-ui/react-slider | direct | MIT | installed-package | PERMISSIVE |
+| @radix-ui/react-slot@1.2.4 | node_modules/@radix-ui/react-slot | direct | MIT | installed-package | PERMISSIVE |
+| @radix-ui/react-switch@1.2.6 | node_modules/@radix-ui/react-switch | direct | MIT | installed-package | PERMISSIVE |
+| @radix-ui/react-tabs@1.1.13 | node_modules/@radix-ui/react-tabs | direct | MIT | installed-package | PERMISSIVE |
+| @radix-ui/react-toast@1.2.15 | node_modules/@radix-ui/react-toast | direct | MIT | installed-package | PERMISSIVE |
+| @radix-ui/react-toggle@1.1.10 | node_modules/@radix-ui/react-toggle | direct | MIT | installed-package | PERMISSIVE |
+| @radix-ui/react-toggle-group@1.1.11 | node_modules/@radix-ui/react-toggle-group | direct | MIT | installed-package | PERMISSIVE |
+| @radix-ui/react-toolbar@1.1.11 | node_modules/@radix-ui/react-toolbar | transitive | MIT | installed-package | PERMISSIVE |
+| @radix-ui/react-separator@1.1.7 | node_modules/@radix-ui/react-toolbar/node_modules/@radix-ui/react-separator | transitive | MIT | npm-registry | PERMISSIVE |
+| @radix-ui/react-tooltip@1.2.8 | node_modules/@radix-ui/react-tooltip | direct | MIT | installed-package | PERMISSIVE |
+| @radix-ui/react-slot@1.2.3 | node_modules/@radix-ui/react-tooltip/node_modules/@radix-ui/react-slot | transitive | MIT | npm-registry | PERMISSIVE |
+| @radix-ui/react-use-callback-ref@1.1.1 | node_modules/@radix-ui/react-use-callback-ref | transitive | MIT | installed-package | PERMISSIVE |
+| @radix-ui/react-use-controllable-state@1.2.2 | node_modules/@radix-ui/react-use-controllable-state | transitive | MIT | installed-package | PERMISSIVE |
+| @radix-ui/react-use-effect-event@0.0.2 | node_modules/@radix-ui/react-use-effect-event | transitive | MIT | installed-package | PERMISSIVE |
+| @radix-ui/react-use-escape-keydown@1.1.1 | node_modules/@radix-ui/react-use-escape-keydown | transitive | MIT | installed-package | PERMISSIVE |
+| @radix-ui/react-use-is-hydrated@0.1.0 | node_modules/@radix-ui/react-use-is-hydrated | transitive | MIT | installed-package | PERMISSIVE |
+| @radix-ui/react-use-layout-effect@1.1.1 | node_modules/@radix-ui/react-use-layout-effect | transitive | MIT | installed-package | PERMISSIVE |
+| @radix-ui/react-use-previous@1.1.1 | node_modules/@radix-ui/react-use-previous | transitive | MIT | installed-package | PERMISSIVE |
+| @radix-ui/react-use-rect@1.1.1 | node_modules/@radix-ui/react-use-rect | transitive | MIT | installed-package | PERMISSIVE |
+| @radix-ui/react-use-size@1.1.1 | node_modules/@radix-ui/react-use-size | transitive | MIT | installed-package | PERMISSIVE |
+| @radix-ui/react-visually-hidden@1.2.3 | node_modules/@radix-ui/react-visually-hidden | transitive | MIT | installed-package | PERMISSIVE |
+| @radix-ui/rect@1.1.1 | node_modules/@radix-ui/rect | transitive | MIT | installed-package | PERMISSIVE |
+| @react-hook/intersection-observer@3.1.2 | node_modules/@react-hook/intersection-observer | transitive | MIT | installed-package | PERMISSIVE |
+| @react-hook/passive-layout-effect@1.2.1 | node_modules/@react-hook/passive-layout-effect | transitive | MIT | installed-package | PERMISSIVE |
+| @reactuses/core@6.1.9 | node_modules/@reactuses/core | direct | Unlicense | installed-package | PERMISSIVE |
+| @schummar/icu-type-parser@1.21.5 | node_modules/@schummar/icu-type-parser | transitive | MIT | installed-package | PERMISSIVE |
+| @standard-schema/spec@1.1.0 | node_modules/@standard-schema/spec | transitive | MIT | installed-package | PERMISSIVE |
+| @standard-schema/utils@0.3.0 | node_modules/@standard-schema/utils | transitive | MIT | installed-package | PERMISSIVE |
+| @stitches/core@1.2.8 | node_modules/@stitches/core | transitive | MIT | installed-package | PERMISSIVE |
+| @swc/core@1.15.8 | node_modules/@swc/core | transitive | Apache-2.0 | npm-registry | PERMISSIVE |
+| @swc/core-darwin-arm64@1.15.8 | node_modules/@swc/core-darwin-arm64 | transitive (optional) | Apache-2.0 AND MIT | npm-registry | PERMISSIVE |
+| @swc/core-darwin-x64@1.15.8 | node_modules/@swc/core-darwin-x64 | transitive (optional) | Apache-2.0 AND MIT | npm-registry | PERMISSIVE |
+| @swc/core-linux-arm-gnueabihf@1.15.8 | node_modules/@swc/core-linux-arm-gnueabihf | transitive (optional) | Apache-2.0 | npm-registry | PERMISSIVE |
+| @swc/core-linux-arm64-gnu@1.15.8 | node_modules/@swc/core-linux-arm64-gnu | transitive (optional) | Apache-2.0 AND MIT | npm-registry | PERMISSIVE |
+| @swc/core-linux-arm64-musl@1.15.8 | node_modules/@swc/core-linux-arm64-musl | transitive (optional) | Apache-2.0 AND MIT | npm-registry | PERMISSIVE |
+| @swc/core-linux-x64-gnu@1.15.8 | node_modules/@swc/core-linux-x64-gnu | transitive (optional) | Apache-2.0 AND MIT | npm-registry | PERMISSIVE |
+| @swc/core-linux-x64-musl@1.15.8 | node_modules/@swc/core-linux-x64-musl | transitive (optional) | Apache-2.0 AND MIT | npm-registry | PERMISSIVE |
+| @swc/core-win32-arm64-msvc@1.15.8 | node_modules/@swc/core-win32-arm64-msvc | transitive (optional) | Apache-2.0 AND MIT | npm-registry | PERMISSIVE |
+| @swc/core-win32-ia32-msvc@1.15.8 | node_modules/@swc/core-win32-ia32-msvc | transitive (optional) | Apache-2.0 AND MIT | npm-registry | PERMISSIVE |
+| @swc/core-win32-x64-msvc@1.15.8 | node_modules/@swc/core-win32-x64-msvc | transitive (optional) | Apache-2.0 AND MIT | npm-registry | PERMISSIVE |
+| @swc/counter@0.1.3 | node_modules/@swc/counter | transitive | Apache-2.0 | installed-package | PERMISSIVE |
+| @swc/types@0.1.25 | node_modules/@swc/types | transitive | Apache-2.0 | npm-registry | PERMISSIVE |
+| @tanstack/query-core@5.90.19 | node_modules/@tanstack/query-core | transitive | MIT | installed-package | PERMISSIVE |
+| @tanstack/react-query@5.90.19 | node_modules/@tanstack/react-query | direct | MIT | installed-package | PERMISSIVE |
+| @tanstack/react-table@8.21.3 | node_modules/@tanstack/react-table | direct | MIT | installed-package | PERMISSIVE |
+| @tanstack/table-core@8.21.3 | node_modules/@tanstack/table-core | transitive | MIT | installed-package | PERMISSIVE |
+| @types/d3-array@3.2.2 | node_modules/@types/d3-array | transitive | MIT | installed-package | PERMISSIVE |
+| @types/d3-color@3.1.3 | node_modules/@types/d3-color | transitive | MIT | installed-package | PERMISSIVE |
+| @types/d3-ease@3.0.2 | node_modules/@types/d3-ease | transitive | MIT | installed-package | PERMISSIVE |
+| @types/d3-interpolate@3.0.4 | node_modules/@types/d3-interpolate | transitive | MIT | installed-package | PERMISSIVE |
+| @types/d3-path@3.1.1 | node_modules/@types/d3-path | transitive | MIT | installed-package | PERMISSIVE |
+| @types/d3-scale@4.0.9 | node_modules/@types/d3-scale | transitive | MIT | installed-package | PERMISSIVE |
+| @types/d3-shape@3.1.8 | node_modules/@types/d3-shape | transitive | MIT | installed-package | PERMISSIVE |
+| @types/d3-time@3.0.4 | node_modules/@types/d3-time | transitive | MIT | installed-package | PERMISSIVE |
+| @types/d3-timer@3.0.2 | node_modules/@types/d3-timer | transitive | MIT | installed-package | PERMISSIVE |
+| @types/debug@4.1.12 | node_modules/@types/debug | transitive | MIT | installed-package | PERMISSIVE |
+| @types/estree@1.0.8 | node_modules/@types/estree | transitive | MIT | installed-package | PERMISSIVE |
+| @types/estree-jsx@1.0.5 | node_modules/@types/estree-jsx | transitive | MIT | installed-package | PERMISSIVE |
+| @types/hast@3.0.4 | node_modules/@types/hast | transitive | MIT | installed-package | PERMISSIVE |
+| @types/mdast@4.0.4 | node_modules/@types/mdast | transitive | MIT | installed-package | PERMISSIVE |
+| @types/ms@2.1.0 | node_modules/@types/ms | transitive | MIT | installed-package | PERMISSIVE |
+| @types/react@19.2.8 | node_modules/@types/react | transitive | MIT | installed-package | PERMISSIVE |
+| @types/react-dom@19.2.3 | node_modules/@types/react-dom | transitive | MIT | installed-package | PERMISSIVE |
+| @types/unist@3.0.3 | node_modules/@types/unist | transitive | MIT | installed-package | PERMISSIVE |
+| @ungap/structured-clone@1.3.0 | node_modules/@ungap/structured-clone | transitive | ISC | installed-package | PERMISSIVE |
+| acorn@8.15.0 | node_modules/acorn | transitive | MIT | installed-package | PERMISSIVE |
+| acorn-jsx@5.3.2 | node_modules/acorn-jsx | transitive | MIT | installed-package | PERMISSIVE |
+| anser@2.3.5 | node_modules/anser | transitive | MIT | installed-package | PERMISSIVE |
+| argparse@2.0.1 | node_modules/argparse | transitive | Python-2.0 | installed-package | PERMISSIVE |
+| aria-hidden@1.2.6 | node_modules/aria-hidden | transitive | MIT | installed-package | PERMISSIVE |
+| bail@2.0.2 | node_modules/bail | transitive | MIT | installed-package | PERMISSIVE |
+| base64-js@1.5.1 | node_modules/base64-js | transitive | MIT | installed-package | PERMISSIVE |
+| baseline-browser-mapping@2.9.15 | node_modules/baseline-browser-mapping | transitive | Apache-2.0 | npm-registry | PERMISSIVE |
+| buffer@6.0.3 | node_modules/buffer | transitive | MIT | installed-package | PERMISSIVE |
+| c12@3.1.0 | node_modules/c12 | transitive | MIT | installed-package | PERMISSIVE |
+| caniuse-lite@1.0.30001764 | node_modules/caniuse-lite | transitive | CC-BY-4.0 | installed-package | PERMISSIVE |
+| ccount@2.0.1 | node_modules/ccount | transitive | MIT | installed-package | PERMISSIVE |
+| character-entities@2.0.2 | node_modules/character-entities | transitive | MIT | installed-package | PERMISSIVE |
+| character-entities-html4@2.1.0 | node_modules/character-entities-html4 | transitive | MIT | installed-package | PERMISSIVE |
+| character-entities-legacy@3.0.0 | node_modules/character-entities-legacy | transitive | MIT | installed-package | PERMISSIVE |
+| character-reference-invalid@2.0.1 | node_modules/character-reference-invalid | transitive | MIT | installed-package | PERMISSIVE |
+| chokidar@4.0.3 | node_modules/chokidar | transitive | MIT | installed-package | PERMISSIVE |
+| citty@0.1.6 | node_modules/citty | transitive | MIT | installed-package | PERMISSIVE |
+| class-variance-authority@0.7.1 | node_modules/class-variance-authority | direct | Apache-2.0 | installed-package | PERMISSIVE |
+| classnames@2.5.1 | node_modules/classnames | transitive | MIT | installed-package | PERMISSIVE |
+| clean-set@1.1.2 | node_modules/clean-set | transitive | MIT | installed-package | PERMISSIVE |
+| client-only@0.0.1 | node_modules/client-only | transitive | MIT | installed-package | PERMISSIVE |
+| clsx@2.1.1 | node_modules/clsx | direct | MIT | installed-package | PERMISSIVE |
+| cm6-theme-basic-light@0.2.0 | node_modules/cm6-theme-basic-light | transitive | MIT | installed-package | PERMISSIVE |
+| cmdk@1.1.1 | node_modules/cmdk | direct | MIT | installed-package | PERMISSIVE |
+| codemirror@6.0.2 | node_modules/codemirror | transitive | MIT | installed-package | PERMISSIVE |
+| comma-separated-tokens@2.0.3 | node_modules/comma-separated-tokens | transitive | MIT | installed-package | PERMISSIVE |
+| compute-scroll-into-view@2.0.4 | node_modules/compute-scroll-into-view | transitive | MIT | installed-package | PERMISSIVE |
+| confbox@0.2.2 | node_modules/confbox | transitive | MIT | installed-package | PERMISSIVE |
+| consola@3.4.2 | node_modules/consola | transitive | MIT | installed-package | PERMISSIVE |
+| cookie@0.7.2 | node_modules/cookie | transitive | MIT | installed-package | PERMISSIVE |
+| crelt@1.0.6 | node_modules/crelt | transitive | MIT | installed-package | PERMISSIVE |
+| csstype@3.2.3 | node_modules/csstype | transitive | MIT | installed-package | PERMISSIVE |
+| d@1.0.2 | node_modules/d | transitive | ISC | installed-package | PERMISSIVE |
+| d3-array@3.2.4 | node_modules/d3-array | transitive | ISC | installed-package | PERMISSIVE |
+| d3-color@3.1.0 | node_modules/d3-color | transitive | ISC | installed-package | PERMISSIVE |
+| d3-ease@3.0.1 | node_modules/d3-ease | transitive | BSD-3-Clause | installed-package | PERMISSIVE |
+| d3-format@3.1.2 | node_modules/d3-format | transitive | ISC | installed-package | PERMISSIVE |
+| d3-interpolate@3.0.1 | node_modules/d3-interpolate | transitive | ISC | installed-package | PERMISSIVE |
+| d3-path@3.1.0 | node_modules/d3-path | transitive | ISC | installed-package | PERMISSIVE |
+| d3-scale@4.0.2 | node_modules/d3-scale | transitive | ISC | installed-package | PERMISSIVE |
+| d3-shape@3.2.0 | node_modules/d3-shape | transitive | ISC | installed-package | PERMISSIVE |
+| d3-time@3.1.0 | node_modules/d3-time | transitive | ISC | installed-package | PERMISSIVE |
+| d3-time-format@4.1.0 | node_modules/d3-time-format | transitive | ISC | installed-package | PERMISSIVE |
+| d3-timer@3.0.1 | node_modules/d3-timer | transitive | ISC | installed-package | PERMISSIVE |
+| date-fns@4.1.0 | node_modules/date-fns | direct | MIT | installed-package | PERMISSIVE |
+| date-fns-jalali@4.1.0-0 | node_modules/date-fns-jalali | transitive | MIT | installed-package | PERMISSIVE |
+| debug@4.4.3 | node_modules/debug | transitive | MIT | installed-package | PERMISSIVE |
+| decimal.js@10.6.0 | node_modules/decimal.js | transitive | MIT | npm-registry | PERMISSIVE |
+| decimal.js-light@2.5.1 | node_modules/decimal.js-light | transitive | MIT | installed-package | PERMISSIVE |
+| decode-named-character-reference@1.2.0 | node_modules/decode-named-character-reference | transitive | MIT | installed-package | PERMISSIVE |
+| deepmerge-ts@7.1.5 | node_modules/deepmerge-ts | transitive | BSD-3-Clause | installed-package | PERMISSIVE |
+| defu@6.1.4 | node_modules/defu | transitive | MIT | installed-package | PERMISSIVE |
+| dequal@2.0.3 | node_modules/dequal | transitive | MIT | installed-package | PERMISSIVE |
+| destr@2.0.5 | node_modules/destr | transitive | MIT | installed-package | PERMISSIVE |
+| detect-libc@2.1.2 | node_modules/detect-libc | transitive | Apache-2.0 | installed-package | PERMISSIVE |
+| detect-node-es@1.1.0 | node_modules/detect-node-es | transitive | MIT | installed-package | PERMISSIVE |
+| devlop@1.1.0 | node_modules/devlop | transitive | MIT | installed-package | PERMISSIVE |
+| diff@5.2.0 | node_modules/diff | transitive | BSD-3-Clause | installed-package | PERMISSIVE |
+| dom-helpers@5.2.1 | node_modules/dom-helpers | transitive | MIT | installed-package | PERMISSIVE |
+| dotenv@16.6.1 | node_modules/dotenv | transitive | BSD-2-Clause | installed-package | PERMISSIVE |
+| downshift@7.6.2 | node_modules/downshift | transitive | MIT | installed-package | PERMISSIVE |
+| react-is@17.0.2 | node_modules/downshift/node_modules/react-is | transitive | MIT | npm-registry | PERMISSIVE |
+| effect@3.18.4 | node_modules/effect | transitive | MIT | installed-package | PERMISSIVE |
+| embla-carousel@8.6.0 | node_modules/embla-carousel | transitive | MIT | installed-package | PERMISSIVE |
+| embla-carousel-react@8.6.0 | node_modules/embla-carousel-react | direct | MIT | installed-package | PERMISSIVE |
+| embla-carousel-reactive-utils@8.6.0 | node_modules/embla-carousel-reactive-utils | transitive | MIT | installed-package | PERMISSIVE |
+| empathic@2.0.0 | node_modules/empathic | transitive | MIT | installed-package | PERMISSIVE |
+| es5-ext@0.10.64 | node_modules/es5-ext | transitive | ISC | installed-package | PERMISSIVE |
+| es6-iterator@2.0.3 | node_modules/es6-iterator | transitive | MIT | installed-package | PERMISSIVE |
+| es6-symbol@3.1.4 | node_modules/es6-symbol | transitive | ISC | installed-package | PERMISSIVE |
+| escape-carriage@1.3.1 | node_modules/escape-carriage | transitive | MIT | installed-package | PERMISSIVE |
+| esniff@2.0.1 | node_modules/esniff | transitive | ISC | installed-package | PERMISSIVE |
+| estree-util-is-identifier-name@3.0.0 | node_modules/estree-util-is-identifier-name | transitive | MIT | installed-package | PERMISSIVE |
+| estree-util-visit@2.0.0 | node_modules/estree-util-visit | transitive | MIT | installed-package | PERMISSIVE |
+| event-emitter@0.3.5 | node_modules/event-emitter | transitive | MIT | installed-package | PERMISSIVE |
+| eventemitter3@4.0.7 | node_modules/eventemitter3 | transitive | MIT | installed-package | PERMISSIVE |
+| exsolve@1.0.8 | node_modules/exsolve | transitive | MIT | installed-package | PERMISSIVE |
+| ext@1.7.0 | node_modules/ext | transitive | ISC | installed-package | PERMISSIVE |
+| extend@3.0.2 | node_modules/extend | transitive | MIT | installed-package | PERMISSIVE |
+| fast-check@3.23.2 | node_modules/fast-check | transitive | MIT | installed-package | PERMISSIVE |
+| fast-equals@5.4.0 | node_modules/fast-equals | transitive | MIT | installed-package | PERMISSIVE |
+| fault@2.0.1 | node_modules/fault | transitive | MIT | installed-package | PERMISSIVE |
+| format@0.2.2 | node_modules/format | transitive | MIT (declared in package README; package.json omits the field) | installed-package | PERMISSIVE |
+| framer-motion@12.26.2 | node_modules/framer-motion | direct | MIT | installed-package | PERMISSIVE |
+| get-nonce@1.0.1 | node_modules/get-nonce | transitive | MIT | installed-package | PERMISSIVE |
+| giget@2.0.0 | node_modules/giget | transitive | MIT | installed-package | PERMISSIVE |
+| hast-util-parse-selector@2.2.5 | node_modules/hast-util-parse-selector | transitive | MIT | installed-package | PERMISSIVE |
+| hast-util-to-jsx-runtime@2.3.6 | node_modules/hast-util-to-jsx-runtime | transitive | MIT | installed-package | PERMISSIVE |
+| hast-util-whitespace@3.0.0 | node_modules/hast-util-whitespace | transitive | MIT | installed-package | PERMISSIVE |
+| hastscript@6.0.0 | node_modules/hastscript | transitive | MIT | installed-package | PERMISSIVE |
+| @types/hast@2.3.10 | node_modules/hastscript/node_modules/@types/hast | transitive | MIT | npm-registry | PERMISSIVE |
+| @types/unist@2.0.11 | node_modules/hastscript/node_modules/@types/hast/node_modules/@types/unist | transitive | MIT | npm-registry | PERMISSIVE |
+| comma-separated-tokens@1.0.8 | node_modules/hastscript/node_modules/comma-separated-tokens | transitive | MIT | npm-registry | PERMISSIVE |
+| property-information@5.6.0 | node_modules/hastscript/node_modules/property-information | transitive | MIT | npm-registry | PERMISSIVE |
+| space-separated-tokens@1.1.5 | node_modules/hastscript/node_modules/space-separated-tokens | transitive | MIT | npm-registry | PERMISSIVE |
+| highlight.js@10.7.3 | node_modules/highlight.js | transitive | BSD-3-Clause | installed-package | PERMISSIVE |
+| highlightjs-vue@1.0.0 | node_modules/highlightjs-vue | transitive | CC0-1.0 | installed-package | PERMISSIVE |
+| html-url-attributes@3.0.1 | node_modules/html-url-attributes | transitive | MIT | installed-package | PERMISSIVE |
+| ieee754@1.2.1 | node_modules/ieee754 | transitive | BSD-3-Clause | installed-package | PERMISSIVE |
+| inline-style-parser@0.2.7 | node_modules/inline-style-parser | transitive | MIT | installed-package | PERMISSIVE |
+| input-otp@1.4.2 | node_modules/input-otp | direct | MIT | installed-package | PERMISSIVE |
+| internmap@2.0.3 | node_modules/internmap | transitive | ISC | installed-package | PERMISSIVE |
+| intersection-observer@0.10.0 | node_modules/intersection-observer | transitive | W3C-20150513 | installed-package | NON-STANDARD |
+| intl-messageformat@10.7.18 | node_modules/intl-messageformat | transitive | BSD-3-Clause | npm-registry | PERMISSIVE |
+| is-alphabetical@2.0.1 | node_modules/is-alphabetical | transitive | MIT | installed-package | PERMISSIVE |
+| is-alphanumerical@2.0.1 | node_modules/is-alphanumerical | transitive | MIT | installed-package | PERMISSIVE |
+| is-decimal@2.0.1 | node_modules/is-decimal | transitive | MIT | installed-package | PERMISSIVE |
+| is-extglob@2.1.1 | node_modules/is-extglob | transitive | MIT | installed-package | PERMISSIVE |
+| is-glob@4.0.3 | node_modules/is-glob | transitive | MIT | installed-package | PERMISSIVE |
+| is-hexadecimal@2.0.1 | node_modules/is-hexadecimal | transitive | MIT | installed-package | PERMISSIVE |
+| is-plain-obj@4.1.0 | node_modules/is-plain-obj | transitive | MIT | installed-package | PERMISSIVE |
+| isomorphic.js@0.2.5 | node_modules/isomorphic.js | transitive | MIT | installed-package | PERMISSIVE |
+| jiti@2.6.1 | node_modules/jiti | transitive | MIT | installed-package | PERMISSIVE |
+| jose@4.15.9 | node_modules/jose | transitive | MIT | npm-registry | PERMISSIVE |
+| js-cookie@3.0.5 | node_modules/js-cookie | transitive | MIT | installed-package | PERMISSIVE |
+| js-tokens@4.0.0 | node_modules/js-tokens | transitive | MIT | installed-package | PERMISSIVE |
+| js-yaml@4.1.1 | node_modules/js-yaml | transitive | MIT | installed-package | PERMISSIVE |
+| kleur@4.1.5 | node_modules/kleur | transitive | MIT | installed-package | PERMISSIVE |
+| lexical@0.35.0 | node_modules/lexical | transitive | MIT | installed-package | PERMISSIVE |
+| lib0@0.2.117 | node_modules/lib0 | transitive | MIT | installed-package | PERMISSIVE |
+| lodash@4.17.21 | node_modules/lodash | transitive | MIT | installed-package | PERMISSIVE |
+| lodash-es@4.17.22 | node_modules/lodash-es | transitive | MIT | installed-package | PERMISSIVE |
+| longest-streak@3.1.0 | node_modules/longest-streak | transitive | MIT | installed-package | PERMISSIVE |
+| loose-envify@1.4.0 | node_modules/loose-envify | transitive | MIT | installed-package | PERMISSIVE |
+| lowlight@1.20.0 | node_modules/lowlight | transitive | MIT | installed-package | PERMISSIVE |
+| fault@1.0.4 | node_modules/lowlight/node_modules/fault | transitive | MIT | npm-registry | PERMISSIVE |
+| lru-cache@6.0.0 | node_modules/lru-cache | transitive | ISC | installed-package | PERMISSIVE |
+| lucide-react@0.525.0 | node_modules/lucide-react | direct | ISC | installed-package | PERMISSIVE |
+| lz-string@1.5.0 | node_modules/lz-string | transitive | MIT | installed-package | PERMISSIVE |
+| markdown-table@3.0.4 | node_modules/markdown-table | transitive | MIT | installed-package | PERMISSIVE |
+| mdast-util-directive@3.1.0 | node_modules/mdast-util-directive | transitive | MIT | installed-package | PERMISSIVE |
+| mdast-util-from-markdown@2.0.2 | node_modules/mdast-util-from-markdown | transitive | MIT | installed-package | PERMISSIVE |
+| mdast-util-frontmatter@2.0.1 | node_modules/mdast-util-frontmatter | transitive | MIT | installed-package | PERMISSIVE |
+| escape-string-regexp@5.0.0 | node_modules/mdast-util-frontmatter/node_modules/escape-string-regexp | transitive | MIT | npm-registry | PERMISSIVE |
+| mdast-util-gfm-strikethrough@2.0.0 | node_modules/mdast-util-gfm-strikethrough | transitive | MIT | installed-package | PERMISSIVE |
+| mdast-util-gfm-table@2.0.0 | node_modules/mdast-util-gfm-table | transitive | MIT | installed-package | PERMISSIVE |
+| mdast-util-gfm-task-list-item@2.0.0 | node_modules/mdast-util-gfm-task-list-item | transitive | MIT | installed-package | PERMISSIVE |
+| mdast-util-highlight-mark@1.2.2 | node_modules/mdast-util-highlight-mark | transitive | MIT | installed-package | PERMISSIVE |
+| mdast-util-mdx@3.0.0 | node_modules/mdast-util-mdx | transitive | MIT | installed-package | PERMISSIVE |
+| mdast-util-mdx-expression@2.0.1 | node_modules/mdast-util-mdx-expression | transitive | MIT | installed-package | PERMISSIVE |
+| mdast-util-mdx-jsx@3.2.0 | node_modules/mdast-util-mdx-jsx | transitive | MIT | installed-package | PERMISSIVE |
+| mdast-util-mdxjs-esm@2.0.1 | node_modules/mdast-util-mdxjs-esm | transitive | MIT | installed-package | PERMISSIVE |
+| mdast-util-phrasing@4.1.0 | node_modules/mdast-util-phrasing | transitive | MIT | installed-package | PERMISSIVE |
+| mdast-util-to-hast@13.2.1 | node_modules/mdast-util-to-hast | transitive | MIT | installed-package | PERMISSIVE |
+| mdast-util-to-markdown@2.1.2 | node_modules/mdast-util-to-markdown | transitive | MIT | installed-package | PERMISSIVE |
+| mdast-util-to-string@4.0.0 | node_modules/mdast-util-to-string | transitive | MIT | installed-package | PERMISSIVE |
+| micromark@4.0.2 | node_modules/micromark | transitive | MIT | installed-package | PERMISSIVE |
+| micromark-core-commonmark@2.0.3 | node_modules/micromark-core-commonmark | transitive | MIT | installed-package | PERMISSIVE |
+| micromark-extension-directive@3.0.2 | node_modules/micromark-extension-directive | transitive | MIT | installed-package | PERMISSIVE |
+| micromark-extension-frontmatter@2.0.0 | node_modules/micromark-extension-frontmatter | transitive | MIT | installed-package | PERMISSIVE |
+| micromark-extension-gfm-strikethrough@2.1.0 | node_modules/micromark-extension-gfm-strikethrough | transitive | MIT | installed-package | PERMISSIVE |
+| micromark-extension-gfm-table@2.1.1 | node_modules/micromark-extension-gfm-table | transitive | MIT | installed-package | PERMISSIVE |
+| micromark-extension-gfm-task-list-item@2.1.0 | node_modules/micromark-extension-gfm-task-list-item | transitive | MIT | installed-package | PERMISSIVE |
+| micromark-extension-highlight-mark@1.2.0 | node_modules/micromark-extension-highlight-mark | transitive | MIT | installed-package | PERMISSIVE |
+| micromark-extension-mdx-expression@3.0.1 | node_modules/micromark-extension-mdx-expression | transitive | MIT | installed-package | PERMISSIVE |
+| micromark-extension-mdx-jsx@3.0.2 | node_modules/micromark-extension-mdx-jsx | transitive | MIT | installed-package | PERMISSIVE |
+| micromark-extension-mdx-md@2.0.0 | node_modules/micromark-extension-mdx-md | transitive | MIT | installed-package | PERMISSIVE |
+| micromark-extension-mdxjs@3.0.0 | node_modules/micromark-extension-mdxjs | transitive | MIT | installed-package | PERMISSIVE |
+| micromark-extension-mdxjs-esm@3.0.0 | node_modules/micromark-extension-mdxjs-esm | transitive | MIT | installed-package | PERMISSIVE |
+| micromark-factory-destination@2.0.1 | node_modules/micromark-factory-destination | transitive | MIT | installed-package | PERMISSIVE |
+| micromark-factory-label@2.0.1 | node_modules/micromark-factory-label | transitive | MIT | installed-package | PERMISSIVE |
+| micromark-factory-mdx-expression@2.0.3 | node_modules/micromark-factory-mdx-expression | transitive | MIT | installed-package | PERMISSIVE |
+| micromark-factory-space@2.0.1 | node_modules/micromark-factory-space | transitive | MIT | installed-package | PERMISSIVE |
+| micromark-factory-title@2.0.1 | node_modules/micromark-factory-title | transitive | MIT | installed-package | PERMISSIVE |
+| micromark-factory-whitespace@2.0.1 | node_modules/micromark-factory-whitespace | transitive | MIT | installed-package | PERMISSIVE |
+| micromark-util-character@2.1.1 | node_modules/micromark-util-character | transitive | MIT | installed-package | PERMISSIVE |
+| micromark-util-chunked@2.0.1 | node_modules/micromark-util-chunked | transitive | MIT | installed-package | PERMISSIVE |
+| micromark-util-classify-character@2.0.1 | node_modules/micromark-util-classify-character | transitive | MIT | installed-package | PERMISSIVE |
+| micromark-util-combine-extensions@2.0.1 | node_modules/micromark-util-combine-extensions | transitive | MIT | installed-package | PERMISSIVE |
+| micromark-util-decode-numeric-character-reference@2.0.2 | node_modules/micromark-util-decode-numeric-character-reference | transitive | MIT | installed-package | PERMISSIVE |
+| micromark-util-decode-string@2.0.1 | node_modules/micromark-util-decode-string | transitive | MIT | installed-package | PERMISSIVE |
+| micromark-util-encode@2.0.1 | node_modules/micromark-util-encode | transitive | MIT | installed-package | PERMISSIVE |
+| micromark-util-events-to-acorn@2.0.3 | node_modules/micromark-util-events-to-acorn | transitive | MIT | installed-package | PERMISSIVE |
+| micromark-util-html-tag-name@2.0.1 | node_modules/micromark-util-html-tag-name | transitive | MIT | installed-package | PERMISSIVE |
+| micromark-util-normalize-identifier@2.0.1 | node_modules/micromark-util-normalize-identifier | transitive | MIT | installed-package | PERMISSIVE |
+| micromark-util-resolve-all@2.0.1 | node_modules/micromark-util-resolve-all | transitive | MIT | installed-package | PERMISSIVE |
+| micromark-util-sanitize-uri@2.0.1 | node_modules/micromark-util-sanitize-uri | transitive | MIT | installed-package | PERMISSIVE |
+| micromark-util-subtokenize@2.1.0 | node_modules/micromark-util-subtokenize | transitive | MIT | installed-package | PERMISSIVE |
+| micromark-util-symbol@2.0.1 | node_modules/micromark-util-symbol | transitive | MIT | installed-package | PERMISSIVE |
+| micromark-util-types@2.0.2 | node_modules/micromark-util-types | transitive | MIT | installed-package | PERMISSIVE |
+| mime-db@1.54.0 | node_modules/mime-db | transitive | MIT | installed-package | PERMISSIVE |
+| motion-dom@12.26.2 | node_modules/motion-dom | transitive | MIT | installed-package | PERMISSIVE |
+| motion-utils@12.24.10 | node_modules/motion-utils | transitive | MIT | installed-package | PERMISSIVE |
+| mri@1.2.0 | node_modules/mri | transitive | MIT | installed-package | PERMISSIVE |
+| ms@2.1.3 | node_modules/ms | transitive | MIT | installed-package | PERMISSIVE |
+| nanoid@3.3.11 | node_modules/nanoid | transitive | MIT | installed-package | PERMISSIVE |
+| negotiator@1.0.0 | node_modules/negotiator | transitive | MIT | installed-package | PERMISSIVE |
+| next@16.1.3 | node_modules/next | direct | MIT | npm-registry | PERMISSIVE |
+| next-auth@4.24.13 | node_modules/next-auth | direct | ISC | npm-registry | PERMISSIVE |
+| uuid@8.3.2 | node_modules/next-auth/node_modules/uuid | transitive | MIT | npm-registry | PERMISSIVE |
+| next-intl@4.7.0 | node_modules/next-intl | direct | MIT | npm-registry | PERMISSIVE |
+| next-intl-swc-plugin-extractor@4.7.0 | node_modules/next-intl-swc-plugin-extractor | transitive | MIT | npm-registry | PERMISSIVE |
+| next-themes@0.4.6 | node_modules/next-themes | direct | MIT | installed-package | PERMISSIVE |
+| next-tick@1.1.0 | node_modules/next-tick | transitive | ISC | installed-package | PERMISSIVE |
+| @swc/helpers@0.5.15 | node_modules/next/node_modules/@swc/helpers | transitive | Apache-2.0 | npm-registry | PERMISSIVE |
+| postcss@8.4.31 | node_modules/next/node_modules/postcss | transitive | MIT | npm-registry | PERMISSIVE |
+| node-addon-api@7.1.1 | node_modules/node-addon-api | transitive | MIT | installed-package | PERMISSIVE |
+| node-fetch-native@1.6.7 | node_modules/node-fetch-native | transitive | MIT | installed-package | PERMISSIVE |
+| nypm@0.6.2 | node_modules/nypm | transitive | MIT | installed-package | PERMISSIVE |
+| oauth@0.9.15 | node_modules/oauth | transitive | MIT | installed-package | PERMISSIVE |
+| object-assign@4.1.1 | node_modules/object-assign | transitive | MIT | installed-package | PERMISSIVE |
+| object-hash@2.2.0 | node_modules/object-hash | transitive | MIT | installed-package | PERMISSIVE |
+| ohash@2.0.11 | node_modules/ohash | transitive | MIT | installed-package | PERMISSIVE |
+| oidc-token-hash@5.2.0 | node_modules/oidc-token-hash | transitive | MIT | installed-package | PERMISSIVE |
+| openid-client@5.7.1 | node_modules/openid-client | transitive | MIT | installed-package | PERMISSIVE |
+| outvariant@1.4.0 | node_modules/outvariant | transitive | MIT | installed-package | PERMISSIVE |
+| parse-entities@4.0.2 | node_modules/parse-entities | transitive | MIT | installed-package | PERMISSIVE |
+| @types/unist@2.0.11 | node_modules/parse-entities/node_modules/@types/unist | transitive | MIT | npm-registry | PERMISSIVE |
+| pathe@2.0.3 | node_modules/pathe | transitive | MIT | installed-package | PERMISSIVE |
+| perfect-debounce@1.0.0 | node_modules/perfect-debounce | transitive | MIT | installed-package | PERMISSIVE |
+| picocolors@1.1.1 | node_modules/picocolors | transitive | ISC | installed-package | PERMISSIVE |
+| picomatch@4.0.3 | node_modules/picomatch | transitive | MIT | installed-package | PERMISSIVE |
+| pkg-types@2.3.0 | node_modules/pkg-types | transitive | MIT | installed-package | PERMISSIVE |
+| po-parser@2.1.1 | node_modules/po-parser | transitive | MIT | npm-registry | PERMISSIVE |
+| preact@10.28.2 | node_modules/preact | transitive | MIT | installed-package | PERMISSIVE |
+| preact-render-to-string@5.2.6 | node_modules/preact-render-to-string | transitive | MIT | installed-package | PERMISSIVE |
+| pretty-format@3.8.0 | node_modules/pretty-format | transitive | MIT | installed-package | PERMISSIVE |
+| prisma@6.19.2 | node_modules/prisma | direct | Apache-2.0 | installed-package | PERMISSIVE |
+| prismjs@1.30.0 | node_modules/prismjs | transitive | MIT | installed-package | PERMISSIVE |
+| prop-types@15.8.1 | node_modules/prop-types | transitive | MIT | installed-package | PERMISSIVE |
+| react-is@16.13.1 | node_modules/prop-types/node_modules/react-is | transitive | MIT | npm-registry | PERMISSIVE |
+| property-information@7.1.0 | node_modules/property-information | transitive | MIT | installed-package | PERMISSIVE |
+| pure-rand@6.1.0 | node_modules/pure-rand | transitive | MIT | installed-package | PERMISSIVE |
+| rc9@2.1.2 | node_modules/rc9 | transitive | MIT | installed-package | PERMISSIVE |
+| react@19.2.3 | node_modules/react | direct | MIT | installed-package | PERMISSIVE |
+| react-day-picker@9.13.0 | node_modules/react-day-picker | direct | MIT | installed-package | PERMISSIVE |
+| react-devtools-inline@4.4.0 | node_modules/react-devtools-inline | transitive | MIT | installed-package | PERMISSIVE |
+| react-dom@19.2.3 | node_modules/react-dom | direct | MIT | installed-package | PERMISSIVE |
+| react-error-boundary@3.1.4 | node_modules/react-error-boundary | transitive | MIT | installed-package | PERMISSIVE |
+| react-hook-form@7.71.1 | node_modules/react-hook-form | direct | MIT | installed-package | PERMISSIVE |
+| react-is@18.3.1 | node_modules/react-is | transitive | MIT | installed-package | PERMISSIVE |
+| react-markdown@10.1.0 | node_modules/react-markdown | direct | MIT | installed-package | PERMISSIVE |
+| react-remove-scroll@2.7.2 | node_modules/react-remove-scroll | transitive | MIT | installed-package | PERMISSIVE |
+| react-remove-scroll-bar@2.3.8 | node_modules/react-remove-scroll-bar | transitive | MIT | installed-package | PERMISSIVE |
+| react-resizable-panels@3.0.6 | node_modules/react-resizable-panels | direct | MIT | installed-package | PERMISSIVE |
+| react-smooth@4.0.4 | node_modules/react-smooth | transitive | MIT | installed-package | PERMISSIVE |
+| react-style-singleton@2.2.3 | node_modules/react-style-singleton | transitive | MIT | installed-package | PERMISSIVE |
+| react-syntax-highlighter@15.6.6 | node_modules/react-syntax-highlighter | direct | MIT | installed-package | PERMISSIVE |
+| react-transition-group@4.4.5 | node_modules/react-transition-group | transitive | BSD-3-Clause | installed-package | PERMISSIVE |
+| readdirp@4.1.2 | node_modules/readdirp | transitive | MIT | installed-package | PERMISSIVE |
+| recharts@2.15.4 | node_modules/recharts | direct | MIT | installed-package | PERMISSIVE |
+| recharts-scale@0.4.5 | node_modules/recharts-scale | transitive | MIT | installed-package | PERMISSIVE |
+| refractor@3.6.0 | node_modules/refractor | transitive | MIT | installed-package | PERMISSIVE |
+| parse-entities@2.0.0 | node_modules/refractor/node_modules/parse-entities | transitive | MIT | npm-registry | PERMISSIVE |
+| character-entities@1.2.4 | node_modules/refractor/node_modules/parse-entities/node_modules/character-entities | transitive | MIT | npm-registry | PERMISSIVE |
+| character-entities-legacy@1.1.4 | node_modules/refractor/node_modules/parse-entities/node_modules/character-entities-legacy | transitive | MIT | npm-registry | PERMISSIVE |
+| character-reference-invalid@1.1.4 | node_modules/refractor/node_modules/parse-entities/node_modules/character-reference-invalid | transitive | MIT | npm-registry | PERMISSIVE |
+| is-alphanumerical@1.0.4 | node_modules/refractor/node_modules/parse-entities/node_modules/is-alphanumerical | transitive | MIT | npm-registry | PERMISSIVE |
+| is-alphabetical@1.0.4 | node_modules/refractor/node_modules/parse-entities/node_modules/is-alphanumerical/node_modules/is-alphabetical | transitive | MIT | npm-registry | PERMISSIVE |
+| is-decimal@1.0.4 | node_modules/refractor/node_modules/parse-entities/node_modules/is-decimal | transitive | MIT | npm-registry | PERMISSIVE |
+| is-hexadecimal@1.0.4 | node_modules/refractor/node_modules/parse-entities/node_modules/is-hexadecimal | transitive | MIT | npm-registry | PERMISSIVE |
+| prismjs@1.27.0 | node_modules/refractor/node_modules/prismjs | transitive | MIT | npm-registry | PERMISSIVE |
+| remark-parse@11.0.0 | node_modules/remark-parse | transitive | MIT | installed-package | PERMISSIVE |
+| remark-rehype@11.1.2 | node_modules/remark-rehype | transitive | MIT | installed-package | PERMISSIVE |
+| sade@1.8.1 | node_modules/sade | transitive | MIT | installed-package | PERMISSIVE |
+| scheduler@0.27.0 | node_modules/scheduler | transitive | MIT | installed-package | PERMISSIVE |
+| screenfull@5.2.0 | node_modules/screenfull | transitive | MIT | installed-package | PERMISSIVE |
+| semver@7.7.3 | node_modules/semver | transitive | ISC | npm-registry | PERMISSIVE |
+| sharp@0.34.5 | node_modules/sharp | direct | Apache-2.0 | npm-registry | PERMISSIVE |
+| sonner@2.0.7 | node_modules/sonner | direct | MIT | installed-package | PERMISSIVE |
+| source-map-js@1.2.1 | node_modules/source-map-js | transitive | BSD-3-Clause | installed-package | PERMISSIVE |
+| space-separated-tokens@2.0.2 | node_modules/space-separated-tokens | transitive | MIT | installed-package | PERMISSIVE |
+| static-browser-server@1.0.3 | node_modules/static-browser-server | transitive | Apache-2.0 | installed-package | PERMISSIVE |
+| strict-event-emitter@0.4.6 | node_modules/strict-event-emitter | transitive | MIT | installed-package | PERMISSIVE |
+| stringify-entities@4.0.4 | node_modules/stringify-entities | transitive | MIT | installed-package | PERMISSIVE |
+| style-mod@4.1.3 | node_modules/style-mod | transitive | MIT | installed-package | PERMISSIVE |
+| style-to-js@1.1.21 | node_modules/style-to-js | transitive | MIT | installed-package | PERMISSIVE |
+| style-to-object@1.0.14 | node_modules/style-to-object | transitive | MIT | installed-package | PERMISSIVE |
+| styled-jsx@5.1.6 | node_modules/styled-jsx | transitive | MIT | installed-package | PERMISSIVE |
+| tabbable@6.4.0 | node_modules/tabbable | transitive | MIT | installed-package | PERMISSIVE |
+| tailwind-merge@3.4.0 | node_modules/tailwind-merge | direct | MIT | installed-package | PERMISSIVE |
+| tailwindcss@4.1.18 | node_modules/tailwindcss | transitive | MIT | installed-package | PERMISSIVE |
+| tailwindcss-animate@1.0.7 | node_modules/tailwindcss-animate | direct | MIT | installed-package | PERMISSIVE |
+| tiny-invariant@1.3.3 | node_modules/tiny-invariant | transitive | MIT | installed-package | PERMISSIVE |
+| tinyexec@1.0.2 | node_modules/tinyexec | transitive | MIT | installed-package | PERMISSIVE |
+| trim-lines@3.0.1 | node_modules/trim-lines | transitive | MIT | installed-package | PERMISSIVE |
+| trough@2.2.0 | node_modules/trough | transitive | MIT | installed-package | PERMISSIVE |
+| tslib@2.8.1 | node_modules/tslib | transitive | 0BSD | installed-package | PERMISSIVE |
+| type@2.7.3 | node_modules/type | transitive | ISC | installed-package | PERMISSIVE |
+| typescript@5.9.3 | node_modules/typescript | transitive | Apache-2.0 | installed-package | PERMISSIVE |
+| unidiff@1.0.4 | node_modules/unidiff | transitive | MIT | installed-package | PERMISSIVE |
+| unified@11.0.5 | node_modules/unified | transitive | MIT | installed-package | PERMISSIVE |
+| unist-util-is@6.0.1 | node_modules/unist-util-is | transitive | MIT | installed-package | PERMISSIVE |
+| unist-util-position@5.0.0 | node_modules/unist-util-position | transitive | MIT | installed-package | PERMISSIVE |
+| unist-util-position-from-estree@2.0.0 | node_modules/unist-util-position-from-estree | transitive | MIT | installed-package | PERMISSIVE |
+| unist-util-stringify-position@4.0.0 | node_modules/unist-util-stringify-position | transitive | MIT | installed-package | PERMISSIVE |
+| unist-util-visit@5.0.0 | node_modules/unist-util-visit | transitive | MIT | installed-package | PERMISSIVE |
+| unist-util-visit-parents@6.0.2 | node_modules/unist-util-visit-parents | transitive | MIT | installed-package | PERMISSIVE |
+| use-callback-ref@1.3.3 | node_modules/use-callback-ref | transitive | MIT | installed-package | PERMISSIVE |
+| use-intl@4.7.0 | node_modules/use-intl | transitive | MIT | npm-registry | PERMISSIVE |
+| use-sidecar@1.1.3 | node_modules/use-sidecar | transitive | MIT | installed-package | PERMISSIVE |
+| use-sync-external-store@1.6.0 | node_modules/use-sync-external-store | transitive | MIT | installed-package | PERMISSIVE |
+| uuid@11.1.0 | node_modules/uuid | direct | MIT | npm-registry | PERMISSIVE |
+| uvu@0.5.6 | node_modules/uvu | transitive | MIT | installed-package | PERMISSIVE |
+| vaul@1.1.2 | node_modules/vaul | direct | MIT | installed-package | PERMISSIVE |
+| vfile@6.0.3 | node_modules/vfile | transitive | MIT | installed-package | PERMISSIVE |
+| vfile-message@4.0.3 | node_modules/vfile-message | transitive | MIT | installed-package | PERMISSIVE |
+| victory-vendor@36.9.2 | node_modules/victory-vendor | transitive | MIT AND ISC | installed-package | PERMISSIVE |
+| w3c-keyname@2.2.8 | node_modules/w3c-keyname | transitive | MIT | installed-package | PERMISSIVE |
+| xtend@4.0.2 | node_modules/xtend | transitive | MIT | installed-package | PERMISSIVE |
+| yallist@4.0.0 | node_modules/yallist | transitive | ISC | installed-package | PERMISSIVE |
+| yjs@13.6.29 | node_modules/yjs | transitive | MIT | installed-package | PERMISSIVE |
+| z-ai-web-dev-sdk@0.0.18 | node_modules/z-ai-web-dev-sdk | direct | ISC | installed-package | PERMISSIVE |
+| zod@4.3.5 | node_modules/zod | direct | MIT | npm-registry | PERMISSIVE |
+| zustand@5.0.10 | node_modules/zustand | direct | MIT | installed-package | PERMISSIVE |
+| zwitch@2.0.4 | node_modules/zwitch | transitive | MIT | installed-package | PERMISSIVE |
 
-## 2. Adapted external code
+## 2. Development-only instances (not shipped, enumerated for completeness)
 
-- **shadcn/ui component primitives** — the files under `src/components/ui/*` are adapted from shadcn/ui (MIT). Radix UI primitives (`@radix-ui/*`) are integrated npm dependencies (listed above).
-- **WAI-ARIA patterns / hover-intent debounce utilities** — small, well-known community patterns re-implemented in-repo; no verbatim third-party file copied without attribution.
+418 instances — full list in `docs/legal/generated/dependency-audit.json` (`devPackages`) and the SBOM (scope `excluded`). Classification: PERMISSIVE=405, COPYLEFT-WEAK=13.
 
-## 3. Optional integrations
+## 3. Adapted external code
 
-- **z-ai-web-dev-sdk gateway** — environment-provided SDK (NOT published to npm under this repo's lockfile; loaded at runtime when installed). Its license/terms are the provider's — BEAN FX never silently substitutes another provider.
-- **faster-whisper / other local engines** — registered as NOT-ready unless explicitly enabled via env (license assessed before enabling).
+- **shadcn/ui component primitives** — files under `src/components/ui/*` are adapted from shadcn/ui (MIT), built on Radix UI primitives (npm instances above).
+- Small well-known community patterns are re-implemented in-repo; no verbatim third-party file is copied without attribution.
 
-## 4. Reference-only projects
+## 4. Optional integrations
 
-- Public research repositories and open video-AI projects studied during milestones are documented in `docs/OPEN_SOURCE_VIDEO_AI_RESEARCH.md` as **reference-only**: no code was copied into this repository from them, and they are NOT integrated dependencies.
+- **z-ai gateway SDK** — environment-provided SDK for LLM/ASR/TTS when the deployment supplies it. Not a package of this lockfile; its terms are the provider's; excluded from redistribution claims. Absent → capabilities disclosed, never faked.
+- **Local transcription engines** (e.g. faster-whisper) — registered NOT-ready unless explicitly enabled; licenses assessed before enabling. No silent engine downloads.
 
-## 5. Open-source learning resources
+## 5. Reference-only projects
 
-- FFmpeg documentation (ffmpeg.org), MDN Web Docs, Next.js/Prisma/Radix documentation, WAI-ARIA Authoring Practices — read and followed as documentation, not dependencies.
+- Research repositories studied during milestones (`docs/OPEN_SOURCE_VIDEO_AI_RESEARCH.md`) are reference-only: no code copied, NOT integrated dependencies.
 
-## 6. AI coding assistant guidance
+## 6. Open-source learning resources
 
-- Users may explore this public repository and any public open-source repository, and use their preferred AI coding assistant (including Claude and other independent providers), subject to each provider's own terms.
-- BEAN FX does **not** provide unlimited free AI assistant subscriptions. AI provider pricing is separate from BEAN FX.
+- FFmpeg documentation, MDN Web Docs, WAI-ARIA Authoring Practices, Next.js/Prisma/Radix/CodeMirror docs — documentation, not dependencies.
+
+## 7. AI coding assistant guidance
+
+- Users may explore this public repository — and any public open-source repository — and use their preferred AI coding assistant (including Claude and other independent providers), subject to each provider's own terms.
+- BEAN FX does **not** provide unlimited free AI assistant subscriptions. AI provider pricing is separate.
 - Public source availability does not remove copyright. Repository licenses govern code reuse.
-- AI-generated modifications do not remove upstream obligations (attribution, license texts, copyleft terms where applicable).
+- AI-generated modifications do not remove upstream obligations (attribution, license texts, copyleft terms).
+- Not every coding assistant is free — check each provider's terms.
 
-## 7. Third-party licenses and notices
+## 8. Third-party licenses and notices
 
-- Full license copies for direct dependencies: `docs/legal/licenses/`.
-- Required notices document: `THIRD_PARTY_NOTICES.md` (repository root).
-- SBOM (CycloneDX 1.5): `docs/legal/sbom.cdx.json`; machine-readable audit: `docs/legal/generated/dependency-audit.json`.
+- Full license copies for direct production dependencies: `docs/legal/licenses/`.
+- Required notices: `THIRD_PARTY_NOTICES.md` (repository root).
+- SBOM (CycloneDX 1.5, one component per instance, unique bom-refs): `docs/legal/sbom.cdx.json`; machine-readable audit: `docs/legal/generated/dependency-audit.json`.
 - Risk assessment: `docs/legal/LICENSE_RISK_REPORT.md`.
