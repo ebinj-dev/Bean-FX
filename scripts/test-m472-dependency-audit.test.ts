@@ -64,7 +64,10 @@ describe("instance enumeration — the complete installed set", () => {
   });
 
   test("distinct versions of the same package are NOT collapsed", () => {
-    for (const name of ["@radix-ui/react-slot", "@radix-ui/react-context", "@radix-ui/react-primitive", "@formatjs/intl-localematcher"]) {
+    // @formatjs/intl-localematcher previously had a nested 0.6.2 duplicate;
+    // the corrected (bun-aligned) lockfile deduped it to a single version —
+    // the three Radix packages still carry genuine multi-version installs.
+    for (const name of ["@radix-ui/react-slot", "@radix-ui/react-context", "@radix-ui/react-primitive"]) {
       const versions = new Set(prod.filter((i) => i.name === name).map((i) => i.version));
       expect(versions.size).toBeGreaterThan(1);
       // Each instance keeps its own install path + bom-ref.
@@ -74,9 +77,12 @@ describe("instance enumeration — the complete installed set", () => {
   });
 
   test("declared-but-uninstalled dependencies are flagged (install-state integrity)", () => {
-    // nodemailer@^10.6.0 is declared in package.json but has NO lockfile entry —
-    // npm ci fails; the audit must surface this, never hide it.
-    expect(AUDIT.counts.declaredButNotInLockfile).toContain("nodemailer");
+    // M47.3-C — the nodemailer mismatch is FIXED: the regenerated lockfile
+    // (bun-aligned, npm-override for next-auth's optional peer) now contains
+    // nodemailer@10.6.1, plain `npm ci` passes, and NO declared dependency is
+    // missing from the lockfile. The audit must keep enforcing this invariant.
+    expect(AUDIT.counts.declaredButNotInLockfile).toEqual([]);
+    expect(prod.some((i) => i.name === "nodemailer" && i.scope === "direct")).toBe(true);
   });
 
   test("counts block reconciles with the enumerated arrays", () => {
