@@ -509,9 +509,12 @@ export function ProgramMonitor({
       // M45: when the canvas VFX layer owns the picture, the element stays
       // decoded but invisible — its processed frame is drawn on the canvas.
       const hideForVfx = isActive && (activeVideo ? clipHasCanvasVfx(activeVideo.clip) : false);
+      // M48-D — picture fades are now VISIBLE in preview (parity with the
+      // export path, which already applies fadeMultiplierAt).
+      const fade = isActive && activeVideo && !hideForVfx ? fadeMultiplierAt(activeVideo.clip, playhead) : 1;
       if (isActive && activeTransform) {
         el.style.transform = activeTransform.transform ?? "";
-        el.style.opacity = hideForVfx ? "0" : activeTransform.opacity ?? "";
+        el.style.opacity = hideForVfx ? "0" : applyFade(activeTransform.opacity, fade);
       } else if (isActive && hideForVfx) {
         el.style.transform = "";
         el.style.opacity = "0";
@@ -520,7 +523,7 @@ export function ProgramMonitor({
         el.style.opacity = "";
       }
     }
-  }, [activeAssetId, isImageAsset, previewFilter, comparing, previewTransform, measureDisplayScale, activeVideo]);
+  }, [activeAssetId, isImageAsset, previewFilter, comparing, previewTransform, measureDisplayScale, activeVideo, playhead]);
   // M37: display size changes (window resize) re-measure the composition→
   // display factor; settled transforms re-apply on the next React pass.
   useEffect(() => {
@@ -538,11 +541,13 @@ export function ProgramMonitor({
       const active = activeVideoClipAt(seq, frame);
       if (!active) return;
       const t = cssTransformStyle(transformAt(active.clip, frame), displayScaleRef.current);
+      // M48-D — per-frame picture fade (export parity).
+      const fade = fadeMultiplierAt(active.clip, frame);
       for (const el of [videoARef.current, videoBRef.current]) {
         if (!el || el.className.includes("hidden")) continue;
         // M45 — the canvas VFX layer owns visibility while it is active.
         el.style.transform = t.transform ?? "";
-        if (!vfxOwnsPicture) el.style.opacity = t.opacity ?? "";
+        if (!vfxOwnsPicture) el.style.opacity = applyFade(t.opacity, fade);
       }
     });
   }, []);
@@ -838,6 +843,12 @@ export function ProgramMonitor({
       </div>
     </div>
   );
+}
+
+/** M48-D — multiply a CSS opacity string by a fade factor (clamped 0..1). */
+function applyFade(cssOpacity: string | null | undefined, fade: number): string {
+  const base = cssOpacity === undefined || cssOpacity === null || cssOpacity === "" ? 1 : Math.max(0, Math.min(1, parseFloat(cssOpacity)));
+  return String(Math.max(0, Math.min(1, base * fade)));
 }
 
 /** Timecode that follows the frame bus imperatively (no re-render per tick). */

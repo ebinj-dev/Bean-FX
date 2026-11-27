@@ -34,6 +34,7 @@ import { ProgramMonitor } from "@/components/bean/editor/monitor";
 import { EditorTimeline } from "@/components/bean/editor/timeline";
 import { ClipInspector } from "@/components/bean/editor/inspector";
 import { SourceMonitor } from "@/components/bean/editor/source-monitor";
+import { ScopesPanel } from "@/components/bean/editor/scopes";
 import { EMPTY_EDITOR_LINK_CONTEXT as EMPTY_CONTEXT, parseEditorHash, returnToChatHash, type EditorLinkContext } from "@/lib/editor/deep-link";
 import { EditingToolbar } from "@/components/bean/editor/editing-toolbar";
 import { MediaBrowser, useMediaImport } from "@/components/bean/editor/media-browser";
@@ -86,6 +87,8 @@ export function EditorTool({ user }: { user: { id: string }; onLogout: () => voi
   // M48-C — Source Monitor (three-point editing) visibility + loaded source.
   const [sourceOpen, setSourceOpen] = useState(false);
   const [sourceAssetId, setSourceAssetId] = useState<string | null>(null);
+  // M48-D — computed scopes visibility.
+  const [scopesOpen, setScopesOpen] = useState(false);
 
   const session = useEditorSession(projectId);
   const sequence = session.sequence;
@@ -571,6 +574,7 @@ export function EditorTool({ user }: { user: { id: string }; onLogout: () => voi
         <div className="flex min-w-0 flex-1 flex-col">
           <div className="relative flex min-h-0 flex-1">
             <ProgramMonitor sequence={sequence} playhead={session.playheadFrame} playing={playing} onPlayhead={session.setPlayhead} onPlayingChange={setPlaying} session={session} activeTool={activeTool} guides={guides} snapEnabled={snap} onDecodeError={setNotice} />
+            {scopesOpen && sequence && <ScopesPanel sequence={sequence} playhead={session.playheadFrame} />}
           </div>
           {/* Transport bar */}
           <div className="flex items-center gap-2 border-y border-[#2a2a2a] bg-[#0d0d0c] px-3 py-1">
