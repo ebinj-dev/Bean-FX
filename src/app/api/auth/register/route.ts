@@ -23,6 +23,24 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Invalid request body." }, { status: 400 });
     }
     const { email, password, name } = body as { email?: string; password?: string; name?: string };
+    // M47.2-C — SERVER-SIDE DRAFT ACKNOWLEDGEMENT. The registration UI
+    // presents the draft Terms of Service + AI Processing & Data Usage Policy
+    // acknowledgement as REQUIRED (unchecked-by-default checkbox, submit
+    // gated), so the API enforces the same contract: a direct request without
+    // an explicit `acceptedDraftTerms: true` is rejected with a clear
+    // validation error — the browser checkbox cannot be bypassed.
+    // Semantics (documented in the Legal Center): this is a factual
+    // acknowledgement of DRAFT documents only. It creates NO binding consent
+    // record, claims no final-policy acceptance, and implies no policy
+    // version — per-account acceptance tracking starts only after
+    // owner-approved final terms exist.
+    const acceptedDraftTerms = (body as { acceptedDraftTerms?: unknown }).acceptedDraftTerms;
+    if (acceptedDraftTerms !== true) {
+      return NextResponse.json(
+        { error: "Registration requires an explicit acknowledgement of the draft Terms of Service and the AI Processing & Data Usage Policy (acceptedDraftTerms must be true). These documents remain drafts — no binding acceptance is created." },
+        { status: 400 },
+      );
+    }
 
     if (!email || !validateEmail(email.trim())) {
       return NextResponse.json({ error: "Enter a valid email address." }, { status: 400 });
@@ -64,7 +82,7 @@ export async function POST(req: NextRequest) {
     } else {
       verification = { delivered: false, notice: "Email delivery is not configured on this deployment — email addresses cannot be verified until an SMTP provider is set up.", devToken: verifyRaw };
     }
-    await audit("auth.registered", { userId: user.id, ip: clientIp(req as unknown as Request), detail: `mailConfigured=${mailConfigured()}` });
+    await audit("auth.registered", { userId: user.id, ip: clientIp(req as unknown as Request), detail: `mailConfigured=${mailConfigured()} draftAcknowledged=true` });
 
     const { token, expiresAt } = await createSession(user.id);
     const res = NextResponse.json({

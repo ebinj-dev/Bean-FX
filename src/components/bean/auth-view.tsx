@@ -79,7 +79,11 @@ export function AuthView({
           : await fetch("/api/auth/register", {
               method: "POST",
               headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ email, password, name }),
+              // M47.2-C — the acknowledgement the UI requires is sent explicitly
+              // and enforced server-side (missing/false → 400). It acknowledges
+              // DRAFT documents only: no binding consent record is created and
+              // no policy version is implied.
+              body: JSON.stringify({ email, password, name, acceptedDraftTerms }),
             });
       const data = await res.json().catch(() => null);
       if (!res.ok) {
