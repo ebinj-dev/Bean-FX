@@ -1,28 +1,133 @@
 {
   "$schema": "./style-recipe.schema.md",
   "$comment": "BEAN FX M42-C/G editing-style recipes. Every field maps to a REAL editor capability: effects must be members of EffectType (src/lib/editor/model.ts), keyframe params of KeyframeProperty, transitions of TransitionKind, caption styles of CaptionStyleSchema. 'needs' lists capabilities that require analysis/generation not guaranteed locally — the style engine discloses them and offers alternatives; it never fabricates the effect.",
-  "version": "2026.11.24",
+  "version": "2026.11.27",
   "recipes": [
     {
       "id": "cinematic-trailer",
       "name": "Movie trailer",
       "family": "cinematic",
       "purpose": "High-impact promotional cut that builds momentum to a climax and ends on a title or sting.",
-      "suitableFor": ["narrative footage", "action", "product", "teaser"],
+      "suitableFor": [
+        "narrative footage",
+        "action",
+        "product",
+        "teaser"
+      ],
       "emotion": "anticipation → tension → payoff",
-      "aspect": ["16:9", "9:16", "1:1"],
-      "structure": ["hook (0-8% runtime)", "rising stakes (8-55%)", "montage acceleration (55-85%)", "climax + title card (85-100%)"],
+      "aspect": [
+        "16:9",
+        "9:16",
+        "1:1"
+      ],
+      "structure": [
+        "hook (0-8% runtime)",
+        "rising stakes (8-55%)",
+        "montage acceleration (55-85%)",
+        "climax + title card (85-100%)"
+      ],
       "shotSelection": "lead with the most visually striking wide; end sections on motion vectors that match the next shot's direction",
-      "pacing": { "avgShotSec": [1.2, 2.2], "shotsPerMin": [28, 50], "acceleration": "monotonic within acts; hold longest take in the quiet beat before the climax" },
-      "cutting": ["cut on action", "smash cut", "metric montage", "J-cut into dialogue"],
-      "transitions": [{ "kind": "CUT" }, { "kind": "CROSS_DISSOLVE", "durationFrames": [8, 16], "onlyBetweenScenes": true }, { "kind": "FADE_TO_BLACK", "use": "act break + final frame" }],
-      "motion": { "pushIn": { "param": "scale", "from": 1.0, "to": 1.08, "interpolation": "EASE_IN_OUT", "typicalDurationSec": [1.5, 3] } },
-      "color": { "effects": [{ "type": "contrast", "amount": [0.05, 0.15] }, { "type": "saturation", "amount": [-0.05, 0.1] }, { "type": "vignette", "amount": [0.1, 0.25] }], "note": "sample shot-matched amounts, never a fixed LUT" },
-      "audio": { "fadeInFrames": [0, 15], "fadeOutFrames": [15, 45], "ducking": "music under dialogue", "bed": "steady pulse; risers before act breaks (needs asset or MCP sound tool)" },
-      "captions": { "style": "title-card upper thirds; no dialogue captions unless requested" },
-      "needs": ["music bed asset or MCP sound-design tool", "title graphic (editor captions or MCP design tool)"],
-      "qualityChecks": ["no accidental repetition of the same shot twice in a row", "climax lands within the last 15%", "title card ≥ 1.5 s", "audio ends clean (no truncated music)"],
-      "notFor": ["raw documentary testimony (pacing destroys credibility)", "footage shorter than 20 s"],
+      "pacing": {
+        "avgShotSec": [
+          1.2,
+          2.2
+        ],
+        "shotsPerMin": [
+          28,
+          50
+        ],
+        "acceleration": "monotonic within acts; hold longest take in the quiet beat before the climax"
+      },
+      "cutting": [
+        "cut on action",
+        "smash cut",
+        "metric montage",
+        "J-cut into dialogue"
+      ],
+      "transitions": [
+        {
+          "kind": "CUT"
+        },
+        {
+          "kind": "CROSS_DISSOLVE",
+          "durationFrames": [
+            8,
+            16
+          ],
+          "onlyBetweenScenes": true
+        },
+        {
+          "kind": "FADE_TO_BLACK",
+          "use": "act break + final frame"
+        }
+      ],
+      "motion": {
+        "pushIn": {
+          "param": "scale",
+          "from": 1.0,
+          "to": 1.08,
+          "interpolation": "EASE_IN_OUT",
+          "typicalDurationSec": [
+            1.5,
+            3
+          ]
+        }
+      },
+      "color": {
+        "effects": [
+          {
+            "type": "contrast",
+            "amount": [
+              0.05,
+              0.15
+            ]
+          },
+          {
+            "type": "saturation",
+            "amount": [
+              -0.05,
+              0.1
+            ]
+          },
+          {
+            "type": "vignette",
+            "amount": [
+              0.1,
+              0.25
+            ]
+          }
+        ],
+        "note": "sample shot-matched amounts, never a fixed LUT"
+      },
+      "audio": {
+        "fadeInFrames": [
+          0,
+          15
+        ],
+        "fadeOutFrames": [
+          15,
+          45
+        ],
+        "ducking": "music under dialogue",
+        "bed": "steady pulse; risers before act breaks (needs asset or MCP sound tool)"
+      },
+      "captions": {
+        "style": "title-card upper thirds; no dialogue captions unless requested"
+      },
+      "needs": [
+        "music bed asset or MCP sound-design tool",
+        "title graphic (editor captions or MCP design tool)"
+      ],
+      "qualityChecks": [
+        "no accidental repetition of the same shot twice in a row",
+        "climax lands within the last 15%",
+        "title card ≥ 1.5 s",
+        "audio ends clean (no truncated music)"
+      ],
+      "notFor": [
+        "raw documentary testimony (pacing destroys credibility)",
+        "footage shorter than 20 s"
+      ],
       "promptExample": "Turn all these clips into a 45-second cinematic trailer."
     },
     {
@@ -30,21 +135,109 @@
       "name": "Cinematic storytelling",
       "family": "cinematic",
       "purpose": "Narrative-driven edit that reads like a short film: establishing → development → resolution.",
-      "suitableFor": ["travel", "lifestyle", "brand story", "personal film"],
+      "suitableFor": [
+        "travel",
+        "lifestyle",
+        "brand story",
+        "personal film"
+      ],
       "emotion": "immersion, empathy",
-      "aspect": ["16:9"],
-      "structure": ["establish world", "develop subject", "turn", "resolve"],
+      "aspect": [
+        "16:9"
+      ],
+      "structure": [
+        "establish world",
+        "develop subject",
+        "turn",
+        "resolve"
+      ],
       "shotSelection": "establishing wide first; hold human subjects longer than scenery; sequence by continuity of motion and light",
-      "pacing": { "avgShotSec": [2.5, 4.5], "shotsPerMin": [14, 24], "acceleration": "none — steady breath" },
-      "cutting": ["continuity editing", "cut on action", "reaction cut", "J-cut/L-cut"],
-      "transitions": [{ "kind": "CUT" }, { "kind": "CROSS_DISSOLVE", "durationFrames": [10, 20], "onlyBetweenScenes": true }],
-      "motion": { "pushIn": { "param": "scale", "from": 1.0, "to": 1.05, "interpolation": "EASE_IN_OUT", "typicalDurationSec": [2, 4] } },
-      "color": { "effects": [{ "type": "temperature", "amount": [-0.05, 0.1] }, { "type": "contrast", "amount": [0.03, 0.1] }], "note": "natural-first; match shots across scenes" },
-      "audio": { "fadeInFrames": [15, 30], "fadeOutFrames": [30, 60], "ducking": "dialogue always dominant" },
-      "captions": { "style": "none or sparse lower thirds" },
-      "needs": [],
-      "qualityChecks": ["timeline reads without narration", "no 6+ s static wide unless intentional", "matched white balance across scenes"],
-      "notFor": ["fast social deliverables"],
+      "pacing": {
+        "avgShotSec": [
+          2.5,
+          4.5
+        ],
+        "shotsPerMin": [
+          14,
+          24
+        ],
+        "acceleration": "none — steady breath"
+      },
+      "cutting": [
+        "continuity editing",
+        "cut on action",
+        "reaction cut",
+        "J-cut/L-cut"
+      ],
+      "transitions": [
+        {
+          "kind": "CUT"
+        },
+        {
+          "kind": "CROSS_DISSOLVE",
+          "durationFrames": [
+            10,
+            20
+          ],
+          "onlyBetweenScenes": true
+        }
+      ],
+      "motion": {
+        "pushIn": {
+          "param": "scale",
+          "from": 1.0,
+          "to": 1.05,
+          "interpolation": "EASE_IN_OUT",
+          "typicalDurationSec": [
+            2,
+            4
+          ]
+        }
+      },
+      "color": {
+        "effects": [
+          {
+            "type": "temperature",
+            "amount": [
+              -0.05,
+              0.1
+            ]
+          },
+          {
+            "type": "contrast",
+            "amount": [
+              0.03,
+              0.1
+            ]
+          }
+        ],
+        "note": "natural-first; match shots across scenes"
+      },
+      "audio": {
+        "fadeInFrames": [
+          15,
+          30
+        ],
+        "fadeOutFrames": [
+          30,
+          60
+        ],
+        "ducking": "dialogue always dominant"
+      },
+      "captions": {
+        "style": "none or sparse lower thirds"
+      },
+      "needs": [
+        "user-provided footage with coverage for the intended emotional beats (media prerequisite — no engine capability required)"
+      ],
+      "qualityChecks": [
+        "timeline reads without narration",
+        "no 6+ s static wide unless intentional",
+        "matched white balance across scenes"
+      ],
+      "notFor": [
+        "fast social deliverables"
+      ],
       "promptExample": "Create a documentary-style edit with a strong story."
     },
     {
@@ -52,21 +245,111 @@
       "name": "Instagram Reel",
       "family": "social",
       "purpose": "Vertical, hook-first short: retain past second 2, deliver payoff fast, loop cleanly.",
-      "suitableFor": ["vlog clips", "UGC", "lifestyle", "travel"],
+      "suitableFor": [
+        "vlog clips",
+        "UGC",
+        "lifestyle",
+        "travel"
+      ],
       "emotion": "energy, curiosity",
-      "aspect": ["9:16", "1:1"],
-      "structure": ["hook (first 1.5-2.5 s)", "3-5 value beats", "payoff + loop point"],
+      "aspect": [
+        "9:16",
+        "1:1"
+      ],
+      "structure": [
+        "hook (first 1.5-2.5 s)",
+        "3-5 value beats",
+        "payoff + loop point"
+      ],
       "shotSelection": "strongest expression/motion frame first; vertical-safe crops (subject in upper 2/3)",
-      "pacing": { "avgShotSec": [0.7, 1.6], "shotsPerMin": [40, 85], "acceleration": "front-loaded — fastest cuts in the first 5 s" },
-      "cutting": ["jump cut", "cut on action", "smash cut", "montage"],
-      "transitions": [{ "kind": "CUT" }, { "kind": "ZOOM_IN", "use": "max 1-2, into the payoff" }],
-      "motion": { "zoomPunch": { "param": "scale", "from": 1.0, "to": 1.12, "interpolation": "EASE_OUT", "typicalDurationSec": [0.25, 0.5] } },
-      "color": { "effects": [{ "type": "saturation", "amount": [0.05, 0.2] }, { "type": "contrast", "amount": [0.05, 0.12] }], "note": "bright, clean; protect skin tones" },
-      "audio": { "fadeInFrames": [0, 5], "fadeOutFrames": [10, 20], "ducking": "music dominant, speech raised" },
-      "captions": { "style": "word/near-word social captions, BOTTOM or CENTER, large font, high-contrast background", "fontSize": [42, 72] },
-      "needs": ["ASR for captions when dialogue exists (fallback: manual text)", "music bed asset"],
-      "qualityChecks": ["hook lands ≤ 2.5 s", "safe-area respected (no caption under UI chrome)", "loop: last frame cuts back to first cleanly", "duration ≤ 60 s target"],
-      "notFor": ["long-form lecture content"],
+      "pacing": {
+        "avgShotSec": [
+          0.7,
+          1.6
+        ],
+        "shotsPerMin": [
+          40,
+          85
+        ],
+        "acceleration": "front-loaded — fastest cuts in the first 5 s"
+      },
+      "cutting": [
+        "jump cut",
+        "cut on action",
+        "smash cut",
+        "montage"
+      ],
+      "transitions": [
+        {
+          "kind": "CUT"
+        },
+        {
+          "kind": "ZOOM_IN",
+          "use": "max 1-2, into the payoff"
+        }
+      ],
+      "motion": {
+        "zoomPunch": {
+          "param": "scale",
+          "from": 1.0,
+          "to": 1.12,
+          "interpolation": "EASE_OUT",
+          "typicalDurationSec": [
+            0.25,
+            0.5
+          ]
+        }
+      },
+      "color": {
+        "effects": [
+          {
+            "type": "saturation",
+            "amount": [
+              0.05,
+              0.2
+            ]
+          },
+          {
+            "type": "contrast",
+            "amount": [
+              0.05,
+              0.12
+            ]
+          }
+        ],
+        "note": "bright, clean; protect skin tones"
+      },
+      "audio": {
+        "fadeInFrames": [
+          0,
+          5
+        ],
+        "fadeOutFrames": [
+          10,
+          20
+        ],
+        "ducking": "music dominant, speech raised"
+      },
+      "captions": {
+        "style": "word/near-word social captions, BOTTOM or CENTER, large font, high-contrast background",
+        "fontSize": [
+          42,
+          72
+        ]
+      },
+      "needs": [
+        "ASR for captions when dialogue exists (fallback: manual text)",
+        "music bed asset"
+      ],
+      "qualityChecks": [
+        "hook lands ≤ 2.5 s",
+        "safe-area respected (no caption under UI chrome)",
+        "loop: last frame cuts back to first cleanly",
+        "duration ≤ 60 s target"
+      ],
+      "notFor": [
+        "long-form lecture content"
+      ],
       "promptExample": "Make a professional Instagram Reel from these videos."
     },
     {
@@ -74,21 +357,113 @@
       "name": "Interview documentary",
       "family": "documentary",
       "purpose": "Credible testimony-driven edit: the words lead, images support.",
-      "suitableFor": ["interviews", "testimony", "case studies"],
+      "suitableFor": [
+        "interviews",
+        "testimony",
+        "case studies"
+      ],
       "emotion": "trust, authenticity",
-      "aspect": ["16:9"],
-      "structure": ["cold-open quote", "context", "development via answered questions", "reflective close"],
+      "aspect": [
+        "16:9"
+      ],
+      "structure": [
+        "cold-open quote",
+        "context",
+        "development via answered questions",
+        "reflective close"
+      ],
       "shotSelection": "keep talking-head takes with natural blinks/breath; cutaways on statement boundaries; never cut mid-word",
-      "pacing": { "avgShotSec": [3.0, 6.0], "shotsPerMin": [10, 18], "acceleration": "follow the speech rhythm, not a metronome" },
-      "cutting": ["L-cut", "J-cut", "cutaway", "reaction cut"],
-      "transitions": [{ "kind": "CUT" }, { "kind": "CROSS_DISSOLVE", "durationFrames": [12, 20], "onlyBetweenChapters": true }],
-      "motion": { "slowPush": { "param": "scale", "from": 1.0, "to": 1.03, "interpolation": "LINEAR", "typicalDurationSec": [4, 8] } },
-      "color": { "effects": [{ "type": "contrast", "amount": [0.0, 0.06] }, { "type": "shadows", "amount": [0.0, 0.08] }], "note": "documentary realism — minimal grade" },
-      "audio": { "fadeInFrames": [10, 20], "fadeOutFrames": [20, 45], "ducking": "music never above speech; room tone continuity" },
-      "captions": { "style": "documentary subtitles, BOTTOM, moderate font, speaker labels if diarization is available", "fontSize": [28, 40] },
-      "needs": ["ASR for transcript/captions", "diarization only via an approved provider (disclosed)"],
-      "qualityChecks": ["no sentence truncated at a cut", "cutaway does not contradict the spoken content", "captions match audio verbatim"],
-      "notFor": ["hype trailers"],
+      "pacing": {
+        "avgShotSec": [
+          3.0,
+          6.0
+        ],
+        "shotsPerMin": [
+          10,
+          18
+        ],
+        "acceleration": "follow the speech rhythm, not a metronome"
+      },
+      "cutting": [
+        "L-cut",
+        "J-cut",
+        "cutaway",
+        "reaction cut"
+      ],
+      "transitions": [
+        {
+          "kind": "CUT"
+        },
+        {
+          "kind": "CROSS_DISSOLVE",
+          "durationFrames": [
+            12,
+            20
+          ],
+          "onlyBetweenChapters": true
+        }
+      ],
+      "motion": {
+        "slowPush": {
+          "param": "scale",
+          "from": 1.0,
+          "to": 1.03,
+          "interpolation": "LINEAR",
+          "typicalDurationSec": [
+            4,
+            8
+          ]
+        }
+      },
+      "color": {
+        "effects": [
+          {
+            "type": "contrast",
+            "amount": [
+              0.0,
+              0.06
+            ]
+          },
+          {
+            "type": "shadows",
+            "amount": [
+              0.0,
+              0.08
+            ]
+          }
+        ],
+        "note": "documentary realism — minimal grade"
+      },
+      "audio": {
+        "fadeInFrames": [
+          10,
+          20
+        ],
+        "fadeOutFrames": [
+          20,
+          45
+        ],
+        "ducking": "music never above speech; room tone continuity"
+      },
+      "captions": {
+        "style": "documentary subtitles, BOTTOM, moderate font, speaker labels if diarization is available",
+        "fontSize": [
+          28,
+          40
+        ]
+      },
+      "needs": [
+        "ASR for transcript/captions",
+        "diarization only via an approved provider (disclosed)"
+      ],
+      "qualityChecks": [
+        "no sentence truncated at a cut",
+        "cutaway does not contradict the spoken content",
+        "captions match audio verbatim"
+      ],
+      "notFor": [
+        "hype trailers"
+      ],
       "promptExample": "Remove silences and mistakes, retain the important dialogue and create accurate captions."
     },
     {
@@ -96,21 +471,108 @@
       "name": "Wedding highlight",
       "family": "event",
       "purpose": "Emotional arc from preparation → vows → celebration; the couple's words carry the story.",
-      "suitableFor": ["wedding footage", "event footage"],
+      "suitableFor": [
+        "wedding footage",
+        "event footage"
+      ],
       "emotion": "warmth, tenderness, joy",
-      "aspect": ["16:9", "9:16"],
-      "structure": ["preparation details", "ceremony (vows/rings)", "portraits + golden hour", "celebration peak", "closing look"],
+      "aspect": [
+        "16:9",
+        "9:16"
+      ],
+      "structure": [
+        "preparation details",
+        "ceremony (vows/rings)",
+        "portraits + golden hour",
+        "celebration peak",
+        "closing look"
+      ],
       "shotSelection": "hands, glances, vows; guests' reactions as punctuation; golden-hour frames for the turn",
-      "pacing": { "avgShotSec": [2.0, 3.8], "shotsPerMin": [16, 28], "acceleration": "gentle; lift pace only for the dance floor" },
-      "cutting": ["continuity editing", "match cut", "reaction cut"],
-      "transitions": [{ "kind": "CROSS_DISSOLVE", "durationFrames": [12, 24] }, { "kind": "FADE_TO_BLACK", "use": "final frame only" }],
-      "motion": { "slowPush": { "param": "scale", "from": 1.0, "to": 1.04, "interpolation": "EASE_IN_OUT", "typicalDurationSec": [2.5, 5] } },
-      "color": { "effects": [{ "type": "temperature", "amount": [0.03, 0.1] }, { "type": "saturation", "amount": [-0.02, 0.06] }], "note": "warm, gentle; protect white dress highlights" },
-      "audio": { "fadeInFrames": [20, 40], "fadeOutFrames": [30, 60], "ducking": "vows always dominant over music" },
-      "captions": { "style": "none, or sparse names/lower thirds" },
-      "needs": ["licensed music bed asset (user-provided)"],
-      "qualityChecks": ["vows audible and unbroken", "no jarring cut on the couple's emotional peak", "warm grade consistent across cameras"],
-      "notFor": ["high-tempo gaming edits"],
+      "pacing": {
+        "avgShotSec": [
+          2.0,
+          3.8
+        ],
+        "shotsPerMin": [
+          16,
+          28
+        ],
+        "acceleration": "gentle; lift pace only for the dance floor"
+      },
+      "cutting": [
+        "continuity editing",
+        "match cut",
+        "reaction cut"
+      ],
+      "transitions": [
+        {
+          "kind": "CROSS_DISSOLVE",
+          "durationFrames": [
+            12,
+            24
+          ]
+        },
+        {
+          "kind": "FADE_TO_BLACK",
+          "use": "final frame only"
+        }
+      ],
+      "motion": {
+        "slowPush": {
+          "param": "scale",
+          "from": 1.0,
+          "to": 1.04,
+          "interpolation": "EASE_IN_OUT",
+          "typicalDurationSec": [
+            2.5,
+            5
+          ]
+        }
+      },
+      "color": {
+        "effects": [
+          {
+            "type": "temperature",
+            "amount": [
+              0.03,
+              0.1
+            ]
+          },
+          {
+            "type": "saturation",
+            "amount": [
+              -0.02,
+              0.06
+            ]
+          }
+        ],
+        "note": "warm, gentle; protect white dress highlights"
+      },
+      "audio": {
+        "fadeInFrames": [
+          20,
+          40
+        ],
+        "fadeOutFrames": [
+          30,
+          60
+        ],
+        "ducking": "vows always dominant over music"
+      },
+      "captions": {
+        "style": "none, or sparse names/lower thirds"
+      },
+      "needs": [
+        "licensed music bed asset (user-provided)"
+      ],
+      "qualityChecks": [
+        "vows audible and unbroken",
+        "no jarring cut on the couple's emotional peak",
+        "warm grade consistent across cameras"
+      ],
+      "notFor": [
+        "high-tempo gaming edits"
+      ],
       "promptExample": "Edit this wedding footage into a beautiful emotional highlight film."
     },
     {
@@ -118,21 +580,118 @@
       "name": "Gaming highlights",
       "family": "gaming",
       "purpose": "Skill-forward montage: eliminations, clutch moments, reaction spikes.",
-      "suitableFor": ["gameplay captures", "streams"],
+      "suitableFor": [
+        "gameplay captures",
+        "streams"
+      ],
       "emotion": "excitement, hype",
-      "aspect": ["16:9", "9:16"],
-      "structure": ["cold-open on the best kill/clip", "escalating rounds", "final clutch", "outro sting"],
+      "aspect": [
+        "16:9",
+        "9:16"
+      ],
+      "structure": [
+        "cold-open on the best kill/clip",
+        "escalating rounds",
+        "final clutch",
+        "outro sting"
+      ],
       "shotSelection": "kill/conflict first frames; HUD readable; avoid repeated identical spawns",
-      "pacing": { "avgShotSec": [0.6, 1.4], "shotsPerMin": [45, 100], "acceleration": "peak pace in the final third" },
-      "cutting": ["jump cut", "smash cut", "montage", "speed ramp into kills"],
-      "transitions": [{ "kind": "CUT" }, { "kind": "ZOOM_IN", "use": "impact emphasis" }],
-      "motion": { "speedRamp": { "param": "playbackSpeed", "keyframes": [{ "frame": "kill-15f", "value": 0.5 }, { "frame": "kill", "value": 1.0 }], "note": "real ChangePlaybackSpeed on the clip" } },
-      "color": { "effects": [{ "type": "saturation", "amount": [0.08, 0.2] }, { "type": "contrast", "amount": [0.06, 0.15] }, { "type": "sharpen", "amount": [0.0, 0.2] }] },
-      "audio": { "fadeInFrames": [0, 5], "fadeOutFrames": [10, 25], "ducking": "SFX spikes over music; comms kept when meaningful" },
-      "captions": { "style": "hype word captions optional, TOP to avoid HUD", "fontSize": [40, 64] },
-      "needs": ["audio-event detection for kill sounds (GANGZII/analysis) or manual range markers"],
-      "qualityChecks": ["HUD readable at 9:16 crop", "no dead respawn time left in", "speed ramps return to 1.0 before the next cut"],
-      "notFor": ["solemn documentary content"],
+      "pacing": {
+        "avgShotSec": [
+          0.6,
+          1.4
+        ],
+        "shotsPerMin": [
+          45,
+          100
+        ],
+        "acceleration": "peak pace in the final third"
+      },
+      "cutting": [
+        "jump cut",
+        "smash cut",
+        "montage",
+        "speed ramp into kills"
+      ],
+      "transitions": [
+        {
+          "kind": "CUT"
+        },
+        {
+          "kind": "ZOOM_IN",
+          "use": "impact emphasis"
+        }
+      ],
+      "motion": {
+        "speedRamp": {
+          "param": "playbackSpeed",
+          "keyframes": [
+            {
+              "frame": "kill-15f",
+              "value": 0.5
+            },
+            {
+              "frame": "kill",
+              "value": 1.0
+            }
+          ],
+          "note": "real ChangePlaybackSpeed on the clip"
+        }
+      },
+      "color": {
+        "effects": [
+          {
+            "type": "saturation",
+            "amount": [
+              0.08,
+              0.2
+            ]
+          },
+          {
+            "type": "contrast",
+            "amount": [
+              0.06,
+              0.15
+            ]
+          },
+          {
+            "type": "sharpen",
+            "amount": [
+              0.0,
+              0.2
+            ]
+          }
+        ]
+      },
+      "audio": {
+        "fadeInFrames": [
+          0,
+          5
+        ],
+        "fadeOutFrames": [
+          10,
+          25
+        ],
+        "ducking": "SFX spikes over music; comms kept when meaningful"
+      },
+      "captions": {
+        "style": "hype word captions optional, TOP to avoid HUD",
+        "fontSize": [
+          40,
+          64
+        ]
+      },
+      "needs": [
+        "audio-event detection for kill sounds (GANGZII/analysis) or manual range markers"
+      ],
+      "qualityChecks": [
+        "HUD readable at 9:16 crop",
+        "no dead respawn time left in",
+        "speed ramps return to 1.0 before the next cut"
+      ],
+      "notFor": [
+        "solemn documentary content"
+      ],
       "promptExample": "Make this gaming video more entertaining with fast cuts, zooms and sound effects."
     },
     {
@@ -140,21 +699,121 @@
       "name": "Product advertisement",
       "family": "commercial",
       "purpose": "Problem → product as hero → benefit proof → call to action.",
-      "suitableFor": ["product footage", "unboxing", "UI demos"],
+      "suitableFor": [
+        "product footage",
+        "unboxing",
+        "UI demos"
+      ],
       "emotion": "desire, confidence",
-      "aspect": ["16:9", "9:16", "1:1"],
-      "structure": ["pain point (0-15%)", "product reveal (15-35%)", "feature proof (35-75%)", "CTA end card (75-100%)"],
+      "aspect": [
+        "16:9",
+        "9:16",
+        "1:1"
+      ],
+      "structure": [
+        "pain point (0-15%)",
+        "product reveal (15-35%)",
+        "feature proof (35-75%)",
+        "CTA end card (75-100%)"
+      ],
       "shotSelection": "product beauty frames centered; feature close-ups get the longest holds",
-      "pacing": { "avgShotSec": [1.2, 2.4], "shotsPerMin": [25, 50], "acceleration": "steady; CTA slows down" },
-      "cutting": ["cut on action", "montage", "insert shot"],
-      "transitions": [{ "kind": "CUT" }, { "kind": "CROSS_DISSOLVE", "durationFrames": [8, 14], "onlyBetweenSections": true }],
-      "motion": { "pushIn": { "param": "scale", "from": 1.0, "to": 1.06, "interpolation": "EASE_IN_OUT", "typicalDurationSec": [1.2, 2.5] } },
-      "color": { "effects": [{ "type": "exposure", "amount": [0.0, 0.08] }, { "type": "contrast", "amount": [0.05, 0.12] }, { "type": "saturation", "amount": [0.04, 0.12] }], "note": "clean commercial look; whites clean, no color cast on packaging" },
-      "audio": { "fadeInFrames": [0, 10], "fadeOutFrames": [15, 30], "ducking": "VO dominant" },
-      "captions": { "style": "benefit callouts + CTA end card", "fontSize": [36, 60] },
-      "needs": ["VO or text assets", "CTA copy from the user"],
-      "qualityChecks": ["product name legible in ≥ 3 shots", "CTA holds ≥ 2 s", "no competitor branding visible"],
-      "notFor": ["editorial/news content"],
+      "pacing": {
+        "avgShotSec": [
+          1.2,
+          2.4
+        ],
+        "shotsPerMin": [
+          25,
+          50
+        ],
+        "acceleration": "steady; CTA slows down"
+      },
+      "cutting": [
+        "cut on action",
+        "montage",
+        "insert shot"
+      ],
+      "transitions": [
+        {
+          "kind": "CUT"
+        },
+        {
+          "kind": "CROSS_DISSOLVE",
+          "durationFrames": [
+            8,
+            14
+          ],
+          "onlyBetweenSections": true
+        }
+      ],
+      "motion": {
+        "pushIn": {
+          "param": "scale",
+          "from": 1.0,
+          "to": 1.06,
+          "interpolation": "EASE_IN_OUT",
+          "typicalDurationSec": [
+            1.2,
+            2.5
+          ]
+        }
+      },
+      "color": {
+        "effects": [
+          {
+            "type": "exposure",
+            "amount": [
+              0.0,
+              0.08
+            ]
+          },
+          {
+            "type": "contrast",
+            "amount": [
+              0.05,
+              0.12
+            ]
+          },
+          {
+            "type": "saturation",
+            "amount": [
+              0.04,
+              0.12
+            ]
+          }
+        ],
+        "note": "clean commercial look; whites clean, no color cast on packaging"
+      },
+      "audio": {
+        "fadeInFrames": [
+          0,
+          10
+        ],
+        "fadeOutFrames": [
+          15,
+          30
+        ],
+        "ducking": "VO dominant"
+      },
+      "captions": {
+        "style": "benefit callouts + CTA end card",
+        "fontSize": [
+          36,
+          60
+        ]
+      },
+      "needs": [
+        "VO or text assets",
+        "CTA copy from the user"
+      ],
+      "qualityChecks": [
+        "product name legible in ≥ 3 shots",
+        "CTA holds ≥ 2 s",
+        "no competitor branding visible"
+      ],
+      "notFor": [
+        "editorial/news content"
+      ],
       "promptExample": "Create a professional product advertisement."
     },
     {
@@ -162,21 +821,100 @@
       "name": "Tutorial / how-to",
       "family": "educational",
       "purpose": "Teach one outcome clearly: steps, close-ups on the action, captions for accessibility.",
-      "suitableFor": ["screen recordings", "demos", "teaching footage"],
+      "suitableFor": [
+        "screen recordings",
+        "demos",
+        "teaching footage"
+      ],
       "emotion": "clarity, confidence",
-      "aspect": ["16:9", "9:16"],
-      "structure": ["outcome promise", "step 1..N (each: do → show → verify)", "summary"],
+      "aspect": [
+        "16:9",
+        "9:16"
+      ],
+      "structure": [
+        "outcome promise",
+        "step 1..N (each: do → show → verify)",
+        "summary"
+      ],
       "shotSelection": "the action area fills the frame; the result of each step shown before moving on",
-      "pacing": { "avgShotSec": [2.5, 5.0], "shotsPerMin": [12, 22], "acceleration": "none inside a step; trim pauses BETWEEN steps" },
-      "cutting": ["jump cut (pause removal)", "insert shot", "cut on action"],
-      "transitions": [{ "kind": "CUT" }],
-      "motion": { "highlightZoom": { "param": "scale", "from": 1.0, "to": 1.15, "interpolation": "EASE_OUT", "use": "on the exact UI element being taught" } },
-      "color": { "effects": [{ "type": "brightness", "amount": [0.0, 0.06] }, { "type": "sharpen", "amount": [0.0, 0.15] }], "note": "legibility first" },
-      "audio": { "fadeInFrames": [5, 15], "fadeOutFrames": [15, 30], "ducking": "voice is the spine" },
-      "captions": { "style": "step captions + keywords highlighted, BOTTOM", "fontSize": [30, 44] },
-      "needs": ["ASR for captions (or user-provided script)"],
-      "qualityChecks": ["every step's result visible before the next", "captions spell technical terms correctly", "no dead air > 1.5 s"],
-      "notFor": ["emotional narrative pieces"],
+      "pacing": {
+        "avgShotSec": [
+          2.5,
+          5.0
+        ],
+        "shotsPerMin": [
+          12,
+          22
+        ],
+        "acceleration": "none inside a step; trim pauses BETWEEN steps"
+      },
+      "cutting": [
+        "jump cut (pause removal)",
+        "insert shot",
+        "cut on action"
+      ],
+      "transitions": [
+        {
+          "kind": "CUT"
+        }
+      ],
+      "motion": {
+        "highlightZoom": {
+          "param": "scale",
+          "from": 1.0,
+          "to": 1.15,
+          "interpolation": "EASE_OUT",
+          "use": "on the exact UI element being taught"
+        }
+      },
+      "color": {
+        "effects": [
+          {
+            "type": "brightness",
+            "amount": [
+              0.0,
+              0.06
+            ]
+          },
+          {
+            "type": "sharpen",
+            "amount": [
+              0.0,
+              0.15
+            ]
+          }
+        ],
+        "note": "legibility first"
+      },
+      "audio": {
+        "fadeInFrames": [
+          5,
+          15
+        ],
+        "fadeOutFrames": [
+          15,
+          30
+        ],
+        "ducking": "voice is the spine"
+      },
+      "captions": {
+        "style": "step captions + keywords highlighted, BOTTOM",
+        "fontSize": [
+          30,
+          44
+        ]
+      },
+      "needs": [
+        "ASR for captions (or user-provided script)"
+      ],
+      "qualityChecks": [
+        "every step's result visible before the next",
+        "captions spell technical terms correctly",
+        "no dead air > 1.5 s"
+      ],
+      "notFor": [
+        "emotional narrative pieces"
+      ],
       "promptExample": "Create captions and make the tutorial tighter without losing the steps."
     },
     {
@@ -184,21 +922,111 @@
       "name": "Music-video montage",
       "family": "music",
       "purpose": "Beat-synced visual rhythm: cuts land on transients, sections follow song structure.",
-      "suitableFor": ["performance footage", "fashion", "dance", "montage b-roll"],
+      "suitableFor": [
+        "performance footage",
+        "fashion",
+        "dance",
+        "montage b-roll"
+      ],
       "emotion": "drive, style",
-      "aspect": ["16:9", "9:16"],
-      "structure": ["intro groove", "verse build", "chorus peak (fastest)", "bridge breakdown", "final chorus"],
+      "aspect": [
+        "16:9",
+        "9:16"
+      ],
+      "structure": [
+        "intro groove",
+        "verse build",
+        "chorus peak (fastest)",
+        "bridge breakdown",
+        "final chorus"
+      ],
       "shotSelection": "movement-heavy frames on strong beats; holds on the downbeat of section changes",
-      "pacing": { "avgShotSec": [0.6, 1.5], "shotsPerMin": [40, 100], "acceleration": "locked to the track's energy curve" },
-      "cutting": ["metric montage", "rhythmic cutting", "beat synchronization", "smash cut"],
-      "transitions": [{ "kind": "CUT" }, { "kind": "ZOOM_IN", "use": "on the biggest transient only" }],
-      "motion": { "beatPush": { "param": "scale", "from": 1.0, "to": 1.08, "interpolation": "EASE_OUT", "use": "one-beat pushes on accents" } },
-      "color": { "effects": [{ "type": "contrast", "amount": [0.06, 0.15] }, { "type": "saturation", "amount": [0.0, 0.15] }, { "type": "vignette", "amount": [0.05, 0.2] }], "note": "style shot-matching within sections" },
-      "audio": { "fadeInFrames": [0, 5], "fadeOutFrames": [20, 40], "ducking": "music IS the spine" },
-      "captions": { "style": "none or lyric callouts (karaoke only with aligned lyrics)" },
-      "needs": ["beat/onset analysis (librosa-based tool or MCP audio tool) for exact sync — disclosed when unavailable"],
-      "qualityChecks": ["cuts land on beats ±1 frame at section boundaries", "no cut mid-gesture on the hook", "energy curve matches the song"],
-      "notFor": ["dialogue-driven testimony"],
+      "pacing": {
+        "avgShotSec": [
+          0.6,
+          1.5
+        ],
+        "shotsPerMin": [
+          40,
+          100
+        ],
+        "acceleration": "locked to the track's energy curve"
+      },
+      "cutting": [
+        "metric montage",
+        "rhythmic cutting",
+        "beat synchronization",
+        "smash cut"
+      ],
+      "transitions": [
+        {
+          "kind": "CUT"
+        },
+        {
+          "kind": "ZOOM_IN",
+          "use": "on the biggest transient only"
+        }
+      ],
+      "motion": {
+        "beatPush": {
+          "param": "scale",
+          "from": 1.0,
+          "to": 1.08,
+          "interpolation": "EASE_OUT",
+          "use": "one-beat pushes on accents"
+        }
+      },
+      "color": {
+        "effects": [
+          {
+            "type": "contrast",
+            "amount": [
+              0.06,
+              0.15
+            ]
+          },
+          {
+            "type": "saturation",
+            "amount": [
+              0.0,
+              0.15
+            ]
+          },
+          {
+            "type": "vignette",
+            "amount": [
+              0.05,
+              0.2
+            ]
+          }
+        ],
+        "note": "style shot-matching within sections"
+      },
+      "audio": {
+        "fadeInFrames": [
+          0,
+          5
+        ],
+        "fadeOutFrames": [
+          20,
+          40
+        ],
+        "ducking": "music IS the spine"
+      },
+      "captions": {
+        "style": "none or lyric callouts (karaoke only with aligned lyrics)"
+      },
+      "needs": [
+        "beat/onset analysis (librosa-based tool or MCP audio tool) for exact sync — disclosed when unavailable"
+      ],
+      "qualityChecks": [
+        "cuts land on beats ±1 frame at section boundaries",
+        "no cut mid-gesture on the hook",
+        "energy curve matches the song"
+      ],
+      "notFor": [
+        "dialogue-driven testimony"
+      ],
       "promptExample": "Make the footage cinematic, improve the colors, synchronize cuts with the music and add suitable transitions."
     },
     {
@@ -206,21 +1034,107 @@
       "name": "Sports highlights",
       "family": "sports",
       "purpose": "Outcome-first recap: score moments, saves, reactions — with slow-motion replays.",
-      "suitableFor": ["match footage", "training", "fitness"],
+      "suitableFor": [
+        "match footage",
+        "training",
+        "fitness"
+      ],
       "emotion": "tension, triumph",
-      "aspect": ["16:9", "9:16"],
-      "structure": ["cold open on the decisive moment", "chronological build", "replays of top moments", "celebration close"],
+      "aspect": [
+        "16:9",
+        "9:16"
+      ],
+      "structure": [
+        "cold open on the decisive moment",
+        "chronological build",
+        "replays of top moments",
+        "celebration close"
+      ],
       "shotSelection": "ball/player at the moment of contact; crowd reactions as connective tissue",
-      "pacing": { "avgShotSec": [0.8, 2.0], "shotsPerMin": [30, 70], "acceleration": "rises to the final" },
-      "cutting": ["cut on action", "jump cut", "replay (speed ramp)"],
-      "transitions": [{ "kind": "CUT" }, { "kind": "FADE_TO_BLACK", "use": "before the replay block" }],
-      "motion": { "replayRamp": { "param": "playbackSpeed", "keyframes": [{ "frame": "moment-10f", "value": 1.0 }, { "frame": "moment", "value": 0.4 }], "note": "real playbackSpeed change for the replay" } },
-      "color": { "effects": [{ "type": "contrast", "amount": [0.04, 0.12] }, { "type": "saturation", "amount": [0.02, 0.1] }] },
-      "audio": { "fadeInFrames": [0, 10], "fadeOutFrames": [20, 45], "ducking": "crowd/swells under the replay" },
-      "captions": { "style": "score/minute callouts, TOP" },
-      "needs": ["motion/impact detection for moment finding, or user-provided markers"],
-      "qualityChecks": ["no offside/illegal moment glorified by mistake", "replay returns to real time before the next cut", "celebration close holds ≥ 2 s"],
-      "notFor": ["wedding/joy content"],
+      "pacing": {
+        "avgShotSec": [
+          0.8,
+          2.0
+        ],
+        "shotsPerMin": [
+          30,
+          70
+        ],
+        "acceleration": "rises to the final"
+      },
+      "cutting": [
+        "cut on action",
+        "jump cut",
+        "replay (speed ramp)"
+      ],
+      "transitions": [
+        {
+          "kind": "CUT"
+        },
+        {
+          "kind": "FADE_TO_BLACK",
+          "use": "before the replay block"
+        }
+      ],
+      "motion": {
+        "replayRamp": {
+          "param": "playbackSpeed",
+          "keyframes": [
+            {
+              "frame": "moment-10f",
+              "value": 1.0
+            },
+            {
+              "frame": "moment",
+              "value": 0.4
+            }
+          ],
+          "note": "real playbackSpeed change for the replay"
+        }
+      },
+      "color": {
+        "effects": [
+          {
+            "type": "contrast",
+            "amount": [
+              0.04,
+              0.12
+            ]
+          },
+          {
+            "type": "saturation",
+            "amount": [
+              0.02,
+              0.1
+            ]
+          }
+        ]
+      },
+      "audio": {
+        "fadeInFrames": [
+          0,
+          10
+        ],
+        "fadeOutFrames": [
+          20,
+          45
+        ],
+        "ducking": "crowd/swells under the replay"
+      },
+      "captions": {
+        "style": "score/minute callouts, TOP"
+      },
+      "needs": [
+        "motion/impact detection for moment finding, or user-provided markers"
+      ],
+      "qualityChecks": [
+        "no offside/illegal moment glorified by mistake",
+        "replay returns to real time before the next cut",
+        "celebration close holds ≥ 2 s"
+      ],
+      "notFor": [
+        "wedding/joy content"
+      ],
       "promptExample": "Create the season highlights with slow-motion replays."
     },
     {
@@ -228,21 +1142,48 @@
       "name": "Vertical 9:16 conversion",
       "family": "social",
       "purpose": "Reframe an existing 16:9 edit for vertical delivery while keeping subjects centered and captions safe.",
-      "suitableFor": ["any existing edit"],
+      "suitableFor": [
+        "any existing edit"
+      ],
       "emotion": "same as the source edit",
-      "aspect": ["9:16"],
+      "aspect": [
+        "9:16"
+      ],
       "structure": "inherit the source edit's structure",
       "shotSelection": "subject-aware crop windows per clip; motion follows the subject",
       "pacing": "inherit",
       "cutting": "inherit",
-      "transitions": [{ "kind": "CUT" }],
-      "motion": { "animatedReframe": { "param": "x", "note": "animated x keyframes when the subject moves — real SetKeyframe on x" } },
+      "transitions": [
+        {
+          "kind": "CUT"
+        }
+      ],
+      "motion": {
+        "animatedReframe": {
+          "param": "x",
+          "note": "animated x keyframes when the subject moves — real SetKeyframe on x"
+        }
+      },
       "color": "inherit unchanged",
       "audio": "inherit",
-      "captions": { "style": "re-flow captions for the 9:16 safe area", "fontSize": [40, 64] },
-      "needs": ["subject-position analysis for smart crops (frame sampling + motion analysis); without it, center-crop with disclosure"],
-      "qualityChecks": ["subject fully in frame across the clip", "no caption below the bottom safe line", "16:9 original preserved untouched"],
-      "notFor": ["widescreen-first deliverables"],
+      "captions": {
+        "style": "re-flow captions for the 9:16 safe area",
+        "fontSize": [
+          40,
+          64
+        ]
+      },
+      "needs": [
+        "subject-position analysis for smart crops (frame sampling + motion analysis); without it, center-crop with disclosure"
+      ],
+      "qualityChecks": [
+        "subject fully in frame across the clip",
+        "no caption below the bottom safe line",
+        "16:9 original preserved untouched"
+      ],
+      "notFor": [
+        "widescreen-first deliverables"
+      ],
       "promptExample": "Change the current edit into a vertical 9:16 version."
     },
     {
@@ -250,22 +1191,3600 @@
       "name": "Podcast video",
       "family": "creator",
       "purpose": "Conversation-first edit: trim dead air, punch in on the speaker, chapter the flow.",
-      "suitableFor": ["podcast recordings", "two-camera interviews"],
+      "suitableFor": [
+        "podcast recordings",
+        "two-camera interviews"
+      ],
       "emotion": "engaged, attentive",
-      "aspect": ["16:9", "1:1"],
-      "structure": ["cold-open best quote", "chapters following topics", "midroll highlight", "closing"],
+      "aspect": [
+        "16:9",
+        "1:1"
+      ],
+      "structure": [
+        "cold-open best quote",
+        "chapters following topics",
+        "midroll highlight",
+        "closing"
+      ],
       "shotSelection": "speaker punch-ins on statement starts; listener reactions; no cut mid-word",
-      "pacing": { "avgShotSec": [3.0, 7.0], "shotsPerMin": [8, 18], "acceleration": "trim silences > 1.2 s" },
-      "cutting": ["jump cut (silence removal)", "reaction cut", "L-cut"],
-      "transitions": [{ "kind": "CUT" }],
-      "motion": { "punchIn": { "param": "scale", "from": 1.0, "to": 1.12, "interpolation": "EASE_IN_OUT", "use": "hard punch-in per speaker change" } },
-      "color": { "effects": [{ "type": "contrast", "amount": [0.02, 0.08] }], "note": "clean, consistent across cameras" },
-      "audio": { "fadeInFrames": [5, 10], "fadeOutFrames": [15, 30], "ducking": "speech only" },
-      "captions": { "style": "speaker-labeled subtitles when ASR available", "fontSize": [28, 40] },
-      "needs": ["silence detection (GANGZII/ffmpeg silencedetect) — available", "ASR for captions (optional)"],
-      "qualityChecks": ["no speaker cut mid-word", "punch-in lands on the new speaker within 0.5 s", "chapter boundaries at topic shifts"],
-      "notFor": ["visual-first montages"],
+      "pacing": {
+        "avgShotSec": [
+          3.0,
+          7.0
+        ],
+        "shotsPerMin": [
+          8,
+          18
+        ],
+        "acceleration": "trim silences > 1.2 s"
+      },
+      "cutting": [
+        "jump cut (silence removal)",
+        "reaction cut",
+        "L-cut"
+      ],
+      "transitions": [
+        {
+          "kind": "CUT"
+        }
+      ],
+      "motion": {
+        "punchIn": {
+          "param": "scale",
+          "from": 1.0,
+          "to": 1.12,
+          "interpolation": "EASE_IN_OUT",
+          "use": "hard punch-in per speaker change"
+        }
+      },
+      "color": {
+        "effects": [
+          {
+            "type": "contrast",
+            "amount": [
+              0.02,
+              0.08
+            ]
+          }
+        ],
+        "note": "clean, consistent across cameras"
+      },
+      "audio": {
+        "fadeInFrames": [
+          5,
+          10
+        ],
+        "fadeOutFrames": [
+          15,
+          30
+        ],
+        "ducking": "speech only"
+      },
+      "captions": {
+        "style": "speaker-labeled subtitles when ASR available",
+        "fontSize": [
+          28,
+          40
+        ]
+      },
+      "needs": [
+        "silence detection (GANGZII/ffmpeg silencedetect) — available",
+        "ASR for captions (optional)"
+      ],
+      "qualityChecks": [
+        "no speaker cut mid-word",
+        "punch-in lands on the new speaker within 0.5 s",
+        "chapter boundaries at topic shifts"
+      ],
+      "notFor": [
+        "visual-first montages"
+      ],
       "promptExample": "Remove the silences and punch in on whoever is talking."
+    },
+    {
+      "id": "documentary-investigative",
+      "name": "Investigative documentary",
+      "family": "documentary",
+      "purpose": "Evidence-led long-form cut that lets testimony and documents carry the argument, with restrained visual reinforcement.",
+      "suitableFor": [
+        "interviews",
+        "testimony",
+        "archive footage",
+        "b-roll of locations"
+      ],
+      "emotion": "concern → scrutiny → resolve",
+      "aspect": [
+        "16:9"
+      ],
+      "structure": [
+        "cold open on the sharpest evidence (0-5%)",
+        "context and stakes (5-20%)",
+        "testimony blocks with document cutaways (20-75%)",
+        "counterpoint (75-85%)",
+        "conclusion + call to verify (85-100%)"
+      ],
+      "shotSelection": "privilege stable, well-lit testimony; cut to supporting b-roll EXACTLY when the speaker names the object or place; never cut mid-claim",
+      "pacing": {
+        "avgShotSec": [
+          4.0,
+          8.0
+        ],
+        "shotsPerMin": [
+          8,
+          15
+        ],
+        "acceleration": "flat; brief acceleration only in the cold open"
+      },
+      "cutting": [
+        "continuity editing",
+        "cutaway",
+        "insert shot",
+        "J-cut",
+        "L-cut"
+      ],
+      "transitions": [
+        {
+          "kind": "CUT"
+        },
+        {
+          "kind": "FADE_TO_BLACK",
+          "use": "chapter breaks only",
+          "durationFrames": [
+            12,
+            24
+          ]
+        }
+      ],
+      "motion": {
+        "pushIn": {
+          "param": "scale",
+          "from": 1.0,
+          "to": 1.04,
+          "interpolation": "EASE_IN_OUT",
+          "typicalDurationSec": [
+            4,
+            8
+          ],
+          "use": "document close-ups and stills only"
+        }
+      },
+      "color": {
+        "effects": [
+          {
+            "type": "contrast",
+            "amount": [
+              1.0,
+              1.06
+            ]
+          },
+          {
+            "type": "saturation",
+            "amount": [
+              0.92,
+              1.0
+            ]
+          },
+          {
+            "type": "temperature",
+            "amount": [
+              -0.02,
+              0.04
+            ]
+          }
+        ],
+        "note": "keep testimony color faithful — grade b-roll to match, never stylize evidence"
+      },
+      "audio": {
+        "fadeInFrames": [
+          0,
+          10
+        ],
+        "fadeOutFrames": [
+          20,
+          60
+        ],
+        "ducking": "music sits −12 to −18 dB under speech, full level in chapter transitions",
+        "bed": "sparse ambient pads; no percussion during testimony"
+      },
+      "captions": {
+        "style": "lower-third name straps on first appearance; verbatim captions",
+        "fontSize": [
+          24,
+          32
+        ]
+      },
+      "needs": [
+        "transcription with honest timing (phrase-level disclosed)",
+        "name-strap graphics via NIIKI",
+        "user-provided licensed music bed"
+      ],
+      "qualityChecks": [
+        "no cut interrupts a sentence mid-claim",
+        "every document cutaway lasts ≥ 3 s",
+        "name straps verified against approved spelling",
+        "no stylized grading on testimony shots"
+      ],
+      "notFor": [
+        "music videos",
+        "short-form trend edits",
+        "content without verified speakers"
+      ],
+      "promptExample": "Cut this investigation footage into a 12-minute documentary chapter — testimony leads, documents support, nothing invented."
+    },
+    {
+      "id": "travel-documentary",
+      "name": "Travel documentary",
+      "family": "documentary",
+      "purpose": "Location-led storytelling that balances scenery, people and narration with a clear sense of place.",
+      "suitableFor": [
+        "travel b-roll",
+        "local interviews",
+        "landscape sequences",
+        "street footage"
+      ],
+      "emotion": "curiosity → immersion → warmth",
+      "aspect": [
+        "16:9",
+        "9:16"
+      ],
+      "structure": [
+        "establishing sequence (0-10%)",
+        "arrival + first human moment (10-25%)",
+        "three location movements (25-80%)",
+        "reflective close (80-100%)"
+      ],
+      "shotSelection": "pair every wide with a human-scale detail; keep skyline reveals slow, food and hands shots short",
+      "pacing": {
+        "avgShotSec": [
+          2.5,
+          5.0
+        ],
+        "shotsPerMin": [
+          12,
+          24
+        ],
+        "acceleration": "gently accelerating across each location movement, reset between locations"
+      },
+      "cutting": [
+        "match cut",
+        "continuity editing",
+        "montage",
+        "cut on action"
+      ],
+      "transitions": [
+        {
+          "kind": "CUT"
+        },
+        {
+          "kind": "CROSS_DISSOLVE",
+          "durationFrames": [
+            10,
+            20
+          ],
+          "onlyBetweenScenes": true
+        }
+      ],
+      "motion": {
+        "pushIn": {
+          "param": "scale",
+          "from": 1.0,
+          "to": 1.06,
+          "interpolation": "EASE_IN_OUT",
+          "typicalDurationSec": [
+            2,
+            4
+          ]
+        }
+      },
+      "color": {
+        "effects": [
+          {
+            "type": "saturation",
+            "amount": [
+              1.02,
+              1.1
+            ]
+          },
+          {
+            "type": "temperature",
+            "amount": [
+              0.02,
+              0.08
+            ]
+          },
+          {
+            "type": "highlights",
+            "amount": [
+              0.0,
+              0.06
+            ]
+          }
+        ],
+        "note": "warm the sunlit shots, keep interiors neutral"
+      },
+      "audio": {
+        "fadeInFrames": [
+          10,
+          30
+        ],
+        "fadeOutFrames": [
+          30,
+          90
+        ],
+        "ducking": "narration and interview audio always above ambience",
+        "bed": "location ambience carried across cuts to glue geography"
+      },
+      "captions": {
+        "style": "location name straps; optional bilingual captions",
+        "fontSize": [
+          22,
+          30
+        ]
+      },
+      "needs": [
+        "licensed music bed (user-provided)",
+        "name-strap graphics",
+        "ambience assets"
+      ],
+      "qualityChecks": [
+        "no jump cut within one location",
+        "establishing shots ≥ 2.5 s",
+        "map/name straps spell locations correctly",
+        "audio ambience does not clash between locations"
+      ],
+      "notFor": [
+        "testimonial content",
+        "product demos"
+      ],
+      "promptExample": "Edit this travel footage into a 6-minute documentary chapter with location name straps and warm grade."
+    },
+    {
+      "id": "corporate-documentary",
+      "name": "Corporate documentary",
+      "family": "documentary",
+      "purpose": "Credible company story combining leadership interviews, workplace b-roll and outcome shots.",
+      "suitableFor": [
+        "leadership interviews",
+        "office/factory b-roll",
+        "product shots"
+      ],
+      "emotion": "pride → trust → confidence",
+      "aspect": [
+        "16:9"
+      ],
+      "structure": [
+        "thesis statement (0-8%)",
+        "people proof (8-45%)",
+        "process proof (45-70%)",
+        "outcome + forward look (70-100%)"
+      ],
+      "shotSelection": "every claim from an interview is followed by evidence b-roll; avoid stock-symmetric compositions",
+      "pacing": {
+        "avgShotSec": [
+          3.0,
+          6.0
+        ],
+        "shotsPerMin": [
+          10,
+          20
+        ],
+        "acceleration": "flat with a modest lift in the final act"
+      },
+      "cutting": [
+        "continuity editing",
+        "cutaway",
+        "J-cut",
+        "L-cut"
+      ],
+      "transitions": [
+        {
+          "kind": "CUT"
+        },
+        {
+          "kind": "CROSS_DISSOLVE",
+          "durationFrames": [
+            10,
+            18
+          ],
+          "onlyBetweenScenes": true
+        }
+      ],
+      "motion": {
+        "pushIn": {
+          "param": "scale",
+          "from": 1.0,
+          "to": 1.05,
+          "interpolation": "EASE_IN_OUT",
+          "typicalDurationSec": [
+            3,
+            6
+          ]
+        }
+      },
+      "color": {
+        "effects": [
+          {
+            "type": "contrast",
+            "amount": [
+              1.0,
+              1.05
+            ]
+          },
+          {
+            "type": "saturation",
+            "amount": [
+              0.95,
+              1.05
+            ]
+          }
+        ],
+        "note": "brand-neutral grade; match interview and b-roll color temperature"
+      },
+      "audio": {
+        "fadeInFrames": [
+          10,
+          25
+        ],
+        "fadeOutFrames": [
+          25,
+          60
+        ],
+        "ducking": "dialogue first; music only in transitions",
+        "bed": "warm corporate bed, no vocals"
+      },
+      "captions": {
+        "style": "title card + name straps; verbatim captions",
+        "fontSize": [
+          22,
+          30
+        ]
+      },
+      "needs": [
+        "licensed music bed (user-provided)",
+        "name-strap graphics",
+        "transcription if captions are wanted"
+      ],
+      "qualityChecks": [
+        "no unsubstantiated marketing claim left unpaired with footage",
+        "interview audio intelligible without captions",
+        "logo/brand shots sharp and centered",
+        "no accidental competitor branding in frame"
+      ],
+      "notFor": [
+        "entertainment shorts",
+        "gaming content"
+      ],
+      "promptExample": "Turn these interviews and office shots into a 5-minute corporate documentary."
+    },
+    {
+      "id": "youtube-shorts-hook-first",
+      "name": "YouTube Shorts hook-first",
+      "family": "social",
+      "purpose": "Vertical short whose first two seconds justify the watch; loop-friendly structure.",
+      "suitableFor": [
+        "single-topic footage",
+        "talking head",
+        "process demos"
+      ],
+      "emotion": "surprise → clarity → payoff",
+      "aspect": [
+        "9:16"
+      ],
+      "structure": [
+        "hook (first 2 s, mid-action)",
+        "restate the promise (2-5 s)",
+        "proof beats (5-85%)",
+        "looping close (85-100% — last frame must plausibly precede the first)"
+      ],
+      "shotSelection": "open on the most visually arresting mid-action frame, never a title card; center-weight framing for UI overlays",
+      "pacing": {
+        "avgShotSec": [
+          0.8,
+          2.0
+        ],
+        "shotsPerMin": [
+          30,
+          75
+        ],
+        "acceleration": "fast start, slight deceleration into the payoff"
+      },
+      "cutting": [
+        "jump cut",
+        "cut on action",
+        "montage"
+      ],
+      "transitions": [
+        {
+          "kind": "CUT"
+        },
+        {
+          "kind": "CROSS_DISSOLVE",
+          "durationFrames": [
+            4,
+            8
+          ],
+          "use": "topic shifts only"
+        }
+      ],
+      "motion": {
+        "pushIn": {
+          "param": "scale",
+          "from": 1.0,
+          "to": 1.12,
+          "interpolation": "EASE_OUT",
+          "typicalDurationSec": [
+            0.6,
+            1.2
+          ],
+          "use": "hook and payoff emphasis"
+        }
+      },
+      "color": {
+        "effects": [
+          {
+            "type": "saturation",
+            "amount": [
+              1.05,
+              1.15
+            ]
+          },
+          {
+            "type": "contrast",
+            "amount": [
+              1.02,
+              1.1
+            ]
+          }
+        ],
+        "note": "punchy but skin-tone safe"
+      },
+      "audio": {
+        "fadeInFrames": [
+          0,
+          3
+        ],
+        "fadeOutFrames": [
+          3,
+          10
+        ],
+        "ducking": "voice always dominant",
+        "bed": "trend audio only if the user owns rights to it"
+      },
+      "captions": {
+        "style": "centered bold word captions, 2-4 words per card",
+        "fontSize": [
+          30,
+          42
+        ]
+      },
+      "needs": [
+        "transcription for word captions (phrase timing disclosed)",
+        "user-owned trend audio"
+      ],
+      "qualityChecks": [
+        "first frame is mid-action",
+        "no dead frame before the hook",
+        "last frame can loop into the first",
+        "captions never overlap faces",
+        "≤ 60 s runtime"
+      ],
+      "notFor": [
+        "long-form narration",
+        "multi-chapter documentaries"
+      ],
+      "promptExample": "Cut this into a 45-second vertical Short with a strong mid-action hook and loop close."
+    },
+    {
+      "id": "tiktok-trend-remix",
+      "name": "TikTok trend remix",
+      "family": "social",
+      "purpose": "Trend-native remix following a platform pattern (transitions on beat, caption rhythm, loop).",
+      "suitableFor": [
+        "remixable clips",
+        "dance/performance",
+        "reaction pairs",
+        "before/after"
+      ],
+      "emotion": "playful → energetic → shareable",
+      "aspect": [
+        "9:16"
+      ],
+      "structure": [
+        "beat-aligned hook (0-2 s)",
+        "pattern repetition with variation (2-70%)",
+        "twist (70-90%)",
+        "loop seam (90-100%)"
+      ],
+      "shotSelection": "cut exactly ON beat markers; keep each clip long enough to read, short enough to breathe",
+      "pacing": {
+        "avgShotSec": [
+          0.6,
+          1.6
+        ],
+        "shotsPerMin": [
+          40,
+          100
+        ],
+        "acceleration": "beat-locked; brief slow-motion accent before the twist"
+      },
+      "cutting": [
+        "beat synchronization",
+        "jump cut",
+        "smash cut",
+        "montage"
+      ],
+      "transitions": [
+        {
+          "kind": "CUT"
+        },
+        {
+          "kind": "SLIDE_LEFT",
+          "durationFrames": [
+            4,
+            8
+          ]
+        },
+        {
+          "kind": "PUSH_LEFT",
+          "durationFrames": [
+            4,
+            8
+          ]
+        }
+      ],
+      "motion": {
+        "pushIn": {
+          "param": "scale",
+          "from": 1.0,
+          "to": 1.15,
+          "interpolation": "EASE_OUT",
+          "typicalDurationSec": [
+            0.4,
+            1.0
+          ]
+        }
+      },
+      "color": {
+        "effects": [
+          {
+            "type": "saturation",
+            "amount": [
+              1.06,
+              1.18
+            ]
+          },
+          {
+            "type": "contrast",
+            "amount": [
+              1.03,
+              1.12
+            ]
+          }
+        ],
+        "note": "trend-native punch; keep faces readable"
+      },
+      "audio": {
+        "fadeInFrames": [
+          0,
+          2
+        ],
+        "fadeOutFrames": [
+          2,
+          8
+        ],
+        "ducking": "trend audio is the master; original audio ducked or muted",
+        "bed": "user-owned trend audio only — licensing is the user's responsibility"
+      },
+      "captions": {
+        "style": "trend caption style, beat-synced pops",
+        "fontSize": [
+          28,
+          40
+        ]
+      },
+      "needs": [
+        "user-owned trend audio",
+        "beat markers (manual or beat analysis when available)",
+        "word captions via transcription"
+      ],
+      "qualityChecks": [
+        "cuts land on beats (±1 frame)",
+        "loop seam invisible",
+        "no watermark overlap",
+        "caption rhythm matches the audio pattern"
+      ],
+      "notFor": [
+        "corporate films",
+        "evidence-led documentary"
+      ],
+      "promptExample": "Remix these clips to this beat — every cut on beat, loop the ending."
+    },
+    {
+      "id": "ugc-testimonial",
+      "name": "UGC testimonial",
+      "family": "social",
+      "purpose": "Authentic user-generated-style endorsement: raw-feel but tightly structured.",
+      "suitableFor": [
+        "customer footage",
+        "self-recorded testimonials",
+        "product-in-use clips"
+      ],
+      "emotion": "trust → relatability → desire",
+      "aspect": [
+        "9:16",
+        "1:1",
+        "16:9"
+      ],
+      "structure": [
+        "problem in their words (0-20%)",
+        "discovery (20-35%)",
+        "product in use (35-70%)",
+        "outcome + CTA (70-100%)"
+      ],
+      "shotSelection": "keep the authentic imperfection; stabilise ONLY when shake distracts; product hero shots get the polish",
+      "pacing": {
+        "avgShotSec": [
+          1.5,
+          4.0
+        ],
+        "shotsPerMin": [
+          15,
+          40
+        ],
+        "acceleration": "conversational, accelerating after the discovery beat"
+      },
+      "cutting": [
+        "jump cut",
+        "continuity editing",
+        "insert shot"
+      ],
+      "transitions": [
+        {
+          "kind": "CUT"
+        }
+      ],
+      "motion": {
+        "pushIn": {
+          "param": "scale",
+          "from": 1.0,
+          "to": 1.08,
+          "interpolation": "EASE_OUT",
+          "typicalDurationSec": [
+            1.0,
+            2.0
+          ],
+          "use": "product moments"
+        }
+      },
+      "color": {
+        "effects": [
+          {
+            "type": "saturation",
+            "amount": [
+              1.0,
+              1.08
+            ]
+          },
+          {
+            "type": "exposure",
+            "amount": [
+              -0.05,
+              0.1
+            ]
+          }
+        ],
+        "note": "light touch — overgrading kills UGC authenticity"
+      },
+      "audio": {
+        "fadeInFrames": [
+          0,
+          10
+        ],
+        "fadeOutFrames": [
+          10,
+          30
+        ],
+        "ducking": "voice dominant; light bed under CTA",
+        "bed": "optional; keep ≤ −18 dB under voice"
+      },
+      "captions": {
+        "style": "casual word captions, quoted phrases",
+        "fontSize": [
+          26,
+          38
+        ]
+      },
+      "needs": [
+        "transcription for captions",
+        "user-provided music if any"
+      ],
+      "qualityChecks": [
+        "speaker's words never paraphrased in captions",
+        "product legible in ≥ 3 shots",
+        "no invented claims",
+        "CTA readable ≥ 2 s"
+      ],
+      "notFor": [
+        "formal brand films",
+        "news packages"
+      ],
+      "promptExample": "Assemble these customer clips into a 40-second UGC-style testimonial with honest captions."
+    },
+    {
+      "id": "vlog-day-in-life",
+      "name": "Day-in-the-life vlog",
+      "family": "social",
+      "purpose": "Chronological personal narrative with time-of-day rhythm and personality-forward narration.",
+      "suitableFor": [
+        "personal footage",
+        "routine clips",
+        "talking-head pieces"
+      ],
+      "emotion": "friendly → engaging → companionable",
+      "aspect": [
+        "16:9",
+        "9:16"
+      ],
+      "structure": [
+        "morning promise (0-10%)",
+        "three chapters of the day (10-85%)",
+        "evening reflection + tease (85-100%)"
+      ],
+      "shotSelection": "one anchor shot per chapter; narration on top; keep brems honest (do not fake continuity across days)",
+      "pacing": {
+        "avgShotSec": [
+          1.8,
+          4.0
+        ],
+        "shotsPerMin": [
+          15,
+          33
+        ],
+        "acceleration": "steady; slight lift at chapter starts"
+      },
+      "cutting": [
+        "jump cut",
+        "cut on action",
+        "montage",
+        "match cut"
+      ],
+      "transitions": [
+        {
+          "kind": "CUT"
+        },
+        {
+          "kind": "CROSS_DISSOLVE",
+          "durationFrames": [
+            8,
+            14
+          ],
+          "onlyBetweenScenes": true
+        }
+      ],
+      "motion": {
+        "pushIn": {
+          "param": "scale",
+          "from": 1.0,
+          "to": 1.05,
+          "interpolation": "EASE_IN_OUT",
+          "typicalDurationSec": [
+            1.5,
+            3.0
+          ]
+        }
+      },
+      "color": {
+        "effects": [
+          {
+            "type": "temperature",
+            "amount": [
+              0.0,
+              0.06
+            ]
+          },
+          {
+            "type": "saturation",
+            "amount": [
+              1.0,
+              1.08
+            ]
+          }
+        ],
+        "note": "morning warm → afternoon neutral → evening cool, if footage allows"
+      },
+      "audio": {
+        "fadeInFrames": [
+          10,
+          20
+        ],
+        "fadeOutFrames": [
+          20,
+          60
+        ],
+        "ducking": "voice over bed; ambience kept for place-feel",
+        "bed": "user-provided licensed music"
+      },
+      "captions": {
+        "style": "optional chapter straps; light captions",
+        "fontSize": [
+          22,
+          30
+        ]
+      },
+      "needs": [
+        "licensed music (user-provided)",
+        "chapter strap graphics"
+      ],
+      "qualityChecks": [
+        "chapter order matches the clock (no accidental time travel)",
+        "no dead 3+ s static stretches",
+        "voice audible over every bed"
+      ],
+      "notFor": [
+        "evidence-led documentary",
+        "luxury brand films"
+      ],
+      "promptExample": "Assemble this day footage into a vlog with three chapters and my narration on top."
+    },
+    {
+      "id": "podcast-highlights",
+      "name": "Podcast highlights",
+      "family": "creator",
+      "purpose": "Clip the strongest moments of a long recording into shareable highlight segments.",
+      "suitableFor": [
+        "podcast recordings",
+        "interviews",
+        "panel discussions"
+      ],
+      "emotion": "insight → humor → share-worthy",
+      "aspect": [
+        "9:16",
+        "1:1"
+      ],
+      "structure": [
+        "cold-open on the sharpest quote (0-3 s)",
+        "context (3-8 s)",
+        "the moment (8-70%)",
+        "payoff + pointer to full episode (70-100%)"
+      ],
+      "shotSelection": "anchor on the speaker at the peak line; reaction shots only when they carry emotion",
+      "pacing": {
+        "avgShotSec": [
+          2.0,
+          5.0
+        ],
+        "shotsPerMin": [
+          12,
+          30
+        ],
+        "acceleration": "flat — the words carry it"
+      },
+      "cutting": [
+        "jump cut",
+        "L-cut",
+        "J-cut"
+      ],
+      "transitions": [
+        {
+          "kind": "CUT"
+        }
+      ],
+      "motion": {
+        "pushIn": {
+          "param": "scale",
+          "from": 1.0,
+          "to": 1.05,
+          "interpolation": "EASE_IN_OUT",
+          "typicalDurationSec": [
+            2,
+            4
+          ],
+          "use": "punchline emphasis"
+        }
+      },
+      "color": {
+        "effects": [
+          {
+            "type": "contrast",
+            "amount": [
+              1.0,
+              1.04
+            ]
+          },
+          {
+            "type": "saturation",
+            "amount": [
+              0.98,
+              1.05
+            ]
+          }
+        ],
+        "note": "faithful multi-cam match"
+      },
+      "audio": {
+        "fadeInFrames": [
+          0,
+          8
+        ],
+        "fadeOutFrames": [
+          8,
+          20
+        ],
+        "ducking": "none — speech IS the content",
+        "bed": "no music bed under the moment; sting allowed at open/close"
+      },
+      "captions": {
+        "style": "word captions with speaker emphasis",
+        "fontSize": [
+          28,
+          38
+        ]
+      },
+      "needs": [
+        "silence/regional detection for pause removal",
+        "transcription (phrase timing disclosed)",
+        "diarization NOT available — speaker labels only when the user provides them"
+      ],
+      "qualityChecks": [
+        "quote never truncated mid-word",
+        "pause removal leaves natural breath",
+        "no speaker mislabeling",
+        "clip stands alone without the full episode"
+      ],
+      "notFor": [
+        "visual trend remixes",
+        "b-roll-heavy brand films"
+      ],
+      "promptExample": "Pull the three strongest moments from this podcast recording into vertical clips with captions."
+    },
+    {
+      "id": "stream-recap",
+      "name": "Stream recap",
+      "family": "creator",
+      "purpose": "Compress hours of stream VOD into a highlights reel around the peak plays and reactions.",
+      "suitableFor": [
+        "gaming streams",
+        "event streams",
+        "live recordings"
+      ],
+      "emotion": "hype → tension → celebration",
+      "aspect": [
+        "16:9",
+        "9:16"
+      ],
+      "structure": [
+        "cold open on the best play (0-3 s)",
+        "setup beats (3-25%)",
+        "escalating plays (25-80%)",
+        "final play + outro (80-100%)"
+      ],
+      "shotSelection": "gameplay carries; facecam reaction cut in AT the peak moment; kill repeated failed attempts",
+      "pacing": {
+        "avgShotSec": [
+          1.0,
+          3.0
+        ],
+        "shotsPerMin": [
+          20,
+          60
+        ],
+        "acceleration": "escalating with the stakes"
+      },
+      "cutting": [
+        "jump cut",
+        "speed ramp",
+        "smash cut",
+        "montage"
+      ],
+      "transitions": [
+        {
+          "kind": "CUT"
+        },
+        {
+          "kind": "ZOOM_IN",
+          "durationFrames": [
+            6,
+            12
+          ],
+          "use": "clutch moment entries"
+        }
+      ],
+      "motion": {
+        "pushIn": {
+          "param": "scale",
+          "from": 1.0,
+          "to": 1.2,
+          "interpolation": "EASE_OUT",
+          "typicalDurationSec": [
+            0.5,
+            1.5
+          ],
+          "use": "clutch zooms"
+        }
+      },
+      "color": {
+        "effects": [
+          {
+            "type": "saturation",
+            "amount": [
+              1.04,
+              1.12
+            ]
+          },
+          {
+            "type": "sharpen",
+            "amount": [
+              0.0,
+              0.3
+            ]
+          }
+        ],
+        "note": "crisp gameplay; light sharpen on downscaled VOD"
+      },
+      "audio": {
+        "fadeInFrames": [
+          0,
+          5
+        ],
+        "fadeOutFrames": [
+          5,
+          15
+        ],
+        "ducking": "game audio under reactions at peaks",
+        "bed": "user-owned music; SFX spikes need assets"
+      },
+      "captions": {
+        "style": "callouts for scores/kills; word captions for reactions",
+        "fontSize": [
+          24,
+          34
+        ]
+      },
+      "needs": [
+        "user-owned music",
+        "reaction cam footage",
+        "moment detection is MANUAL (no automatic highlight model — disclosed)"
+      ],
+      "qualityChecks": [
+        "no failed attempt left unlabelled",
+        "reactions synced to the play",
+        "no spoiler of the final play in the cold open",
+        "game UI readable"
+      ],
+      "notFor": [
+        "documentary",
+        "luxury commercial"
+      ],
+      "promptExample": "Turn this stream VOD into a 3-minute recap with clutch zooms and reaction cut-ins."
+    },
+    {
+      "id": "ecommerce-product-demo",
+      "name": "E-commerce product demo",
+      "family": "commercial",
+      "purpose": "Conversion-focused demo: show the product solving the problem in the first five seconds.",
+      "suitableFor": [
+        "product footage",
+        "unboxing",
+        "hands-on use",
+        "UI capture"
+      ],
+      "emotion": "recognition → desire → confidence",
+      "aspect": [
+        "9:16",
+        "1:1",
+        "16:9"
+      ],
+      "structure": [
+        "problem + product in frame (0-5 s)",
+        "three feature beats (5-70%)",
+        "social proof (70-85%)",
+        "offer + CTA (85-100%)"
+      ],
+      "shotSelection": "product occupies ≥ 40% of frame in every shot; hands and faces support, never compete",
+      "pacing": {
+        "avgShotSec": [
+          1.2,
+          2.5
+        ],
+        "shotsPerMin": [
+          24,
+          50
+        ],
+        "acceleration": "even; slight lift before CTA"
+      },
+      "cutting": [
+        "continuity editing",
+        "cut on action",
+        "match cut"
+      ],
+      "transitions": [
+        {
+          "kind": "CUT"
+        },
+        {
+          "kind": "SLIDE_LEFT",
+          "durationFrames": [
+            6,
+            10
+          ],
+          "use": "feature switches"
+        }
+      ],
+      "motion": {
+        "pushIn": {
+          "param": "scale",
+          "from": 1.0,
+          "to": 1.08,
+          "interpolation": "EASE_OUT",
+          "typicalDurationSec": [
+            1,
+            2
+          ]
+        }
+      },
+      "color": {
+        "effects": [
+          {
+            "type": "exposure",
+            "amount": [
+              0.0,
+              0.08
+            ]
+          },
+          {
+            "type": "whites",
+            "amount": [
+              0.0,
+              0.08
+            ]
+          },
+          {
+            "type": "saturation",
+            "amount": [
+              1.02,
+              1.1
+            ]
+          },
+          {
+            "type": "sharpen",
+            "amount": [
+              0.0,
+              0.25
+            ]
+          }
+        ],
+        "note": "clean commercial whites; true-to-product color (never oversaturate a color the buyer will judge)"
+      },
+      "audio": {
+        "fadeInFrames": [
+          0,
+          8
+        ],
+        "fadeOutFrames": [
+          8,
+          20
+        ],
+        "ducking": "VO leads; SFX on feature reveals",
+        "bed": "licensed bed, upbeat but restrained"
+      },
+      "captions": {
+        "style": "feature callouts + CTA card",
+        "fontSize": [
+          22,
+          32
+        ]
+      },
+      "needs": [
+        "VO asset (recorded or TTS)",
+        "licensed music",
+        "callout graphics"
+      ],
+      "qualityChecks": [
+        "product color faithful to reference photo",
+        "price/offer text accurate and legible",
+        "every feature claim shown in footage",
+        "CTA ≥ 2 s and centered"
+      ],
+      "notFor": [
+        "documentary",
+        "gaming"
+      ],
+      "promptExample": "Cut these product clips into a 30-second demo with feature callouts and a CTA card."
+    },
+    {
+      "id": "luxury-brand-film",
+      "name": "Luxury brand film",
+      "family": "commercial",
+      "purpose": "Slow, composed craft piece where negative space and sound design signal quality.",
+      "suitableFor": [
+        "high-end product footage",
+        "atelier/craft b-roll",
+        "macro details"
+      ],
+      "emotion": "calm → admiration → aspiration",
+      "aspect": [
+        "16:9",
+        "9:16"
+      ],
+      "structure": [
+        "macro tease (0-12%)",
+        "craft process (12-50%)",
+        "reveal (50-70%)",
+        "logo promise (70-100%)"
+      ],
+      "shotSelection": "longest, most composed takes; movement enters and exits frame; nothing rushed",
+      "pacing": {
+        "avgShotSec": [
+          4.0,
+          9.0
+        ],
+        "shotsPerMin": [
+          7,
+          15
+        ],
+        "acceleration": "flat — restraint IS the luxury"
+      },
+      "cutting": [
+        "continuity editing",
+        "match cut",
+        "montage"
+      ],
+      "transitions": [
+        {
+          "kind": "CUT"
+        },
+        {
+          "kind": "FADE_FROM_BLACK",
+          "durationFrames": [
+            16,
+            30
+          ],
+          "use": "opening"
+        },
+        {
+          "kind": "CROSS_DISSOLVE",
+          "durationFrames": [
+            12,
+            24
+          ],
+          "onlyBetweenScenes": true
+        }
+      ],
+      "motion": {
+        "pushIn": {
+          "param": "scale",
+          "from": 1.0,
+          "to": 1.04,
+          "interpolation": "EASE_IN_OUT",
+          "typicalDurationSec": [
+            5,
+            9
+          ]
+        }
+      },
+      "color": {
+        "effects": [
+          {
+            "type": "contrast",
+            "amount": [
+              0.98,
+              1.04
+            ]
+          },
+          {
+            "type": "blacks",
+            "amount": [
+              0.0,
+              0.06
+            ]
+          },
+          {
+            "type": "saturation",
+            "amount": [
+              0.92,
+              1.02
+            ]
+          },
+          {
+            "type": "vignette",
+            "amount": [
+              0.1,
+              0.25
+            ]
+          }
+        ],
+        "note": "deep controlled blacks, restrained saturation, gentle vignette"
+      },
+      "audio": {
+        "fadeInFrames": [
+          30,
+          60
+        ],
+        "fadeOutFrames": [
+          45,
+          90
+        ],
+        "ducking": "n/a — sparse VO only",
+        "bed": "orchestral/ambient bed, user-licensed"
+      },
+      "captions": {
+        "style": "typographic title card; serif-aligned brand text",
+        "fontSize": [
+          20,
+          28
+        ]
+      },
+      "needs": [
+        "user-licensed music",
+        "typographic title graphics",
+        "NO stock LUT bundles — grade is authored per project"
+      ],
+      "qualityChecks": [
+        "no shot shorter than 2.5 s",
+        "logo card ≥ 3 s",
+        "blacks never crush detail",
+        "transition durations within recipe ranges"
+      ],
+      "notFor": [
+        "UGC",
+        "trend remixes",
+        "fast-cut shorts"
+      ],
+      "promptExample": "Make a 90-second luxury film from these craft shots — slow, deep blacks, one title card."
+    },
+    {
+      "id": "food-commercial",
+      "name": "Food commercial",
+      "family": "commercial",
+      "purpose": "Appetite-forward cut: texture, steam, cheese-pulls; motion that makes food feel alive.",
+      "suitableFor": [
+        "kitchen footage",
+        "plating shots",
+        "close-ups of texture",
+        "restaurant ambience"
+      ],
+      "emotion": "hunger → craving → indulgence",
+      "aspect": [
+        "16:9",
+        "9:16",
+        "1:1"
+      ],
+      "structure": [
+        "hero bite tease (0-3 s)",
+        "ingredient beats (3-40%)",
+        "process + heat (40-75%)",
+        "final plate + CTA (75-100%)"
+      ],
+      "shotSelection": "close and closer: textures dominate; hands add humanity; steam/pour shots are anchors",
+      "pacing": {
+        "avgShotSec": [
+          1.0,
+          2.4
+        ],
+        "shotsPerMin": [
+          25,
+          60
+        ],
+        "acceleration": "building heat toward the final plate"
+      },
+      "cutting": [
+        "cut on action",
+        "match cut",
+        "montage",
+        "continuity editing"
+      ],
+      "transitions": [
+        {
+          "kind": "CUT"
+        },
+        {
+          "kind": "CROSS_DISSOLVE",
+          "durationFrames": [
+            6,
+            12
+          ],
+          "use": "stage changes"
+        }
+      ],
+      "motion": {
+        "pushIn": {
+          "param": "scale",
+          "from": 1.0,
+          "to": 1.1,
+          "interpolation": "EASE_OUT",
+          "typicalDurationSec": [
+            0.8,
+            1.8
+          ],
+          "use": "hero bites"
+        }
+      },
+      "color": {
+        "effects": [
+          {
+            "type": "temperature",
+            "amount": [
+              0.03,
+              0.1
+            ]
+          },
+          {
+            "type": "saturation",
+            "amount": [
+              1.05,
+              1.14
+            ]
+          },
+          {
+            "type": "highlights",
+            "amount": [
+              0.0,
+              0.05
+            ]
+          },
+          {
+            "type": "shadows",
+            "amount": [
+              0.0,
+              0.06
+            ]
+          }
+        ],
+        "note": "warm and appetizing; never green-shift skin or plates"
+      },
+      "audio": {
+        "fadeInFrames": [
+          0,
+          8
+        ],
+        "fadeOutFrames": [
+          8,
+          20
+        ],
+        "ducking": "SFX (sizzle/pour) at the moments they show",
+        "bed": "licensed bed, rhythmic"
+      },
+      "captions": {
+        "style": "ingredient straps + offer card",
+        "fontSize": [
+          22,
+          32
+        ]
+      },
+      "needs": [
+        "licensed music",
+        "SFX assets",
+        "offer/CTA graphics"
+      ],
+      "qualityChecks": [
+        "food never looks cold in a warm claim",
+        "no raw→cooked continuity error",
+        "hero bite lands in the first 3 s",
+        "CTA readable"
+      ],
+      "notFor": [
+        "investigative content",
+        "gaming"
+      ],
+      "promptExample": "Make these cooking shots into a 30-second food ad — hero bite first, sizzle sync, warm grade."
+    },
+    {
+      "id": "real-estate-tour",
+      "name": "Real estate tour",
+      "family": "commercial",
+      "purpose": "Property walkthrough with stable camera motion, room-to-room logic and measurement honesty.",
+      "suitableFor": [
+        "walkthrough footage",
+        "drone exteriors",
+        "room details"
+      ],
+      "emotion": "spaciousness → comfort → ownership",
+      "aspect": [
+        "16:9",
+        "9:16"
+      ],
+      "structure": [
+        "exterior establishing (0-10%)",
+        "entry + living spaces (10-45%)",
+        "private spaces (45-70%)",
+        "outdoor/amenities + contact card (70-100%)"
+      ],
+      "shotSelection": "stable moving shots (stabilized when needed); every room entered in one move; details 1-2 s",
+      "pacing": {
+        "avgShotSec": [
+          3.0,
+          7.0
+        ],
+        "shotsPerMin": [
+          9,
+          20
+        ],
+        "acceleration": "flat, unhurried"
+      },
+      "cutting": [
+        "continuity editing",
+        "match cut"
+      ],
+      "transitions": [
+        {
+          "kind": "CUT"
+        },
+        {
+          "kind": "CROSS_DISSOLVE",
+          "durationFrames": [
+            10,
+            18
+          ],
+          "onlyBetweenScenes": true
+        }
+      ],
+      "motion": {
+        "pushIn": {
+          "param": "scale",
+          "from": 1.0,
+          "to": 1.03,
+          "interpolation": "EASE_IN_OUT",
+          "typicalDurationSec": [
+            4,
+            7
+          ],
+          "use": "room reveals"
+        }
+      },
+      "color": {
+        "effects": [
+          {
+            "type": "exposure",
+            "amount": [
+              0.0,
+              0.1
+            ]
+          },
+          {
+            "type": "whites",
+            "amount": [
+              0.0,
+              0.08
+            ]
+          },
+          {
+            "type": "temperature",
+            "amount": [
+              0.0,
+              0.05
+            ]
+          }
+        ],
+        "note": "bright and true — windows handled honestly, no fake views"
+      },
+      "audio": {
+        "fadeInFrames": [
+          15,
+          30
+        ],
+        "fadeOutFrames": [
+          30,
+          60
+        ],
+        "ducking": "VO (if any) over bed",
+        "bed": "light licensed bed"
+      },
+      "captions": {
+        "style": "room/feature straps + contact card",
+        "fontSize": [
+          20,
+          28
+        ]
+      },
+      "needs": [
+        "licensed music",
+        "stabilization for shaky walkthroughs (real libvidstab available)",
+        "strap graphics"
+      ],
+      "qualityChecks": [
+        "room order matches the floor plan",
+        "no mirror/door continuity breaks",
+        "square footage claims match the listing",
+        "no clutter left in frame that misrepresents the space"
+      ],
+      "notFor": [
+        "trend remix",
+        "documentary"
+      ],
+      "promptExample": "Assemble this walkthrough into a 90-second property tour with room straps and a contact card."
+    },
+    {
+      "id": "app-demo-screencast",
+      "name": "App demo screencast",
+      "family": "education",
+      "purpose": "UI-first demonstration with honest capture, zooms to detail and no faked interactions.",
+      "suitableFor": [
+        "screen recordings",
+        "UI captures",
+        "cursor movements"
+      ],
+      "emotion": "clarity → competence → intent to try",
+      "aspect": [
+        "16:9",
+        "9:16"
+      ],
+      "structure": [
+        "task promise (0-5%)",
+        "step-by-step flow (5-80%)",
+        "result + where to start (80-100%)"
+      ],
+      "shotSelection": "full UI for orientation, zoomed crops for detail (via scale/x/y keyframes on the SAME capture — never redrawn UI)",
+      "pacing": {
+        "avgShotSec": [
+          3.0,
+          8.0
+        ],
+        "shotsPerMin": [
+          8,
+          20
+        ],
+        "acceleration": "flat and predictable"
+      },
+      "cutting": [
+        "continuity editing",
+        "insert shot"
+      ],
+      "transitions": [
+        {
+          "kind": "CUT"
+        }
+      ],
+      "motion": {
+        "pushIn": {
+          "param": "scale",
+          "from": 1.0,
+          "to": 1.35,
+          "interpolation": "EASE_IN_OUT",
+          "typicalDurationSec": [
+            0.8,
+            1.5
+          ],
+          "use": "zoom to the exact UI region (x/y + scale keyframes)"
+        }
+      },
+      "color": {
+        "effects": [
+          {
+            "type": "sharpen",
+            "amount": [
+              0.0,
+              0.2
+            ]
+          },
+          {
+            "type": "contrast",
+            "amount": [
+              1.0,
+              1.03
+            ]
+          }
+        ],
+        "note": "keep UI text crisp; no color shifts on interface colors"
+      },
+      "audio": {
+        "fadeInFrames": [
+          0,
+          8
+        ],
+        "fadeOutFrames": [
+          8,
+          20
+        ],
+        "ducking": "VO dominant",
+        "bed": "none or very light"
+      },
+      "captions": {
+        "style": "step numbers + captions",
+        "fontSize": [
+          20,
+          28
+        ]
+      },
+      "needs": [
+        "screen capture from the user",
+        "VO or captions via transcription",
+        "zoom keyframes on real captures (never mocked-up UI)"
+      ],
+      "qualityChecks": [
+        "every click shown actually happens in the capture",
+        "no mouse teleport across cuts (match cuts only)",
+        "UI text readable at 100% zoom",
+        "runtime matches the real task duration (no faked speed)"
+      ],
+      "notFor": [
+        "cinematic trailers",
+        "trend remixes"
+      ],
+      "promptExample": "Turn this screen recording into a 2-minute app walkthrough with zooms to each control."
+    },
+    {
+      "id": "startup-pitch",
+      "name": "Startup pitch video",
+      "family": "commercial",
+      "purpose": "Investor-facing narrative: problem, insight, product proof, traction, ask.",
+      "suitableFor": [
+        "founder interview",
+        "product footage",
+        "metric graphics"
+      ],
+      "emotion": "urgency → insight → confidence",
+      "aspect": [
+        "16:9"
+      ],
+      "structure": [
+        "problem hook (0-8%)",
+        "insight (8-20%)",
+        "product demo (20-55%)",
+        "traction (55-80%)",
+        "team + ask (80-100%)"
+      ],
+      "shotSelection": "founder credibility shots + product proof; metric graphics only for real numbers",
+      "pacing": {
+        "avgShotSec": [
+          2.0,
+          5.0
+        ],
+        "shotsPerMin": [
+          12,
+          30
+        ],
+        "acceleration": "rising through traction"
+      },
+      "cutting": [
+        "continuity editing",
+        "cutaway",
+        "J-cut"
+      ],
+      "transitions": [
+        {
+          "kind": "CUT"
+        },
+        {
+          "kind": "FADE_TO_BLACK",
+          "durationFrames": [
+            10,
+            16
+          ],
+          "use": "act breaks"
+        }
+      ],
+      "motion": {
+        "pushIn": {
+          "param": "scale",
+          "from": 1.0,
+          "to": 1.05,
+          "interpolation": "EASE_IN_OUT",
+          "typicalDurationSec": [
+            2,
+            4
+          ]
+        }
+      },
+      "color": {
+        "effects": [
+          {
+            "type": "contrast",
+            "amount": [
+              1.0,
+              1.06
+            ]
+          },
+          {
+            "type": "saturation",
+            "amount": [
+              0.98,
+              1.06
+            ]
+          }
+        ],
+        "note": "confident, brand-aligned, no gimmicks"
+      },
+      "audio": {
+        "fadeInFrames": [
+          10,
+          20
+        ],
+        "fadeOutFrames": [
+          20,
+          45
+        ],
+        "ducking": "VO and interview lead",
+        "bed": "subtle modern bed"
+      },
+      "captions": {
+        "style": "metric callouts + captions",
+        "fontSize": [
+          22,
+          30
+        ]
+      },
+      "needs": [
+        "metric graphics (real numbers only)",
+        "licensed music",
+        "VO or interview audio"
+      ],
+      "qualityChecks": [
+        "every metric matches the deck",
+        "no invented traction",
+        "demo footage shows the real product",
+        "ask is explicit and legible"
+      ],
+      "notFor": [
+        "entertainment",
+        "trend content"
+      ],
+      "promptExample": "Edit this pitch footage into a 3-minute investor video with metric callouts from my deck numbers."
+    },
+    {
+      "id": "engagement-film",
+      "name": "Engagement film",
+      "family": "event",
+      "purpose": "Intimate proposal/engagement story told with restraint — the emotion is in the people, not the effects.",
+      "suitableFor": [
+        "proposal footage",
+        "family reactions",
+        "location details"
+      ],
+      "emotion": "anticipation → joy → tenderness",
+      "aspect": [
+        "16:9",
+        "9:16"
+      ],
+      "structure": [
+        "quiet anticipation (0-20%)",
+        "the moment (20-40%)",
+        "reactions (40-70%)",
+        "portraits + dedication (70-100%)"
+      ],
+      "shotSelection": "faces first; the proposal itself uninterrupted; details as breathing room",
+      "pacing": {
+        "avgShotSec": [
+          3.0,
+          7.0
+        ],
+        "shotsPerMin": [
+          9,
+          20
+        ],
+        "acceleration": "flat — let the moment breathe"
+      },
+      "cutting": [
+        "continuity editing",
+        "reaction cut",
+        "montage"
+      ],
+      "transitions": [
+        {
+          "kind": "CUT"
+        },
+        {
+          "kind": "FADE_FROM_BLACK",
+          "durationFrames": [
+            16,
+            30
+          ],
+          "use": "opening"
+        },
+        {
+          "kind": "CROSS_DISSOLVE",
+          "durationFrames": [
+            12,
+            24
+          ],
+          "onlyBetweenScenes": true
+        }
+      ],
+      "motion": {
+        "pushIn": {
+          "param": "scale",
+          "from": 1.0,
+          "to": 1.04,
+          "interpolation": "EASE_IN_OUT",
+          "typicalDurationSec": [
+            4,
+            8
+          ]
+        }
+      },
+      "color": {
+        "effects": [
+          {
+            "type": "temperature",
+            "amount": [
+              0.01,
+              0.06
+            ]
+          },
+          {
+            "type": "saturation",
+            "amount": [
+              0.98,
+              1.06
+            ]
+          },
+          {
+            "type": "shadows",
+            "amount": [
+              0.0,
+              0.05
+            ]
+          }
+        ],
+        "note": "romantic warmth without skin-tone drift"
+      },
+      "audio": {
+        "fadeInFrames": [
+          30,
+          60
+        ],
+        "fadeOutFrames": [
+          45,
+          90
+        ],
+        "ducking": "dialogue/vows always above bed",
+        "bed": "user-licensed music (usually their song)"
+      },
+      "captions": {
+        "style": "date/place strap + dedication card",
+        "fontSize": [
+          20,
+          26
+        ]
+      },
+      "needs": [
+        "user-licensed music (often personal)",
+        "name/date strap graphics"
+      ],
+      "qualityChecks": [
+        "the proposal moment is NEVER cut mid-action",
+        "no crying face held uncomfortably long",
+        "dedication spelling verified",
+        "no guest filmed unflatteringly without consent"
+      ],
+      "notFor": [
+        "gaming",
+        "trend remix",
+        "news"
+      ],
+      "promptExample": "Edit this proposal footage into a 3-minute engagement film — the moment stays whole."
+    },
+    {
+      "id": "conference-recap",
+      "name": "Conference recap",
+      "family": "event",
+      "purpose": "Energy-compressed event summary: stage moments, audience, hallway color.",
+      "suitableFor": [
+        "stage footage",
+        "audience reactions",
+        "booth/hallway b-roll"
+      ],
+      "emotion": "excitement → insight → belonging",
+      "aspect": [
+        "16:9",
+        "9:16"
+      ],
+      "structure": [
+        "hall establishing + hook talk moment (0-10%)",
+        "session highlights (10-70%)",
+        "people + booths (70-90%)",
+        "see-you-next-year (90-100%)"
+      ],
+      "shotSelection": "peak talk lines + clapping reactions; slides only when legible (or use their real deck exports)",
+      "pacing": {
+        "avgShotSec": [
+          1.2,
+          3.0
+        ],
+        "shotsPerMin": [
+          20,
+          50
+        ],
+        "acceleration": "energetic with breathing room between sessions"
+      },
+      "cutting": [
+        "jump cut",
+        "montage",
+        "cut on action",
+        "smash cut"
+      ],
+      "transitions": [
+        {
+          "kind": "CUT"
+        },
+        {
+          "kind": "CROSS_DISSOLVE",
+          "durationFrames": [
+            8,
+            14
+          ],
+          "onlyBetweenScenes": true
+        }
+      ],
+      "motion": {
+        "pushIn": {
+          "param": "scale",
+          "from": 1.0,
+          "to": 1.06,
+          "interpolation": "EASE_OUT",
+          "typicalDurationSec": [
+            1,
+            2.5
+          ]
+        }
+      },
+      "color": {
+        "effects": [
+          {
+            "type": "contrast",
+            "amount": [
+              1.02,
+              1.08
+            ]
+          },
+          {
+            "type": "saturation",
+            "amount": [
+              1.02,
+              1.1
+            ]
+          }
+        ],
+        "note": "stage lighting is mixed — balance exposure, don't repaint brand colors"
+      },
+      "audio": {
+        "fadeInFrames": [
+          0,
+          10
+        ],
+        "fadeOutFrames": [
+          10,
+          30
+        ],
+        "ducking": "talk audio leads; applause kept natural",
+        "bed": "licensed bed between sessions only"
+      },
+      "captions": {
+        "style": "talk titles + speaker straps",
+        "fontSize": [
+          22,
+          30
+        ]
+      },
+      "needs": [
+        "licensed music",
+        "talk title/speaker strap graphics",
+        "consent-aware crowd footage (organizer's media policy)"
+      ],
+      "qualityChecks": [
+        "no attendee identifiable against their wishes (organizer policy)",
+        "talk titles spelled correctly",
+        "applause never cut mid-clap",
+        "no slide text invented"
+      ],
+      "notFor": [
+        "testimonial ads",
+        "trend remix"
+      ],
+      "promptExample": "Cut this conference footage into a 2-minute recap with talk straps and crowd energy."
+    },
+    {
+      "id": "fitness-training",
+      "name": "Fitness training edit",
+      "family": "event",
+      "purpose": "Motivational training edit: effort visible, form readable, progression felt.",
+      "suitableFor": [
+        "gym/training footage",
+        "repetition sets",
+        "coach cues"
+      ],
+      "emotion": "determination → strain → progress",
+      "aspect": [
+        "9:16",
+        "16:9"
+      ],
+      "structure": [
+        "commitment statement (0-8%)",
+        "work blocks with effort escalation (8-70%)",
+        "progress reveal (70-90%)",
+        "next-session tease (90-100%)"
+      ],
+      "shotSelection": "form readable in every rep shot; sweat/effort close-ups earn the progression; no fake-weight trickery",
+      "pacing": {
+        "avgShotSec": [
+          0.8,
+          2.2
+        ],
+        "shotsPerMin": [
+          27,
+          75
+        ],
+        "acceleration": "with the music; brief slow-motion on the hardest rep"
+      },
+      "cutting": [
+        "beat synchronization",
+        "jump cut",
+        "speed ramp",
+        "montage"
+      ],
+      "transitions": [
+        {
+          "kind": "CUT"
+        },
+        {
+          "kind": "PUSH_LEFT",
+          "durationFrames": [
+            4,
+            8
+          ],
+          "use": "exercise switches"
+        }
+      ],
+      "motion": {
+        "pushIn": {
+          "param": "scale",
+          "from": 1.0,
+          "to": 1.12,
+          "interpolation": "EASE_OUT",
+          "typicalDurationSec": [
+            0.5,
+            1.2
+          ],
+          "use": "peak-effort accents"
+        }
+      },
+      "color": {
+        "effects": [
+          {
+            "type": "contrast",
+            "amount": [
+              1.03,
+              1.1
+            ]
+          },
+          {
+            "type": "saturation",
+            "amount": [
+              1.03,
+              1.12
+            ]
+          },
+          {
+            "type": "shadows",
+            "amount": [
+              0.0,
+              0.05
+            ]
+          }
+        ],
+        "note": "gritty and energetic; keep skin tones honest under gym lighting"
+      },
+      "audio": {
+        "fadeInFrames": [
+          0,
+          4
+        ],
+        "fadeOutFrames": [
+          4,
+          12
+        ],
+        "ducking": "breathing/effort audio kept at peaks",
+        "bed": "user-licensed high-energy music"
+      },
+      "captions": {
+        "style": "rep counters (real counts only) + cue captions",
+        "fontSize": [
+          24,
+          34
+        ]
+      },
+      "needs": [
+        "user-licensed music",
+        "cue/counter graphics (real numbers)",
+        "slow-motion via speed ramps (real)"
+      ],
+      "qualityChecks": [
+        "rep counters match reality",
+        "form never obscured by captions",
+        "no fake weights/edited difficulty",
+        "slow-motion frames stay sharp"
+      ],
+      "notFor": [
+        "documentary",
+        "luxury films"
+      ],
+      "promptExample": "Make a 60-second training edit from these gym clips — beat cuts, slow-mo on the hardest rep."
+    },
+    {
+      "id": "lyric-video",
+      "name": "Lyric video",
+      "family": "music",
+      "purpose": "Text-led music piece where lyrics arrive exactly on their sung moments.",
+      "suitableFor": [
+        "audio track + stills/footage",
+        "typographic backgrounds"
+      ],
+      "emotion": "synchronicity → mood → memorability",
+      "aspect": [
+        "16:9",
+        "9:16"
+      ],
+      "structure": [
+        "intro visual (0-10%)",
+        "verse/chorus typographic flow (10-85%)",
+        "outro + credits (85-100%)"
+      ],
+      "shotSelection": "backgrounds are mood plates — slow motion or stills; text is the star and never fights the image",
+      "pacing": {
+        "avgShotSec": [
+          2.0,
+          6.0
+        ],
+        "shotsPerMin": [
+          10,
+          30
+        ],
+        "acceleration": "with the song's energy map"
+      },
+      "cutting": [
+        "beat synchronization",
+        "montage"
+      ],
+      "transitions": [
+        {
+          "kind": "CUT"
+        },
+        {
+          "kind": "CROSS_DISSOLVE",
+          "durationFrames": [
+            8,
+            16
+          ],
+          "use": "section changes"
+        }
+      ],
+      "motion": {
+        "pushIn": {
+          "param": "opacity",
+          "from": 0.0,
+          "to": 1.0,
+          "interpolation": "EASE_IN_OUT",
+          "typicalDurationSec": [
+            0.3,
+            0.8
+          ],
+          "use": "lyric line entrances"
+        }
+      },
+      "color": {
+        "effects": [
+          {
+            "type": "grayscale",
+            "amount": [
+              0.0,
+              1.0
+            ]
+          },
+          {
+            "type": "contrast",
+            "amount": [
+              1.0,
+              1.06
+            ]
+          },
+          {
+            "type": "vignette",
+            "amount": [
+              0.1,
+              0.3
+            ]
+          }
+        ],
+        "note": "text contrast is the priority — darken or desaturate plates as needed"
+      },
+      "audio": {
+        "fadeInFrames": [
+          0,
+          10
+        ],
+        "fadeOutFrames": [
+          10,
+          40
+        ],
+        "ducking": "n/a",
+        "bed": "the song itself (user must own or license it)"
+      },
+      "captions": {
+        "style": "synced lyric lines; verified against the actual audio",
+        "fontSize": [
+          26,
+          44
+        ]
+      },
+      "needs": [
+        "user-owned/licensed audio",
+        "lyric text from the rights holder",
+        "caption timing verified against the waveform"
+      ],
+      "qualityChecks": [
+        "every line appears when sung (±2 frames)",
+        "no misspelled lyrics",
+        "text readable on every plate",
+        "no copyrighted lyric text without rights"
+      ],
+      "notFor": [
+        "documentary",
+        "screencast"
+      ],
+      "promptExample": "Build a lyric video for my track — lines on the sung moments over these mood plates."
+    },
+    {
+      "id": "beat-synced-montage",
+      "name": "Beat-synced montage",
+      "family": "music",
+      "purpose": "Pure rhythm piece: every cut and accent locked to the music's energy.",
+      "suitableFor": [
+        "dynamic b-roll",
+        "performance",
+        "sports",
+        "city life"
+      ],
+      "emotion": "drive → momentum → release",
+      "aspect": [
+        "16:9",
+        "9:16"
+      ],
+      "structure": [
+        "first beat hit within 2 s",
+        "phrase-matched movements (2-80%)",
+        "breakdown slow section (80-90%)",
+        "final drop + hold (90-100%)"
+      ],
+      "shotSelection": "motion-vector matching across cuts; direction continuity (left→left→left) then reversal on the drop",
+      "pacing": {
+        "avgShotSec": [
+          0.5,
+          1.8
+        ],
+        "shotsPerMin": [
+          33,
+          120
+        ],
+        "acceleration": "beat-locked with a deliberate breakdown"
+      },
+      "cutting": [
+        "beat synchronization",
+        "smash cut",
+        "match on movement",
+        "montage"
+      ],
+      "transitions": [
+        {
+          "kind": "CUT"
+        },
+        {
+          "kind": "ZOOM_IN",
+          "durationFrames": [
+            4,
+            10
+          ],
+          "use": "drop entries"
+        }
+      ],
+      "motion": {
+        "pushIn": {
+          "param": "scale",
+          "from": 1.0,
+          "to": 1.18,
+          "interpolation": "EASE_OUT",
+          "typicalDurationSec": [
+            0.4,
+            1.0
+          ]
+        }
+      },
+      "color": {
+        "effects": [
+          {
+            "type": "contrast",
+            "amount": [
+              1.02,
+              1.1
+            ]
+          },
+          {
+            "type": "saturation",
+            "amount": [
+              1.03,
+              1.12
+            ]
+          }
+        ],
+        "note": "energy-forward; consistent look across sources is mandatory"
+      },
+      "audio": {
+        "fadeInFrames": [
+          0,
+          4
+        ],
+        "fadeOutFrames": [
+          4,
+          12
+        ],
+        "ducking": "n/a",
+        "bed": "user-owned/licensed track — the edit's clock"
+      },
+      "captions": {
+        "style": "minimal — beat pops only",
+        "fontSize": [
+          20,
+          28
+        ]
+      },
+      "needs": [
+        "user-owned/licensed track",
+        "beat markers (manual or beat analysis when available)",
+        "motion-vector aware selection (JAZMII when indexed)"
+      ],
+      "qualityChecks": [
+        "cuts within ±1 frame of beats",
+        "motion direction flows across at least 4-shot runs",
+        "breakdown lands where the music does",
+        "no orphan frame before a cut"
+      ],
+      "notFor": [
+        "testimony-led documentary",
+        "screencast"
+      ],
+      "promptExample": "Sync-cut these clips to my track — every cut on the beat, direction flows, drop hits hardest."
+    },
+    {
+      "id": "explainer-lecture",
+      "name": "Explainer lecture",
+      "family": "education",
+      "purpose": "Teach one concept cleanly: claim → visual proof → recap, with honest pacing for comprehension.",
+      "suitableFor": [
+        "talking head",
+        "slides",
+        "diagrams",
+        "demos"
+      ],
+      "emotion": "clarity → understanding → capability",
+      "aspect": [
+        "16:9",
+        "9:16"
+      ],
+      "structure": [
+        "question or promise (0-5%)",
+        "concept beats with visual proof (5-80%)",
+        "recap + next step (80-100%)"
+      ],
+      "shotSelection": "speaker framed consistently; every abstract claim gets a concrete visual; slides only when legible",
+      "pacing": {
+        "avgShotSec": [
+          3.0,
+          8.0
+        ],
+        "shotsPerMin": [
+          8,
+          20
+        ],
+        "acceleration": "flat; intentional pauses after key claims"
+      },
+      "cutting": [
+        "continuity editing",
+        "cutaway",
+        "J-cut",
+        "L-cut"
+      ],
+      "transitions": [
+        {
+          "kind": "CUT"
+        },
+        {
+          "kind": "CROSS_DISSOLVE",
+          "durationFrames": [
+            8,
+            14
+          ],
+          "onlyBetweenScenes": true
+        }
+      ],
+      "motion": {
+        "pushIn": {
+          "param": "scale",
+          "from": 1.0,
+          "to": 1.03,
+          "interpolation": "EASE_IN_OUT",
+          "typicalDurationSec": [
+            3,
+            6
+          ],
+          "use": "diagram emphasis"
+        }
+      },
+      "color": {
+        "effects": [
+          {
+            "type": "brightness",
+            "amount": [
+              0.0,
+              0.05
+            ]
+          },
+          {
+            "type": "contrast",
+            "amount": [
+              1.0,
+              1.04
+            ]
+          }
+        ],
+        "note": "neutral and readable; diagrams never color-shifted"
+      },
+      "audio": {
+        "fadeInFrames": [
+          0,
+          10
+        ],
+        "fadeOutFrames": [
+          10,
+          30
+        ],
+        "ducking": "voice dominant",
+        "bed": "very light or none"
+      },
+      "captions": {
+        "style": "verbatim captions; key terms emphasized",
+        "fontSize": [
+          22,
+          30
+        ]
+      },
+      "needs": [
+        "transcription for captions (phrase timing disclosed)",
+        "diagram graphics",
+        "optional VO"
+      ],
+      "qualityChecks": [
+        "every claim has a visual within 5 s",
+        "no jargon left undefined",
+        "recap matches the promises made",
+        "captions verbatim"
+      ],
+      "notFor": [
+        "trend remix",
+        "gaming"
+      ],
+      "promptExample": "Edit this lecture into a clean explainer — claims on screen, recap at the end, verbatim captions."
+    },
+    {
+      "id": "software-walkthrough",
+      "name": "Software walkthrough",
+      "family": "education",
+      "purpose": "Task-complete software tutorial: every step shown in real capture with honest timing.",
+      "suitableFor": [
+        "screen recordings",
+        "app captures",
+        "cursor highlights"
+      ],
+      "emotion": "orientation → competence → completion",
+      "aspect": [
+        "16:9"
+      ],
+      "structure": [
+        "task statement (0-5%)",
+        "numbered steps (5-85%)",
+        "done state + follow-ups (85-100%)"
+      ],
+      "shotSelection": "full-window for orientation; zoom (scale/x/y keyframes on the real capture) for small controls; never mock UI",
+      "pacing": {
+        "avgShotSec": [
+          3.0,
+          10.0
+        ],
+        "shotsPerMin": [
+          6,
+          20
+        ],
+        "acceleration": "flat; allow reading time"
+      },
+      "cutting": [
+        "continuity editing",
+        "insert shot"
+      ],
+      "transitions": [
+        {
+          "kind": "CUT"
+        }
+      ],
+      "motion": {
+        "pushIn": {
+          "param": "scale",
+          "from": 1.0,
+          "to": 1.4,
+          "interpolation": "EASE_IN_OUT",
+          "typicalDurationSec": [
+            0.8,
+            1.6
+          ],
+          "use": "control-level zooms"
+        }
+      },
+      "color": {
+        "effects": [
+          {
+            "type": "sharpen",
+            "amount": [
+              0.0,
+              0.2
+            ]
+          }
+        ],
+        "note": "interface text stays crisp and color-true"
+      },
+      "audio": {
+        "fadeInFrames": [
+          0,
+          8
+        ],
+        "fadeOutFrames": [
+          8,
+          20
+        ],
+        "ducking": "VO dominant",
+        "bed": "none"
+      },
+      "captions": {
+        "style": "step-number captions",
+        "fontSize": [
+          20,
+          28
+        ]
+      },
+      "needs": [
+        "real screen captures",
+        "VO or transcription captions",
+        "step-number graphics"
+      ],
+      "qualityChecks": [
+        "each numbered step appears in the capture in order",
+        "no faked clicks",
+        "text readable at delivery resolution",
+        "task completes on screen"
+      ],
+      "notFor": [
+        "cinematic",
+        "trend remix"
+      ],
+      "promptExample": "Cut this screen capture into a numbered walkthrough — zoom to each control, honest timing."
+    },
+    {
+      "id": "kinetic-typography",
+      "name": "Kinetic typography",
+      "family": "motion",
+      "purpose": "Words carry the film: type moves with the voice/music using frame-exact keyframes.",
+      "suitableFor": [
+        "spoken-word audio",
+        "quotes",
+        "manifestos"
+      ],
+      "emotion": "rhythm → emphasis → resonance",
+      "aspect": [
+        "9:16",
+        "1:1",
+        "16:9"
+      ],
+      "structure": [
+        "first word by beat 1",
+        "phrase blocks (2-80%)",
+        "final statement hold (80-100%)"
+      ],
+      "shotSelection": "n/a — text plates and NIIKI graphics tracks carry the picture; images only as accents",
+      "pacing": {
+        "avgShotSec": [
+          0.6,
+          2.0
+        ],
+        "shotsPerMin": [
+          30,
+          100
+        ],
+        "acceleration": "locked to the voice/music rhythm"
+      },
+      "cutting": [
+        "beat synchronization",
+        "montage"
+      ],
+      "transitions": [
+        {
+          "kind": "CUT"
+        },
+        {
+          "kind": "SLIDE_LEFT",
+          "durationFrames": [
+            3,
+            6
+          ]
+        }
+      ],
+      "motion": {
+        "pushIn": {
+          "param": "scale",
+          "from": 0.92,
+          "to": 1.0,
+          "interpolation": "EASE_OUT",
+          "typicalDurationSec": [
+            0.3,
+            0.9
+          ],
+          "use": "word emphasis"
+        }
+      },
+      "color": {
+        "effects": [
+          {
+            "type": "contrast",
+            "amount": [
+              1.0,
+              1.08
+            ]
+          }
+        ],
+        "note": "high text contrast; backgrounds minimal"
+      },
+      "audio": {
+        "fadeInFrames": [
+          0,
+          4
+        ],
+        "fadeOutFrames": [
+          4,
+          12
+        ],
+        "ducking": "n/a",
+        "bed": "the voice/track (user rights)"
+      },
+      "captions": {
+        "style": "the kinetic text IS the caption track (kept in sync)",
+        "fontSize": [
+          28,
+          48
+        ]
+      },
+      "needs": [
+        "user-owned audio",
+        "NIIKI text graphics with keyframes",
+        "word timing (phrase-level disclosed)"
+      ],
+      "qualityChecks": [
+        "text sync within ±2 frames of speech",
+        "no orphan words",
+        "readable at delivery size",
+        "typography consistent"
+      ],
+      "notFor": [
+        "testimony",
+        "property tours"
+      ],
+      "promptExample": "Animate this voiceover as kinetic typography — words land on the beat, high contrast."
+    },
+    {
+      "id": "data-animation-infographic",
+      "name": "Data infographic video",
+      "family": "motion",
+      "purpose": "Numbers made visual and honest: real data, animated counters and charts that never mislead.",
+      "suitableFor": [
+        "chart graphics",
+        "metric callouts",
+        "statistical narratives"
+      ],
+      "emotion": "curiosity → clarity → conviction",
+      "aspect": [
+        "16:9",
+        "1:1"
+      ],
+      "structure": [
+        "the question (0-8%)",
+        "data beats with animated counters (8-75%)",
+        "the answer + source card (75-100%)"
+      ],
+      "shotSelection": "one dataset per beat; axis/labels legible; animated counters count REAL values",
+      "pacing": {
+        "avgShotSec": [
+          2.5,
+          6.0
+        ],
+        "shotsPerMin": [
+          10,
+          24
+        ],
+        "acceleration": "flat — comprehension first"
+      },
+      "cutting": [
+        "continuity editing",
+        "montage"
+      ],
+      "transitions": [
+        {
+          "kind": "CUT"
+        },
+        {
+          "kind": "CROSS_DISSOLVE",
+          "durationFrames": [
+            8,
+            14
+          ],
+          "onlyBetweenScenes": true
+        }
+      ],
+      "motion": {
+        "pushIn": {
+          "param": "opacity",
+          "from": 0.0,
+          "to": 1.0,
+          "interpolation": "EASE_IN_OUT",
+          "typicalDurationSec": [
+            0.4,
+            1.0
+          ],
+          "use": "chart entrances"
+        }
+      },
+      "color": {
+        "effects": [
+          {
+            "type": "contrast",
+            "amount": [
+              1.0,
+              1.05
+            ]
+          }
+        ],
+        "note": "charts keep their authored colors — never grade the data"
+      },
+      "audio": {
+        "fadeInFrames": [
+          0,
+          10
+        ],
+        "fadeOutFrames": [
+          10,
+          30
+        ],
+        "ducking": "VO dominant",
+        "bed": "light neutral"
+      },
+      "captions": {
+        "style": "data callouts + source card",
+        "fontSize": [
+          20,
+          30
+        ]
+      },
+      "needs": [
+        "real data from the user",
+        "chart/counter graphics",
+        "source card"
+      ],
+      "qualityChecks": [
+        "every number traceable to the provided data",
+        "no truncated axes that exaggerate",
+        "source card present at the end",
+        "counters end at the real values"
+      ],
+      "notFor": [
+        "entertainment",
+        "trend remix"
+      ],
+      "promptExample": "Animate my quarterly numbers into a 60-second infographic — counters end at the real values."
+    },
+    {
+      "id": "glitch-art",
+      "name": "Glitch art edit",
+      "family": "motion",
+      "purpose": "Deliberate corruption aesthetics: datamosh-flavored cuts, channel shifts, frame drops — all honest about technique.",
+      "suitableFor": [
+        "abstract footage",
+        "urban night shots",
+        "portraits with consent"
+      ],
+      "emotion": "disorientation → fascination → style",
+      "aspect": [
+        "9:16",
+        "16:9"
+      ],
+      "structure": [
+        "clean tease (0-10%)",
+        "escalating corruption (10-70%)",
+        "full glitch chorus (70-90%)",
+        "snap back to clean (90-100%)"
+      ],
+      "shotSelection": "high-contrast, motion-heavy sources; corruption reads best on detail-rich frames",
+      "pacing": {
+        "avgShotSec": [
+          0.4,
+          1.6
+        ],
+        "shotsPerMin": [
+          38,
+          150
+        ],
+        "acceleration": "escalating with the corruption"
+      },
+      "cutting": [
+        "smash cut",
+        "jump cut",
+        "montage",
+        "beat synchronization"
+      ],
+      "transitions": [
+        {
+          "kind": "CUT"
+        },
+        {
+          "kind": "PUSH_LEFT",
+          "durationFrames": [
+            3,
+            6
+          ],
+          "use": "glitch slams"
+        }
+      ],
+      "motion": {
+        "pushIn": {
+          "param": "x",
+          "from": -6,
+          "to": 6,
+          "interpolation": "LINEAR",
+          "typicalDurationSec": [
+            0.2,
+            0.6
+          ],
+          "use": "frame jitter accents"
+        }
+      },
+      "color": {
+        "effects": [
+          {
+            "type": "saturation",
+            "amount": [
+              1.1,
+              1.3
+            ]
+          },
+          {
+            "type": "contrast",
+            "amount": [
+              1.05,
+              1.15
+            ]
+          },
+          {
+            "type": "temperature",
+            "amount": [
+              -0.06,
+              0.06
+            ]
+          }
+        ],
+        "note": "channel-shift look is approximated in preview via CSS filters and renders via the eq/colorbalance chain — disclosed approximation"
+      },
+      "audio": {
+        "fadeInFrames": [
+          0,
+          2
+        ],
+        "fadeOutFrames": [
+          2,
+          8
+        ],
+        "ducking": "n/a",
+        "bed": "user-owned electronic/glitch audio"
+      },
+      "captions": {
+        "style": "corrupted-style text IF legibility is still met",
+        "fontSize": [
+          22,
+          36
+        ]
+      },
+      "needs": [
+        "user-owned audio",
+        "frame-accurate cuts (engine supports)",
+        "disclosure: true datamosh needs codec-level manipulation — NOT available; the look is approximated with real filters"
+      ],
+      "qualityChecks": [
+        "glitch moments land on audio hits",
+        "at least one clean anchor shot per act",
+        "no seizure-risk strobing longer than 0.2 s at full field",
+        "approximation disclosed to the user"
+      ],
+      "notFor": [
+        "testimony",
+        "memorial content",
+        "children's content"
+      ],
+      "promptExample": "Make a glitch edit from these night shots — corruption on the drops, clean anchors between."
+    },
+    {
+      "id": "slow-cinema-art-film",
+      "name": "Slow cinema art film",
+      "family": "cinematic",
+      "purpose": "Contemplative long-take piece where duration itself is the language.",
+      "suitableFor": [
+        "landscape",
+        "observation",
+        "portraits in stillness"
+      ],
+      "emotion": "stillness → attention → meaning",
+      "aspect": [
+        "16:9"
+      ],
+      "structure": [
+        "opening long take (0-15%)",
+        "three contemplative movements (15-85%)",
+        "final held frame (85-100%)"
+      ],
+      "shotSelection": "longest takes only; nothing narrated into it; composition does the work — no insert-cutting to rescue pacing",
+      "pacing": {
+        "avgShotSec": [
+          10.0,
+          30.0
+        ],
+        "shotsPerMin": [
+          2,
+          6
+        ],
+        "acceleration": "none — stillness is the point"
+      },
+      "cutting": [
+        "long takes",
+        "match cut",
+        "continuity editing"
+      ],
+      "transitions": [
+        {
+          "kind": "CUT"
+        },
+        {
+          "kind": "FADE_TO_BLACK",
+          "durationFrames": [
+            24,
+            48
+          ],
+          "use": "movement ends"
+        }
+      ],
+      "motion": {
+        "pushIn": {
+          "param": "scale",
+          "from": 1.0,
+          "to": 1.02,
+          "interpolation": "EASE_IN_OUT",
+          "typicalDurationSec": [
+            15,
+            30
+          ],
+          "use": "imperceptible drift only"
+        }
+      },
+      "color": {
+        "effects": [
+          {
+            "type": "saturation",
+            "amount": [
+              0.9,
+              1.0
+            ]
+          },
+          {
+            "type": "contrast",
+            "amount": [
+              0.98,
+              1.03
+            ]
+          },
+          {
+            "type": "vignette",
+            "amount": [
+              0.05,
+              0.15
+            ]
+          }
+        ],
+        "note": "naturalistic, painterly restraint"
+      },
+      "audio": {
+        "fadeInFrames": [
+          60,
+          120
+        ],
+        "fadeOutFrames": [
+          60,
+          120
+        ],
+        "ducking": "ambience is the sound design",
+        "bed": "sparse or none"
+      },
+      "captions": {
+        "style": "none unless the user asks",
+        "fontSize": [
+          18,
+          24
+        ]
+      },
+      "needs": [
+        "long takes in the source (cannot be faked — disclosed)",
+        "licensed ambient bed if any"
+      ],
+      "qualityChecks": [
+        "no take shorter than 8 s",
+        "no narrative patching via cutaways",
+        "audio ambience continuous across cuts",
+        "final hold ≥ 5 s"
+      ],
+      "notFor": [
+        "short-form",
+        "ads",
+        "gaming"
+      ],
+      "promptExample": "Assemble these long takes into a slow-cinema piece — minimal cuts, held endings."
+    },
+    {
+      "id": "horror-suspense",
+      "name": "Horror / suspense",
+      "family": "cinematic",
+      "purpose": "Dread through negative space, sound and withheld information.",
+      "suitableFor": [
+        "dim interiors",
+        "night exteriors",
+        "empty spaces",
+        "reactive faces"
+      ],
+      "emotion": "unease → dread → shock",
+      "aspect": [
+        "16:9"
+      ],
+      "structure": [
+        "normalcy (0-15%)",
+        "wrongness accumulates (15-55%)",
+        "the turn (55-70%)",
+        "aftermath silence (70-100%)"
+      ],
+      "shotSelection": "show LESS than the viewer wants; reaction shots over reveals; the turn happens off-screen or in one unbroken move",
+      "pacing": {
+        "avgShotSec": [
+          2.0,
+          6.0
+        ],
+        "shotsPerMin": [
+          10,
+          30
+        ],
+        "acceleration": "decelerate INTO the turn (silence before shock)"
+      },
+      "cutting": [
+        "continuity editing",
+        "smash cut",
+        "cutaway",
+        "suspense timing"
+      ],
+      "transitions": [
+        {
+          "kind": "CUT"
+        },
+        {
+          "kind": "FADE_TO_BLACK",
+          "durationFrames": [
+            16,
+            30
+          ],
+          "use": "act turns"
+        }
+      ],
+      "motion": {
+        "pushIn": {
+          "param": "scale",
+          "from": 1.0,
+          "to": 1.05,
+          "interpolation": "EASE_IN",
+          "typicalDurationSec": [
+            3,
+            8
+          ],
+          "use": "approaching dread"
+        }
+      },
+      "color": {
+        "effects": [
+          {
+            "type": "shadows",
+            "amount": [
+              -0.08,
+              -0.02
+            ]
+          },
+          {
+            "type": "saturation",
+            "amount": [
+              0.85,
+              0.98
+            ]
+          },
+          {
+            "type": "temperature",
+            "amount": [
+              -0.04,
+              0.02
+            ]
+          }
+        ],
+        "note": "cool, crushed shadows with detail intact — never a grey mush"
+      },
+      "audio": {
+        "fadeInFrames": [
+          20,
+          60
+        ],
+        "fadeOutFrames": [
+          30,
+          90
+        ],
+        "ducking": "silence is a weapon — drop the bed before the turn",
+        "bed": "drone/room tone; stingers need user-owned SFX"
+      },
+      "captions": {
+        "style": "none or minimal",
+        "fontSize": [
+          20,
+          26
+        ]
+      },
+      "needs": [
+        "user-owned stinger SFX",
+        "dim footage (cannot fake night from day honestly — disclosed)"
+      ],
+      "qualityChecks": [
+        "the turn lands after a deliberate silence",
+        "no cheap jump-scare every 10 s",
+        "shadow detail readable on delivery",
+        "reveal withheld until the turn"
+      ],
+      "notFor": [
+        "children's content",
+        "ads",
+        "comedy"
+      ],
+      "promptExample": "Cut this footage into a suspense piece — withhold the reveal, silence before the turn."
+    },
+    {
+      "id": "comedy-timing",
+      "name": "Comedy timing edit",
+      "family": "cinematic",
+      "purpose": "Rhythm-driven comedy: the cut IS the punchline — reactions land late on purpose.",
+      "suitableFor": [
+        "sketch footage",
+        "dialogue scenes",
+        "reaction pairs"
+      ],
+      "emotion": "build → surprise → release",
+      "aspect": [
+        "16:9",
+        "9:16"
+      ],
+      "structure": [
+        "setup without signaling (0-25%)",
+        "escalation (25-65%)",
+        "punchline + delayed reaction (65-80%)",
+        "tag (80-100%)"
+      ],
+      "shotSelection": "wide for the setup, tight for the reaction; hold the dead air AFTER the punchline (it is the joke)",
+      "pacing": {
+        "avgShotSec": [
+          1.5,
+          4.0
+        ],
+        "shotsPerMin": [
+          15,
+          40
+        ],
+        "acceleration": "comedic timing beats — hold, then snap"
+      },
+      "cutting": [
+        "comedic timing",
+        "jump cut",
+        "reaction cut",
+        "cutaway"
+      ],
+      "transitions": [
+        {
+          "kind": "CUT"
+        }
+      ],
+      "motion": {
+        "pushIn": {
+          "param": "scale",
+          "from": 1.0,
+          "to": 1.1,
+          "interpolation": "EASE_OUT",
+          "typicalDurationSec": [
+            0.3,
+            0.8
+          ],
+          "use": "punchline snap zooms"
+        }
+      },
+      "color": {
+        "effects": [
+          {
+            "type": "saturation",
+            "amount": [
+              1.0,
+              1.08
+            ]
+          },
+          {
+            "type": "contrast",
+            "amount": [
+              1.0,
+              1.05
+            ]
+          }
+        ],
+        "note": "bright and present; comedy dies in mud"
+      },
+      "audio": {
+        "fadeInFrames": [
+          0,
+          6
+        ],
+        "fadeOutFrames": [
+          6,
+          20
+        ],
+        "ducking": "dialogue sacred; bed drops OUT before punchlines",
+        "bed": "light; stings user-owned only"
+      },
+      "captions": {
+        "style": "caption the punchline exactly as spoken",
+        "fontSize": [
+          24,
+          34
+        ]
+      },
+      "needs": [
+        "user-owned stings (optional)",
+        "reactive coverage in the footage"
+      ],
+      "qualityChecks": [
+        "punchline reaction held ≥ 1 s",
+        "no bed under punchlines",
+        "setup never winks at the joke",
+        "tags land after a breath"
+      ],
+      "notFor": [
+        "memorial",
+        "investigative",
+        "luxury"
+      ],
+      "promptExample": "Edit this sketch for comedy — hold the reaction after the punchline, snap zoom on the tag."
+    },
+    {
+      "id": "interview-news-package",
+      "name": "News package",
+      "family": "documentary",
+      "purpose": "Broadcast-style package: anchor/nat-sound lead, b-roll proof, tight ethical labeling.",
+      "suitableFor": [
+        "interviews",
+        "event footage",
+        "establishing shots"
+      ],
+      "emotion": "urgency → clarity → credibility",
+      "aspect": [
+        "16:9",
+        "9:16"
+      ],
+      "structure": [
+        "strongest actuality first (0-5 s)",
+        "context + who/what/where (5-20%)",
+        "evidence block (20-70%)",
+        "forward look (70-100%)"
+      ],
+      "shotSelection": "nat-sound opens; every factual claim paired with real footage or honest archival labeling",
+      "pacing": {
+        "avgShotSec": [
+          1.5,
+          4.0
+        ],
+        "shotsPerMin": [
+          15,
+          40
+        ],
+        "acceleration": "steady broadcast rhythm"
+      },
+      "cutting": [
+        "continuity editing",
+        "cutaway",
+        "J-cut",
+        "L-cut"
+      ],
+      "transitions": [
+        {
+          "kind": "CUT"
+        }
+      ],
+      "motion": {
+        "pushIn": {
+          "param": "scale",
+          "from": 1.0,
+          "to": 1.03,
+          "interpolation": "EASE_IN_OUT",
+          "typicalDurationSec": [
+            2,
+            4
+          ],
+          "use": "still-photo moves only"
+        }
+      },
+      "color": {
+        "effects": [
+          {
+            "type": "contrast",
+            "amount": [
+              1.0,
+              1.04
+            ]
+          },
+          {
+            "type": "saturation",
+            "amount": [
+              0.96,
+              1.02
+            ]
+          }
+        ],
+        "note": "broadcast-neutral; archival material labeled, never blended invisibly"
+      },
+      "audio": {
+        "fadeInFrames": [
+          0,
+          8
+        ],
+        "fadeOutFrames": [
+          8,
+          20
+        ],
+        "ducking": "voice sacred; nat-sound under b-roll",
+        "bed": "none — news uses no music bed (standard practice)"
+      },
+      "captions": {
+        "style": "lower thirds + location/date straps",
+        "fontSize": [
+          22,
+          30
+        ]
+      },
+      "needs": [
+        "verified facts from the user",
+        "name/location strap graphics",
+        "archival labeling discipline"
+      ],
+      "qualityChecks": [
+        "no music bed (broadcast norm)",
+        "archival/screengrab material clearly labeled",
+        "names/titles verified",
+        "no claim without footage or attribution"
+      ],
+      "notFor": [
+        "entertainment remix",
+        "lyric video"
+      ],
+      "promptExample": "Assemble this into a 90-second news package — actuality first, archival labeled, no music bed."
     }
   ]
 }

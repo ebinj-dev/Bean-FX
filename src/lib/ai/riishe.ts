@@ -25,6 +25,7 @@ import { parseCommand, type Command } from "@/lib/editor/commands";
 import { llmHealth } from "@/lib/my-ai/gateway/provider";
 import { matchStyles, styleCapabilities, styleAlternatives, loadStyleRecipes } from "@/lib/ai/styles";
 import { probeModelRegistry } from "@/lib/ai/models";
+import { retrieveEditingKnowledge } from "@/lib/ai/editing-knowledge";
 
 export type RiisheIntent = "build" | "style-compare" | "analysis" | "scoped-revision" | "history-op" | "command-op" | "question";
 
@@ -168,8 +169,13 @@ export async function riisheChat(
       disclosedGaps: report?.disclosedGaps ?? [],
     }));
     const lines = styles.map((s, i) => `${i + 1}. **${s.name}** (${s.id}) — ${s.purpose}${s.disclosedGaps.length ? ` · disclosed gaps: ${s.disclosedGaps.map((g) => g.capability).join(", ")}` : ""}`);
+    // M48-E — shared knowledge retrieval: current-trend entries relevant to the
+    // request are surfaced WITH their evidence status; a trend never overrides
+    // the user's chosen style — it is presented as an option.
+    const knowledge = retrieveEditingKnowledge(message, { limit: 3 });
+    const trendLines = knowledge.trends.map((t) => `- ${t.name} (confidence: ${t.confidence})`);
     return {
-      reply: ["Three distinct directions for this footage, each a real executable strategy:", ...lines, "", "Pick one (or combine, e.g. a structure style + vertical-reframe) and I will plan it against the current timeline."].join("\n"),
+      reply: ["Three distinct directions for this footage, each a real executable strategy:", ...lines, ...(trendLines.length ? ["", "Current platform intelligence (surface on request, never auto-applied):", ...trendLines] : []), "", "Pick one (or combine, e.g. a structure style + vertical-reframe) and I will plan it against the current timeline."].join("\n"),
       intent,
       mode,
       styles,
