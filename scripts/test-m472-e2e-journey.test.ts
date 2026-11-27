@@ -18,7 +18,7 @@ import path from "node:path";
 import { spawnSync } from "node:child_process";
 
 const BASE = process.env.M472_BASE ?? "http://localhost:3118";
-const EVIDENCE = "/home/z/my-project/download/m472-evidence/e2e-journey";
+const EVIDENCE = "/home/z/my-project/download/m473-evidence/e2e-journey";
 const STAMP = Date.now().toString(36);
 fs.mkdirSync(EVIDENCE, { recursive: true });
 
@@ -213,7 +213,11 @@ describe("M47.2-D — real production journey", () => {
         if (pendingApproval.key === "CONCEPT") {
           const concept = (g.json?.concept ?? null) as { options?: Array<{ id: string; title?: string }>; selectedId?: string | null } | null;
           if (concept?.options?.length && !concept.selectedId) {
-            const dr = await api("POST", `/api/productions/${productionId}/decisions`, { kind: "concept", selectedId: concept.options[0].id });
+            // M47.3-A — the canonical concept-selection action is
+            // PUT /api/productions/[id] {kind:"concept", selectedId} (the
+            // M47.2 E2E wrongly used POST → 405). Existing auth, ownership,
+            // option validation and append-only decision semantics apply.
+            const dr = await api("PUT", `/api/productions/${productionId}`, { kind: "concept", selectedId: concept.options[0].id });
             if (dr.status >= 300) throw new Error(`concept decision → ${dr.status} ${JSON.stringify(dr.json).slice(0, 200)}`);
             fs.appendFileSync(path.join(EVIDENCE, "pipeline-poll.log"), `${new Date().toISOString()} concept selected: ${concept.options[0].id}\n`);
           }
@@ -253,8 +257,13 @@ describe("M47.2-D — real production journey", () => {
     const renderStage = stageState(prod, "FINAL_RENDER");
     expect(renderStage?.state).toBe("SUCCEEDED");
     const qa = stageState(prod, "QUALITY_ASSURANCE");
-    const output = renderStage?.output as { exportId?: string } | null;
-    const exportId = output?.exportId ?? (qa?.output as { exportId?: string } | null)?.exportId ?? prod?.exportId;
+    // The FINAL_RENDER stage output carries `exportFileId` (the ExportFile row);
+    // DELIVERY artifacts list them as well.
+    const output = renderStage?.output as { exportFileId?: string } | null;
+    const delivery = stageState(prod, "DELIVERY")?.output as { artifacts?: Array<{ exportFileId?: string }> } | null;
+    const exportId = output?.exportFileId
+      ?? delivery?.artifacts?.find((a) => a.exportFileId)?.exportFileId
+      ?? (prod as { exportFileId?: string })?.exportFileId;
     expect(exportId).toBeTruthy();
     save("step-14-render-output.json", { renderStageState: renderStage?.state, qaState: qa?.state, exportId, renderOutput: renderStage?.output });
 
