@@ -1,6 +1,6 @@
 # THIRD-PARTY NOTICES — BEAN FX
 
-Generated 2026-11-27 from `package.json` + `package-lock.json` + installed package metadata + npm registry metadata. The audit enumerates **instances** (lockfile install paths), not collapsed package names: 995 lockfile entries = 577 production instances + 418 development instances; 540 unique package names; 40 nested production instances (of which 40 carry versions differing from their top-level counterpart). Full inventory: `docs/legal/OPEN_SOURCE_INVENTORY.md`. SBOM: `docs/legal/sbom.cdx.json`.
+Generated 2026-11-27 from `package.json` + `package-lock.json` + installed package metadata + npm registry metadata. The audit enumerates **instances** (lockfile install paths), not collapsed package names: 1007 lockfile entries = 584 production instances + 423 development instances; 548 unique package names; 37 nested production instances (of which 37 carry versions differing from their top-level counterpart). Full inventory: `docs/legal/OPEN_SOURCE_INVENTORY.md`. SBOM: `docs/legal/sbom.cdx.json`.
 
 > Required attributions and license notices for third-party material. Not legal advice: technical license DETECTION below is not legal CLEARANCE. License texts for direct production dependencies ship in `docs/legal/licenses/`.
 
@@ -15,7 +15,7 @@ Generated 2026-11-27 from `package.json` + `package-lock.json` + installed packa
 
 ## npm instances — per license classification (production)
 
-### PERMISSIVE (561 instances)
+### PERMISSIVE (568 instances)
 
 - **@babel/runtime** 7.28.6 — MIT — 1 install path(s): node_modules/@babel/runtime
 - **@codemirror/autocomplete** 6.20.0 — MIT — 1 install path(s): node_modules/@codemirror/autocomplete
@@ -57,30 +57,35 @@ Generated 2026-11-27 from `package.json` + `package-lock.json` + installed packa
 - **@dnd-kit/core** 6.3.1 — MIT _(direct dependency)_ — 1 install path(s): node_modules/@dnd-kit/core
 - **@dnd-kit/sortable** 10.0.0 — MIT _(direct dependency)_ — 1 install path(s): node_modules/@dnd-kit/sortable
 - **@dnd-kit/utilities** 3.2.2 — MIT _(direct dependency)_ — 1 install path(s): node_modules/@dnd-kit/utilities
+- **@eloqnt/config** 0.1.2 — MIT — 1 install path(s): node_modules/@eloqnt/config
+- **@eloqnt/extractor** 0.1.0 — MIT — 1 install path(s): node_modules/@eloqnt/extractor
+- **@eloqnt/format-json** 0.1.1 — MIT — 1 install path(s): node_modules/@eloqnt/format-json
+- **@eloqnt/format-po** 0.1.2 — MIT — 1 install path(s): node_modules/@eloqnt/format-po
+- **@eloqnt/messages** 0.1.0 — MIT — 1 install path(s): node_modules/@eloqnt/messages
 - **@emnapi/runtime** 1.11.3 — MIT — 1 install path(s): node_modules/@emnapi/runtime
 - **@floating-ui/core** 1.7.3 — MIT — 1 install path(s): node_modules/@floating-ui/core
 - **@floating-ui/dom** 1.7.4 — MIT — 1 install path(s): node_modules/@floating-ui/dom
 - **@floating-ui/react** 0.27.16 — MIT — 1 install path(s): node_modules/@floating-ui/react
 - **@floating-ui/react-dom** 2.1.6 — MIT — 1 install path(s): node_modules/@floating-ui/react-dom
 - **@floating-ui/utils** 0.2.10 — MIT — 1 install path(s): node_modules/@floating-ui/utils
-- **@formatjs/ecma402-abstract** 2.3.6 — MIT — 1 install path(s): node_modules/@formatjs/ecma402-abstract
-- **@formatjs/intl-localematcher** 0.6.2 — MIT — 1 install path(s): node_modules/@formatjs/ecma402-abstract/node_modules/@formatjs/intl-localematcher
-- **@formatjs/fast-memoize** 2.2.7 — MIT — 1 install path(s): node_modules/@formatjs/fast-memoize
-- **@formatjs/icu-messageformat-parser** 2.11.4 — MIT — 1 install path(s): node_modules/@formatjs/icu-messageformat-parser
-- **@formatjs/icu-skeleton-parser** 1.8.16 — MIT — 1 install path(s): node_modules/@formatjs/icu-skeleton-parser
-- **@formatjs/intl-localematcher** 0.5.10 — MIT — 1 install path(s): node_modules/@formatjs/intl-localematcher
+- **@formatjs/fast-memoize** 3.1.7 — MIT — 1 install path(s): node_modules/@formatjs/fast-memoize
+- **@formatjs/icu-messageformat-parser** 3.5.23 — MIT — 1 install path(s): node_modules/@formatjs/icu-messageformat-parser
+- **@formatjs/icu-skeleton-parser** 2.1.13 — MIT — 1 install path(s): node_modules/@formatjs/icu-skeleton-parser
+- **@formatjs/intl-localematcher** 0.8.14 — MIT — 1 install path(s): node_modules/@formatjs/intl-localematcher
 - **@hookform/resolvers** 5.2.2 — MIT _(direct dependency)_ — 1 install path(s): node_modules/@hookform/resolvers
-- **@img/colour** 1.0.0 — MIT — 1 install path(s): node_modules/@img/colour
-- **@img/sharp-darwin-arm64** 0.34.5 — Apache-2.0 — 1 install path(s): node_modules/@img/sharp-darwin-arm64
-- **@img/sharp-darwin-x64** 0.34.5 — Apache-2.0 — 1 install path(s): node_modules/@img/sharp-darwin-x64
-- **@img/sharp-linux-arm** 0.34.5 — Apache-2.0 — 1 install path(s): node_modules/@img/sharp-linux-arm
-- **@img/sharp-linux-arm64** 0.34.5 — Apache-2.0 — 1 install path(s): node_modules/@img/sharp-linux-arm64
-- **@img/sharp-linux-ppc64** 0.34.5 — Apache-2.0 — 1 install path(s): node_modules/@img/sharp-linux-ppc64
-- **@img/sharp-linux-riscv64** 0.34.5 — Apache-2.0 — 1 install path(s): node_modules/@img/sharp-linux-riscv64
-- **@img/sharp-linux-s390x** 0.34.5 — Apache-2.0 — 1 install path(s): node_modules/@img/sharp-linux-s390x
-- **@img/sharp-linux-x64** 0.34.5 — Apache-2.0 — 1 install path(s): node_modules/@img/sharp-linux-x64
-- **@img/sharp-linuxmusl-arm64** 0.34.5 — Apache-2.0 — 1 install path(s): node_modules/@img/sharp-linuxmusl-arm64
-- **@img/sharp-linuxmusl-x64** 0.34.5 — Apache-2.0 — 1 install path(s): node_modules/@img/sharp-linuxmusl-x64
+- **@img/colour** 1.1.0 — MIT — 1 install path(s): node_modules/@img/colour
+- **@img/sharp-darwin-arm64** 0.35.5 — Apache-2.0 — 1 install path(s): node_modules/@img/sharp-darwin-arm64
+- **@img/sharp-darwin-x64** 0.35.5 — Apache-2.0 — 1 install path(s): node_modules/@img/sharp-darwin-x64
+- **@img/sharp-freebsd-wasm32** 0.35.5 — Apache-2.0 — 1 install path(s): node_modules/@img/sharp-freebsd-wasm32
+- **@img/sharp-linux-arm** 0.35.5 — Apache-2.0 — 1 install path(s): node_modules/@img/sharp-linux-arm
+- **@img/sharp-linux-arm64** 0.35.5 — Apache-2.0 — 1 install path(s): node_modules/@img/sharp-linux-arm64
+- **@img/sharp-linux-ppc64** 0.35.5 — Apache-2.0 — 1 install path(s): node_modules/@img/sharp-linux-ppc64
+- **@img/sharp-linux-riscv64** 0.35.5 — Apache-2.0 — 1 install path(s): node_modules/@img/sharp-linux-riscv64
+- **@img/sharp-linux-s390x** 0.35.5 — Apache-2.0 — 1 install path(s): node_modules/@img/sharp-linux-s390x
+- **@img/sharp-linux-x64** 0.35.5 — Apache-2.0 — 1 install path(s): node_modules/@img/sharp-linux-x64
+- **@img/sharp-linuxmusl-arm64** 0.35.5 — Apache-2.0 — 1 install path(s): node_modules/@img/sharp-linuxmusl-arm64
+- **@img/sharp-linuxmusl-x64** 0.35.5 — Apache-2.0 — 1 install path(s): node_modules/@img/sharp-linuxmusl-x64
+- **@img/sharp-webcontainers-wasm32** 0.35.5 — Apache-2.0 — 1 install path(s): node_modules/@img/sharp-webcontainers-wasm32
 - **@lexical/clipboard** 0.35.0 — MIT — 1 install path(s): node_modules/@lexical/clipboard
 - **@lexical/code** 0.35.0 — MIT — 1 install path(s): node_modules/@lexical/code
 - **@lexical/devtools-core** 0.35.0 — MIT — 1 install path(s): node_modules/@lexical/devtools-core
@@ -123,31 +128,30 @@ Generated 2026-11-27 from `package.json` + `package-lock.json` + installed packa
 - **@mdxeditor/editor** 3.52.3 — MIT _(direct dependency)_ — 1 install path(s): node_modules/@mdxeditor/editor
 - **@mdxeditor/gurx** 1.2.4 — MIT — 1 install path(s): node_modules/@mdxeditor/gurx
 - **@microsoft/fetch-event-source** 2.0.1 — MIT — 1 install path(s): node_modules/@microsoft/fetch-event-source
-- **@next/env** 16.1.3 — MIT — 1 install path(s): node_modules/@next/env
-- **@next/swc-darwin-arm64** 16.1.3 — MIT — 1 install path(s): node_modules/@next/swc-darwin-arm64
-- **@next/swc-darwin-x64** 16.1.3 — MIT — 1 install path(s): node_modules/@next/swc-darwin-x64
-- **@next/swc-linux-arm64-gnu** 16.1.3 — MIT — 1 install path(s): node_modules/@next/swc-linux-arm64-gnu
-- **@next/swc-linux-arm64-musl** 16.1.3 — MIT — 1 install path(s): node_modules/@next/swc-linux-arm64-musl
-- **@next/swc-linux-x64-gnu** 16.1.3 — MIT — 1 install path(s): node_modules/@next/swc-linux-x64-gnu
-- **@next/swc-linux-x64-musl** 16.1.3 — MIT — 1 install path(s): node_modules/@next/swc-linux-x64-musl
-- **@next/swc-win32-arm64-msvc** 16.1.3 — MIT — 1 install path(s): node_modules/@next/swc-win32-arm64-msvc
-- **@next/swc-win32-x64-msvc** 16.1.3 — MIT — 1 install path(s): node_modules/@next/swc-win32-x64-msvc
+- **@next/env** 16.4.6 — MIT — 1 install path(s): node_modules/@next/env
+- **@next/swc-darwin-arm64** 16.4.6 — MIT — 1 install path(s): node_modules/@next/swc-darwin-arm64
+- **@next/swc-darwin-x64** 16.4.6 — MIT — 1 install path(s): node_modules/@next/swc-darwin-x64
+- **@next/swc-linux-arm64-gnu** 16.4.6 — MIT — 1 install path(s): node_modules/@next/swc-linux-arm64-gnu
+- **@next/swc-linux-arm64-musl** 16.4.6 — MIT — 1 install path(s): node_modules/@next/swc-linux-arm64-musl
+- **@next/swc-linux-x64-gnu** 16.4.6 — MIT — 1 install path(s): node_modules/@next/swc-linux-x64-gnu
+- **@next/swc-linux-x64-musl** 16.4.6 — MIT — 1 install path(s): node_modules/@next/swc-linux-x64-musl
+- **@next/swc-win32-arm64-msvc** 16.4.6 — MIT — 1 install path(s): node_modules/@next/swc-win32-arm64-msvc
+- **@next/swc-win32-x64-msvc** 16.4.6 — MIT — 1 install path(s): node_modules/@next/swc-win32-x64-msvc
 - **@open-draft/deferred-promise** 2.2.0 — MIT — 1 install path(s): node_modules/@open-draft/deferred-promise
 - **@panva/hkdf** 1.2.1 — MIT — 1 install path(s): node_modules/@panva/hkdf
-- **@parcel/watcher** 2.5.4 — MIT — 1 install path(s): node_modules/@parcel/watcher
-- **@parcel/watcher-android-arm64** 2.5.4 — MIT — 1 install path(s): node_modules/@parcel/watcher-android-arm64
-- **@parcel/watcher-darwin-arm64** 2.5.4 — MIT — 1 install path(s): node_modules/@parcel/watcher-darwin-arm64
-- **@parcel/watcher-darwin-x64** 2.5.4 — MIT — 1 install path(s): node_modules/@parcel/watcher-darwin-x64
-- **@parcel/watcher-freebsd-x64** 2.5.4 — MIT — 1 install path(s): node_modules/@parcel/watcher-freebsd-x64
-- **@parcel/watcher-linux-arm-glibc** 2.5.4 — MIT — 1 install path(s): node_modules/@parcel/watcher-linux-arm-glibc
-- **@parcel/watcher-linux-arm-musl** 2.5.4 — MIT — 1 install path(s): node_modules/@parcel/watcher-linux-arm-musl
-- **@parcel/watcher-linux-arm64-glibc** 2.5.4 — MIT — 1 install path(s): node_modules/@parcel/watcher-linux-arm64-glibc
-- **@parcel/watcher-linux-arm64-musl** 2.5.4 — MIT — 1 install path(s): node_modules/@parcel/watcher-linux-arm64-musl
-- **@parcel/watcher-linux-x64-glibc** 2.5.4 — MIT — 1 install path(s): node_modules/@parcel/watcher-linux-x64-glibc
-- **@parcel/watcher-linux-x64-musl** 2.5.4 — MIT — 1 install path(s): node_modules/@parcel/watcher-linux-x64-musl
-- **@parcel/watcher-win32-arm64** 2.5.4 — MIT — 1 install path(s): node_modules/@parcel/watcher-win32-arm64
-- **@parcel/watcher-win32-ia32** 2.5.4 — MIT — 1 install path(s): node_modules/@parcel/watcher-win32-ia32
-- **@parcel/watcher-win32-x64** 2.5.4 — MIT — 1 install path(s): node_modules/@parcel/watcher-win32-x64
+- **@parcel/watcher** 2.6.0 — MIT — 1 install path(s): node_modules/@parcel/watcher
+- **@parcel/watcher-android-arm64** 2.6.0 — MIT — 1 install path(s): node_modules/@parcel/watcher-android-arm64
+- **@parcel/watcher-darwin-arm64** 2.6.0 — MIT — 1 install path(s): node_modules/@parcel/watcher-darwin-arm64
+- **@parcel/watcher-darwin-x64** 2.6.0 — MIT — 1 install path(s): node_modules/@parcel/watcher-darwin-x64
+- **@parcel/watcher-freebsd-x64** 2.6.0 — MIT — 1 install path(s): node_modules/@parcel/watcher-freebsd-x64
+- **@parcel/watcher-linux-arm-glibc** 2.6.0 — MIT — 1 install path(s): node_modules/@parcel/watcher-linux-arm-glibc
+- **@parcel/watcher-linux-arm-musl** 2.6.0 — MIT — 1 install path(s): node_modules/@parcel/watcher-linux-arm-musl
+- **@parcel/watcher-linux-arm64-glibc** 2.6.0 — MIT — 1 install path(s): node_modules/@parcel/watcher-linux-arm64-glibc
+- **@parcel/watcher-linux-arm64-musl** 2.6.0 — MIT — 1 install path(s): node_modules/@parcel/watcher-linux-arm64-musl
+- **@parcel/watcher-linux-x64-glibc** 2.6.0 — MIT — 1 install path(s): node_modules/@parcel/watcher-linux-x64-glibc
+- **@parcel/watcher-linux-x64-musl** 2.6.0 — MIT — 1 install path(s): node_modules/@parcel/watcher-linux-x64-musl
+- **@parcel/watcher-win32-arm64** 2.6.0 — MIT — 1 install path(s): node_modules/@parcel/watcher-win32-arm64
+- **@parcel/watcher-win32-x64** 2.6.0 — MIT — 1 install path(s): node_modules/@parcel/watcher-win32-x64
 - **@prisma/client** 6.19.2 — Apache-2.0 _(direct dependency)_ — 1 install path(s): node_modules/@prisma/client
 - **@prisma/config** 6.19.2 — Apache-2.0 — 1 install path(s): node_modules/@prisma/config
 - **@prisma/debug** 6.19.2 — Apache-2.0 — 1 install path(s): node_modules/@prisma/debug
@@ -224,19 +228,22 @@ Generated 2026-11-27 from `package.json` + `package-lock.json` + installed packa
 - **@standard-schema/spec** 1.1.0 — MIT — 1 install path(s): node_modules/@standard-schema/spec
 - **@standard-schema/utils** 0.3.0 — MIT — 1 install path(s): node_modules/@standard-schema/utils
 - **@stitches/core** 1.2.8 — MIT — 1 install path(s): node_modules/@stitches/core
-- **@swc/core** 1.15.8 — Apache-2.0 — 1 install path(s): node_modules/@swc/core
-- **@swc/core-darwin-arm64** 1.15.8 — Apache-2.0 AND MIT — 1 install path(s): node_modules/@swc/core-darwin-arm64
-- **@swc/core-darwin-x64** 1.15.8 — Apache-2.0 AND MIT — 1 install path(s): node_modules/@swc/core-darwin-x64
-- **@swc/core-linux-arm-gnueabihf** 1.15.8 — Apache-2.0 — 1 install path(s): node_modules/@swc/core-linux-arm-gnueabihf
-- **@swc/core-linux-arm64-gnu** 1.15.8 — Apache-2.0 AND MIT — 1 install path(s): node_modules/@swc/core-linux-arm64-gnu
-- **@swc/core-linux-arm64-musl** 1.15.8 — Apache-2.0 AND MIT — 1 install path(s): node_modules/@swc/core-linux-arm64-musl
-- **@swc/core-linux-x64-gnu** 1.15.8 — Apache-2.0 AND MIT — 1 install path(s): node_modules/@swc/core-linux-x64-gnu
-- **@swc/core-linux-x64-musl** 1.15.8 — Apache-2.0 AND MIT — 1 install path(s): node_modules/@swc/core-linux-x64-musl
-- **@swc/core-win32-arm64-msvc** 1.15.8 — Apache-2.0 AND MIT — 1 install path(s): node_modules/@swc/core-win32-arm64-msvc
-- **@swc/core-win32-ia32-msvc** 1.15.8 — Apache-2.0 AND MIT — 1 install path(s): node_modules/@swc/core-win32-ia32-msvc
-- **@swc/core-win32-x64-msvc** 1.15.8 — Apache-2.0 AND MIT — 1 install path(s): node_modules/@swc/core-win32-x64-msvc
+- **@swc/core** 1.16.22 — Apache-2.0 — 1 install path(s): node_modules/@swc/core
+- **@swc/core-darwin-arm64** 1.16.22 — Apache-2.0 AND MIT — 1 install path(s): node_modules/@swc/core-darwin-arm64
+- **@swc/core-darwin-x64** 1.16.22 — Apache-2.0 AND MIT — 1 install path(s): node_modules/@swc/core-darwin-x64
+- **@swc/core-linux-arm-gnueabihf** 1.16.22 — Apache-2.0 — 1 install path(s): node_modules/@swc/core-linux-arm-gnueabihf
+- **@swc/core-linux-arm64-gnu** 1.16.22 — Apache-2.0 AND MIT — 1 install path(s): node_modules/@swc/core-linux-arm64-gnu
+- **@swc/core-linux-arm64-musl** 1.16.22 — Apache-2.0 AND MIT — 1 install path(s): node_modules/@swc/core-linux-arm64-musl
+- **@swc/core-linux-ppc64-gnu** 1.16.22 — Apache-2.0 AND MIT — 1 install path(s): node_modules/@swc/core-linux-ppc64-gnu
+- **@swc/core-linux-s390x-gnu** 1.16.22 — Apache-2.0 AND MIT — 1 install path(s): node_modules/@swc/core-linux-s390x-gnu
+- **@swc/core-linux-x64-gnu** 1.16.22 — Apache-2.0 AND MIT — 1 install path(s): node_modules/@swc/core-linux-x64-gnu
+- **@swc/core-linux-x64-musl** 1.16.22 — Apache-2.0 AND MIT — 1 install path(s): node_modules/@swc/core-linux-x64-musl
+- **@swc/core-win32-arm64-msvc** 1.16.22 — Apache-2.0 AND MIT — 1 install path(s): node_modules/@swc/core-win32-arm64-msvc
+- **@swc/core-win32-ia32-msvc** 1.16.22 — Apache-2.0 AND MIT — 1 install path(s): node_modules/@swc/core-win32-ia32-msvc
+- **@swc/core-win32-x64-msvc** 1.16.22 — Apache-2.0 AND MIT — 1 install path(s): node_modules/@swc/core-win32-x64-msvc
 - **@swc/counter** 0.1.3 — Apache-2.0 — 1 install path(s): node_modules/@swc/counter
-- **@swc/types** 0.1.25 — Apache-2.0 — 1 install path(s): node_modules/@swc/types
+- **@swc/helpers** 0.5.23 — Apache-2.0 — 1 install path(s): node_modules/@swc/helpers
+- **@swc/types** 0.1.28 — Apache-2.0 — 1 install path(s): node_modules/@swc/types
 - **@tanstack/query-core** 5.90.19 — MIT — 1 install path(s): node_modules/@tanstack/query-core
 - **@tanstack/react-query** 5.90.19 — MIT _(direct dependency)_ — 1 install path(s): node_modules/@tanstack/react-query
 - **@tanstack/react-table** 8.21.3 — MIT _(direct dependency)_ — 1 install path(s): node_modules/@tanstack/react-table
@@ -267,7 +274,7 @@ Generated 2026-11-27 from `package.json` + `package-lock.json` + installed packa
 - **aria-hidden** 1.2.6 — MIT — 1 install path(s): node_modules/aria-hidden
 - **bail** 2.0.2 — MIT — 1 install path(s): node_modules/bail
 - **base64-js** 1.5.1 — MIT — 1 install path(s): node_modules/base64-js
-- **baseline-browser-mapping** 2.9.15 — Apache-2.0 — 1 install path(s): node_modules/baseline-browser-mapping
+- **baseline-browser-mapping** 2.11.40 — Apache-2.0 — 1 install path(s): node_modules/baseline-browser-mapping
 - **buffer** 6.0.3 — MIT — 1 install path(s): node_modules/buffer
 - **c12** 3.1.0 — MIT — 1 install path(s): node_modules/c12
 - **caniuse-lite** 1.0.30001764 — CC-BY-4.0 — 1 install path(s): node_modules/caniuse-lite
@@ -308,7 +315,6 @@ Generated 2026-11-27 from `package.json` + `package-lock.json` + installed packa
 - **date-fns** 4.1.0 — MIT _(direct dependency)_ — 1 install path(s): node_modules/date-fns
 - **date-fns-jalali** 4.1.0-0 — MIT — 1 install path(s): node_modules/date-fns-jalali
 - **debug** 4.4.3 — MIT — 1 install path(s): node_modules/debug
-- **decimal.js** 10.6.0 — MIT — 1 install path(s): node_modules/decimal.js
 - **decimal.js-light** 2.5.1 — MIT — 1 install path(s): node_modules/decimal.js-light
 - **decode-named-character-reference** 1.2.0 — MIT — 1 install path(s): node_modules/decode-named-character-reference
 - **deepmerge-ts** 7.1.5 — BSD-3-Clause — 1 install path(s): node_modules/deepmerge-ts
@@ -358,11 +364,13 @@ Generated 2026-11-27 from `package.json` + `package-lock.json` + installed packa
 - **highlight.js** 10.7.3 — BSD-3-Clause — 1 install path(s): node_modules/highlight.js
 - **highlightjs-vue** 1.0.0 — CC0-1.0 — 1 install path(s): node_modules/highlightjs-vue
 - **html-url-attributes** 3.0.1 — MIT — 1 install path(s): node_modules/html-url-attributes
+- **icu-minify** 4.15.3 — MIT — 1 install path(s): node_modules/icu-minify
 - **ieee754** 1.2.1 — BSD-3-Clause — 1 install path(s): node_modules/ieee754
 - **inline-style-parser** 0.2.7 — MIT — 1 install path(s): node_modules/inline-style-parser
 - **input-otp** 1.4.2 — MIT _(direct dependency)_ — 1 install path(s): node_modules/input-otp
 - **internmap** 2.0.3 — ISC — 1 install path(s): node_modules/internmap
-- **intl-messageformat** 10.7.18 — BSD-3-Clause — 1 install path(s): node_modules/intl-messageformat
+- **intl-messageformat** 12.2.1 — BSD-3-Clause — 1 install path(s): node_modules/intl-messageformat
+- **@formatjs/fast-memoize** 3.1.8 — MIT — 1 install path(s): node_modules/intl-messageformat/node_modules/@formatjs/fast-memoize
 - **is-alphabetical** 2.0.1 — MIT — 1 install path(s): node_modules/is-alphabetical
 - **is-alphanumerical** 2.0.1 — MIT — 1 install path(s): node_modules/is-alphanumerical
 - **is-decimal** 2.0.1 — MIT — 1 install path(s): node_modules/is-decimal
@@ -378,7 +386,7 @@ Generated 2026-11-27 from `package.json` + `package-lock.json` + installed packa
 - **js-yaml** 4.1.1 — MIT — 1 install path(s): node_modules/js-yaml
 - **kleur** 4.1.5 — MIT — 1 install path(s): node_modules/kleur
 - **lexical** 0.35.0 — MIT — 1 install path(s): node_modules/lexical
-- **lib0** 0.2.117 — MIT — 1 install path(s): node_modules/lib0
+- **lib0** 0.2.120 — MIT — 1 install path(s): node_modules/lib0
 - **lodash** 4.17.21 — MIT — 1 install path(s): node_modules/lodash
 - **lodash-es** 4.17.22 — MIT — 1 install path(s): node_modules/lodash-es
 - **longest-streak** 3.1.0 — MIT — 1 install path(s): node_modules/longest-streak
@@ -444,19 +452,17 @@ Generated 2026-11-27 from `package.json` + `package-lock.json` + installed packa
 - **motion-utils** 12.24.10 — MIT — 1 install path(s): node_modules/motion-utils
 - **mri** 1.2.0 — MIT — 1 install path(s): node_modules/mri
 - **ms** 2.1.3 — MIT — 1 install path(s): node_modules/ms
-- **nanoid** 3.3.11 — MIT — 1 install path(s): node_modules/nanoid
+- **nanoid** 3.3.20 — MIT — 1 install path(s): node_modules/nanoid
 - **negotiator** 1.0.0 — MIT — 1 install path(s): node_modules/negotiator
-- **next** 16.1.3 — MIT _(direct dependency)_ — 1 install path(s): node_modules/next
-- **next-auth** 4.24.13 — ISC _(direct dependency)_ — 1 install path(s): node_modules/next-auth
-- **uuid** 8.3.2 — MIT _(direct dependency)_ — 1 install path(s): node_modules/next-auth/node_modules/uuid
-- **next-intl** 4.7.0 — MIT _(direct dependency)_ — 1 install path(s): node_modules/next-intl
-- **next-intl-swc-plugin-extractor** 4.7.0 — MIT — 1 install path(s): node_modules/next-intl-swc-plugin-extractor
+- **next** 16.4.6 — MIT _(direct dependency)_ — 1 install path(s): node_modules/next
+- **next-auth** 4.24.15 — ISC _(direct dependency)_ — 1 install path(s): node_modules/next-auth
+- **next-intl** 4.16.2 — MIT _(direct dependency)_ — 1 install path(s): node_modules/next-intl
+- **next-intl-swc-plugin-extractor** 4.15.1 — MIT — 1 install path(s): node_modules/next-intl-swc-plugin-extractor
 - **next-themes** 0.4.6 — MIT _(direct dependency)_ — 1 install path(s): node_modules/next-themes
 - **next-tick** 1.1.0 — ISC — 1 install path(s): node_modules/next-tick
-- **@swc/helpers** 0.5.15 — Apache-2.0 — 1 install path(s): node_modules/next/node_modules/@swc/helpers
-- **postcss** 8.4.31 — MIT — 1 install path(s): node_modules/next/node_modules/postcss
 - **node-addon-api** 7.1.1 — MIT — 1 install path(s): node_modules/node-addon-api
 - **node-fetch-native** 1.6.7 — MIT — 1 install path(s): node_modules/node-fetch-native
+- **nodemailer** 10.6.1 — MIT-0 _(direct dependency)_ — 1 install path(s): node_modules/nodemailer
 - **nypm** 0.6.2 — MIT — 1 install path(s): node_modules/nypm
 - **oauth** 0.9.15 — MIT — 1 install path(s): node_modules/oauth
 - **object-assign** 4.1.1 — MIT — 1 install path(s): node_modules/object-assign
@@ -469,9 +475,10 @@ Generated 2026-11-27 from `package.json` + `package-lock.json` + installed packa
 - **pathe** 2.0.3 — MIT — 1 install path(s): node_modules/pathe
 - **perfect-debounce** 1.0.0 — MIT — 1 install path(s): node_modules/perfect-debounce
 - **picocolors** 1.1.1 — ISC — 1 install path(s): node_modules/picocolors
-- **picomatch** 4.0.3 — MIT — 1 install path(s): node_modules/picomatch
+- **picomatch** 4.0.7 — MIT — 1 install path(s): node_modules/picomatch
 - **pkg-types** 2.3.0 — MIT — 1 install path(s): node_modules/pkg-types
-- **po-parser** 2.1.1 — MIT — 1 install path(s): node_modules/po-parser
+- **po-parser** 2.2.0 — MIT — 1 install path(s): node_modules/po-parser
+- **postcss** 8.5.23 — MIT — 1 install path(s): node_modules/postcss
 - **preact** 10.28.2 — MIT — 1 install path(s): node_modules/preact
 - **preact-render-to-string** 5.2.6 — MIT — 1 install path(s): node_modules/preact-render-to-string
 - **pretty-format** 3.8.0 — MIT — 1 install path(s): node_modules/pretty-format
@@ -515,8 +522,8 @@ Generated 2026-11-27 from `package.json` + `package-lock.json` + installed packa
 - **sade** 1.8.1 — MIT — 1 install path(s): node_modules/sade
 - **scheduler** 0.27.0 — MIT — 1 install path(s): node_modules/scheduler
 - **screenfull** 5.2.0 — MIT — 1 install path(s): node_modules/screenfull
-- **semver** 7.7.3 — ISC — 1 install path(s): node_modules/semver
-- **sharp** 0.34.5 — Apache-2.0 _(direct dependency)_ — 1 install path(s): node_modules/sharp
+- **semver** 7.8.6 — ISC — 1 install path(s): node_modules/semver
+- **sharp** 0.35.5 — Apache-2.0 _(direct dependency)_ — 1 install path(s): node_modules/sharp
 - **sonner** 2.0.7 — MIT _(direct dependency)_ — 1 install path(s): node_modules/sonner
 - **source-map-js** 1.2.1 — BSD-3-Clause — 1 install path(s): node_modules/source-map-js
 - **space-separated-tokens** 2.0.2 — MIT — 1 install path(s): node_modules/space-separated-tokens
@@ -547,10 +554,10 @@ Generated 2026-11-27 from `package.json` + `package-lock.json` + installed packa
 - **unist-util-visit** 5.0.0 — MIT — 1 install path(s): node_modules/unist-util-visit
 - **unist-util-visit-parents** 6.0.2 — MIT — 1 install path(s): node_modules/unist-util-visit-parents
 - **use-callback-ref** 1.3.3 — MIT — 1 install path(s): node_modules/use-callback-ref
-- **use-intl** 4.7.0 — MIT — 1 install path(s): node_modules/use-intl
+- **use-intl** 4.15.1 — MIT — 1 install path(s): node_modules/use-intl
 - **use-sidecar** 1.1.3 — MIT — 1 install path(s): node_modules/use-sidecar
 - **use-sync-external-store** 1.6.0 — MIT — 1 install path(s): node_modules/use-sync-external-store
-- **uuid** 11.1.0 — MIT _(direct dependency)_ — 1 install path(s): node_modules/uuid
+- **uuid** 11.1.1 — MIT _(direct dependency)_ — 1 install path(s): node_modules/uuid
 - **uvu** 0.5.6 — MIT — 1 install path(s): node_modules/uvu
 - **vaul** 1.1.2 — MIT _(direct dependency)_ — 1 install path(s): node_modules/vaul
 - **vfile** 6.0.3 — MIT — 1 install path(s): node_modules/vfile
@@ -559,28 +566,28 @@ Generated 2026-11-27 from `package.json` + `package-lock.json` + installed packa
 - **w3c-keyname** 2.2.8 — MIT — 1 install path(s): node_modules/w3c-keyname
 - **xtend** 4.0.2 — MIT — 1 install path(s): node_modules/xtend
 - **yallist** 4.0.0 — ISC — 1 install path(s): node_modules/yallist
-- **yjs** 13.6.29 — MIT — 1 install path(s): node_modules/yjs
+- **yjs** 13.6.33 — MIT — 1 install path(s): node_modules/yjs
 - **z-ai-web-dev-sdk** 0.0.18 — ISC _(direct dependency)_ — 1 install path(s): node_modules/z-ai-web-dev-sdk
-- **zod** 4.3.5 — MIT _(direct dependency)_ — 1 install path(s): node_modules/zod
+- **zod** 4.6.7 — MIT _(direct dependency)_ — 1 install path(s): node_modules/zod
 - **zustand** 5.0.10 — MIT _(direct dependency)_ — 1 install path(s): node_modules/zustand
 - **zwitch** 2.0.4 — MIT — 1 install path(s): node_modules/zwitch
 
 ### COPYLEFT-WEAK (14 instances)
 
-- **@img/sharp-libvips-darwin-arm64** 1.2.4 — LGPL-3.0-or-later — 1 install path(s): node_modules/@img/sharp-libvips-darwin-arm64
-- **@img/sharp-libvips-darwin-x64** 1.2.4 — LGPL-3.0-or-later — 1 install path(s): node_modules/@img/sharp-libvips-darwin-x64
-- **@img/sharp-libvips-linux-arm** 1.2.4 — LGPL-3.0-or-later — 1 install path(s): node_modules/@img/sharp-libvips-linux-arm
-- **@img/sharp-libvips-linux-arm64** 1.2.4 — LGPL-3.0-or-later — 1 install path(s): node_modules/@img/sharp-libvips-linux-arm64
-- **@img/sharp-libvips-linux-ppc64** 1.2.4 — LGPL-3.0-or-later — 1 install path(s): node_modules/@img/sharp-libvips-linux-ppc64
-- **@img/sharp-libvips-linux-riscv64** 1.2.4 — LGPL-3.0-or-later — 1 install path(s): node_modules/@img/sharp-libvips-linux-riscv64
-- **@img/sharp-libvips-linux-s390x** 1.2.4 — LGPL-3.0-or-later — 1 install path(s): node_modules/@img/sharp-libvips-linux-s390x
-- **@img/sharp-libvips-linux-x64** 1.2.4 — LGPL-3.0-or-later — 1 install path(s): node_modules/@img/sharp-libvips-linux-x64
-- **@img/sharp-libvips-linuxmusl-arm64** 1.2.4 — LGPL-3.0-or-later — 1 install path(s): node_modules/@img/sharp-libvips-linuxmusl-arm64
-- **@img/sharp-libvips-linuxmusl-x64** 1.2.4 — LGPL-3.0-or-later — 1 install path(s): node_modules/@img/sharp-libvips-linuxmusl-x64
-- **@img/sharp-wasm32** 0.34.5 — Apache-2.0 AND LGPL-3.0-or-later AND MIT — 1 install path(s): node_modules/@img/sharp-wasm32
-- **@img/sharp-win32-arm64** 0.34.5 — Apache-2.0 AND LGPL-3.0-or-later — 1 install path(s): node_modules/@img/sharp-win32-arm64
-- **@img/sharp-win32-ia32** 0.34.5 — Apache-2.0 AND LGPL-3.0-or-later — 1 install path(s): node_modules/@img/sharp-win32-ia32
-- **@img/sharp-win32-x64** 0.34.5 — Apache-2.0 AND LGPL-3.0-or-later — 1 install path(s): node_modules/@img/sharp-win32-x64
+- **@img/sharp-libvips-darwin-arm64** 1.3.4 — LGPL-3.0-or-later — 1 install path(s): node_modules/@img/sharp-libvips-darwin-arm64
+- **@img/sharp-libvips-darwin-x64** 1.3.4 — LGPL-3.0-or-later — 1 install path(s): node_modules/@img/sharp-libvips-darwin-x64
+- **@img/sharp-libvips-linux-arm** 1.3.4 — LGPL-3.0-or-later — 1 install path(s): node_modules/@img/sharp-libvips-linux-arm
+- **@img/sharp-libvips-linux-arm64** 1.3.4 — LGPL-3.0-or-later — 1 install path(s): node_modules/@img/sharp-libvips-linux-arm64
+- **@img/sharp-libvips-linux-ppc64** 1.3.4 — LGPL-3.0-or-later — 1 install path(s): node_modules/@img/sharp-libvips-linux-ppc64
+- **@img/sharp-libvips-linux-riscv64** 1.3.4 — LGPL-3.0-or-later — 1 install path(s): node_modules/@img/sharp-libvips-linux-riscv64
+- **@img/sharp-libvips-linux-s390x** 1.3.4 — LGPL-3.0-or-later — 1 install path(s): node_modules/@img/sharp-libvips-linux-s390x
+- **@img/sharp-libvips-linux-x64** 1.3.4 — LGPL-3.0-or-later — 1 install path(s): node_modules/@img/sharp-libvips-linux-x64
+- **@img/sharp-libvips-linuxmusl-arm64** 1.3.4 — LGPL-3.0-or-later — 1 install path(s): node_modules/@img/sharp-libvips-linuxmusl-arm64
+- **@img/sharp-libvips-linuxmusl-x64** 1.3.4 — LGPL-3.0-or-later — 1 install path(s): node_modules/@img/sharp-libvips-linuxmusl-x64
+- **@img/sharp-wasm32** 0.35.5 — Apache-2.0 AND LGPL-3.0-or-later AND MIT — 1 install path(s): node_modules/@img/sharp-wasm32
+- **@img/sharp-win32-arm64** 0.35.5 — Apache-2.0 AND LGPL-3.0-or-later — 1 install path(s): node_modules/@img/sharp-win32-arm64
+- **@img/sharp-win32-ia32** 0.35.5 — Apache-2.0 AND LGPL-3.0-or-later — 1 install path(s): node_modules/@img/sharp-win32-ia32
+- **@img/sharp-win32-x64** 0.35.5 — Apache-2.0 AND LGPL-3.0-or-later — 1 install path(s): node_modules/@img/sharp-win32-x64
 
 ### NON-STANDARD (2 instances)
 
@@ -589,4 +596,4 @@ Generated 2026-11-27 from `package.json` + `package-lock.json` + installed packa
 
 ## Development-only instances
 
-418 development instances (dev-only tooling) are enumerated in the audit JSON and SBOM (scope `excluded`) but are NOT shipped in this notices file; they are excluded from distribution claims. Classification: PERMISSIVE=405, COPYLEFT-WEAK=13.
+423 development instances (dev-only tooling) are enumerated in the audit JSON and SBOM (scope `excluded`) but are NOT shipped in this notices file; they are excluded from distribution claims. Classification: PERMISSIVE=410, COPYLEFT-WEAK=13.

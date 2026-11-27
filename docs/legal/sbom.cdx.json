@@ -1,10 +1,10 @@
 {
   "bomFormat": "CycloneDX",
   "specVersion": "1.5",
-  "serialNumber": "urn:uuid:9c976fb7-9117-408d-ba1b-551f4bd70d1f",
+  "serialNumber": "urn:uuid:4e3dc44a-080a-4bf9-8e2b-c7515aeca7e5",
   "version": 1,
   "metadata": {
-    "timestamp": "2026-11-27T09:27:50.912Z",
+    "timestamp": "2026-11-27T12:33:27.840Z",
     "component": {
       "type": "application",
       "name": "bean-fx",
@@ -1251,6 +1251,201 @@
     },
     {
       "type": "library",
+      "bom-ref": "inst:node_modules/@eloqnt/config",
+      "name": "@eloqnt/config",
+      "version": "0.1.2",
+      "scope": "required",
+      "licenses": [
+        {
+          "license": {
+            "name": "MIT"
+          }
+        }
+      ],
+      "purl": "pkg:npm/@eloqnt%2fconfig@0.1.2",
+      "externalReferences": [
+        {
+          "type": "distribution",
+          "url": "https://registry.npmjs.org/@eloqnt/config/-/config-0.1.2.tgz"
+        }
+      ],
+      "properties": [
+        {
+          "name": "beanfx:lockfile-path",
+          "value": "node_modules/@eloqnt/config"
+        },
+        {
+          "name": "beanfx:nesting",
+          "value": "top-level"
+        },
+        {
+          "name": "beanfx:license-evidence",
+          "value": "installed-package"
+        },
+        {
+          "name": "beanfx:integrity",
+          "value": "sha512-0pdjiCFur3M1fxuoPIoLS/ElTNerOdmkjToiLi399ITOLE/HRvHxJ5OjuOPQqPIZcbYXr2+WAWu3dnXMjt/WZg=="
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "bom-ref": "inst:node_modules/@eloqnt/extractor",
+      "name": "@eloqnt/extractor",
+      "version": "0.1.0",
+      "scope": "required",
+      "licenses": [
+        {
+          "license": {
+            "name": "MIT"
+          }
+        }
+      ],
+      "purl": "pkg:npm/@eloqnt%2fextractor@0.1.0",
+      "externalReferences": [
+        {
+          "type": "distribution",
+          "url": "https://registry.npmjs.org/@eloqnt/extractor/-/extractor-0.1.0.tgz"
+        }
+      ],
+      "properties": [
+        {
+          "name": "beanfx:lockfile-path",
+          "value": "node_modules/@eloqnt/extractor"
+        },
+        {
+          "name": "beanfx:nesting",
+          "value": "top-level"
+        },
+        {
+          "name": "beanfx:license-evidence",
+          "value": "npm-registry"
+        },
+        {
+          "name": "beanfx:integrity",
+          "value": "sha512-ZesGo0H7jCqGLvCE2e0vyUNhRPBnIRc3xuCtCMsrSXTc+DTtjhXfyF+BtCmDk2WVEgExL0e8Y3bJQygjmr3qdw=="
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "bom-ref": "inst:node_modules/@eloqnt/format-json",
+      "name": "@eloqnt/format-json",
+      "version": "0.1.1",
+      "scope": "required",
+      "licenses": [
+        {
+          "license": {
+            "name": "MIT"
+          }
+        }
+      ],
+      "purl": "pkg:npm/@eloqnt%2fformat-json@0.1.1",
+      "externalReferences": [
+        {
+          "type": "distribution",
+          "url": "https://registry.npmjs.org/@eloqnt/format-json/-/format-json-0.1.1.tgz"
+        }
+      ],
+      "properties": [
+        {
+          "name": "beanfx:lockfile-path",
+          "value": "node_modules/@eloqnt/format-json"
+        },
+        {
+          "name": "beanfx:nesting",
+          "value": "top-level"
+        },
+        {
+          "name": "beanfx:license-evidence",
+          "value": "installed-package"
+        },
+        {
+          "name": "beanfx:integrity",
+          "value": "sha512-Pp8DZPMSWBZy8CydZ293LhXnopdiIVdKO0z//fWFA+Cq1CK9vk2DdoigEFxjWl4CqYfXrRQYPdaKEKTC/9e1CQ=="
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "bom-ref": "inst:node_modules/@eloqnt/format-po",
+      "name": "@eloqnt/format-po",
+      "version": "0.1.2",
+      "scope": "required",
+      "licenses": [
+        {
+          "license": {
+            "name": "MIT"
+          }
+        }
+      ],
+      "purl": "pkg:npm/@eloqnt%2fformat-po@0.1.2",
+      "externalReferences": [
+        {
+          "type": "distribution",
+          "url": "https://registry.npmjs.org/@eloqnt/format-po/-/format-po-0.1.2.tgz"
+        }
+      ],
+      "properties": [
+        {
+          "name": "beanfx:lockfile-path",
+          "value": "node_modules/@eloqnt/format-po"
+        },
+        {
+          "name": "beanfx:nesting",
+          "value": "top-level"
+        },
+        {
+          "name": "beanfx:license-evidence",
+          "value": "installed-package"
+        },
+        {
+          "name": "beanfx:integrity",
+          "value": "sha512-bohkA1SmJ9rJQG+tNsY8gWrdSo+pJazdjI+dTW+Wt2eg+UuwejXuYOkZDVcWRBCt6MH1dhHo0UuDau0jUmu/+Q=="
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "bom-ref": "inst:node_modules/@eloqnt/messages",
+      "name": "@eloqnt/messages",
+      "version": "0.1.0",
+      "scope": "required",
+      "licenses": [
+        {
+          "license": {
+            "name": "MIT"
+          }
+        }
+      ],
+      "purl": "pkg:npm/@eloqnt%2fmessages@0.1.0",
+      "externalReferences": [
+        {
+          "type": "distribution",
+          "url": "https://registry.npmjs.org/@eloqnt/messages/-/messages-0.1.0.tgz"
+        }
+      ],
+      "properties": [
+        {
+          "name": "beanfx:lockfile-path",
+          "value": "node_modules/@eloqnt/messages"
+        },
+        {
+          "name": "beanfx:nesting",
+          "value": "top-level"
+        },
+        {
+          "name": "beanfx:license-evidence",
+          "value": "npm-registry"
+        },
+        {
+          "name": "beanfx:integrity",
+          "value": "sha512-/YIr/bPaRCJmPGR5OrqVoado0j5ijcD7q95jZlkIzd0ipmEM4s+805c9PafoLUKCrudMEI4gqIUsZ24hZ0d2pQ=="
+        }
+      ]
+    },
+    {
+      "type": "library",
       "bom-ref": "inst:node_modules/@emnapi/runtime",
       "name": "@emnapi/runtime",
       "version": "1.11.3",
@@ -1440,69 +1635,9 @@
     },
     {
       "type": "library",
-      "bom-ref": "inst:node_modules/@formatjs/ecma402-abstract",
-      "name": "@formatjs/ecma402-abstract",
-      "version": "2.3.6",
-      "scope": "required",
-      "licenses": [
-        {
-          "license": {
-            "name": "MIT"
-          }
-        }
-      ],
-      "purl": "pkg:npm/@formatjs%2fecma402-abstract@2.3.6",
-      "externalReferences": [],
-      "properties": [
-        {
-          "name": "beanfx:lockfile-path",
-          "value": "node_modules/@formatjs/ecma402-abstract"
-        },
-        {
-          "name": "beanfx:nesting",
-          "value": "top-level"
-        },
-        {
-          "name": "beanfx:license-evidence",
-          "value": "npm-registry"
-        }
-      ]
-    },
-    {
-      "type": "library",
-      "bom-ref": "inst:node_modules/@formatjs/ecma402-abstract/node_modules/@formatjs/intl-localematcher",
-      "name": "@formatjs/intl-localematcher",
-      "version": "0.6.2",
-      "scope": "required",
-      "licenses": [
-        {
-          "license": {
-            "name": "MIT"
-          }
-        }
-      ],
-      "purl": "pkg:npm/@formatjs%2fintl-localematcher@0.6.2",
-      "externalReferences": [],
-      "properties": [
-        {
-          "name": "beanfx:lockfile-path",
-          "value": "node_modules/@formatjs/ecma402-abstract/node_modules/@formatjs/intl-localematcher"
-        },
-        {
-          "name": "beanfx:nesting",
-          "value": "nested"
-        },
-        {
-          "name": "beanfx:license-evidence",
-          "value": "npm-registry"
-        }
-      ]
-    },
-    {
-      "type": "library",
       "bom-ref": "inst:node_modules/@formatjs/fast-memoize",
       "name": "@formatjs/fast-memoize",
-      "version": "2.2.7",
+      "version": "3.1.7",
       "scope": "required",
       "licenses": [
         {
@@ -1511,8 +1646,13 @@
           }
         }
       ],
-      "purl": "pkg:npm/@formatjs%2ffast-memoize@2.2.7",
-      "externalReferences": [],
+      "purl": "pkg:npm/@formatjs%2ffast-memoize@3.1.7",
+      "externalReferences": [
+        {
+          "type": "distribution",
+          "url": "https://registry.npmjs.org/@formatjs/fast-memoize/-/fast-memoize-3.1.7.tgz"
+        }
+      ],
       "properties": [
         {
           "name": "beanfx:lockfile-path",
@@ -1524,7 +1664,11 @@
         },
         {
           "name": "beanfx:license-evidence",
-          "value": "npm-registry"
+          "value": "installed-package"
+        },
+        {
+          "name": "beanfx:integrity",
+          "value": "sha512-zXfhLpvA6T7+efdt9JLbBwZ00tT7NsBMDVnDu8rpHeNNv8KfRZAMo2gkG0k9lK/Nzc//3kJ9pImsfuJxk3KhUA=="
         }
       ]
     },
@@ -1532,7 +1676,7 @@
       "type": "library",
       "bom-ref": "inst:node_modules/@formatjs/icu-messageformat-parser",
       "name": "@formatjs/icu-messageformat-parser",
-      "version": "2.11.4",
+      "version": "3.5.23",
       "scope": "required",
       "licenses": [
         {
@@ -1541,8 +1685,13 @@
           }
         }
       ],
-      "purl": "pkg:npm/@formatjs%2ficu-messageformat-parser@2.11.4",
-      "externalReferences": [],
+      "purl": "pkg:npm/@formatjs%2ficu-messageformat-parser@3.5.23",
+      "externalReferences": [
+        {
+          "type": "distribution",
+          "url": "https://registry.npmjs.org/@formatjs/icu-messageformat-parser/-/icu-messageformat-parser-3.5.23.tgz"
+        }
+      ],
       "properties": [
         {
           "name": "beanfx:lockfile-path",
@@ -1554,7 +1703,11 @@
         },
         {
           "name": "beanfx:license-evidence",
-          "value": "npm-registry"
+          "value": "installed-package"
+        },
+        {
+          "name": "beanfx:integrity",
+          "value": "sha512-iB1fYfhtSGd8uH9A8b1m01Ujcv6QtQnJasefP3jPApmz72L/zNipzf3BdoinTMd1xuviVChjUJWL60iTwjUQ+w=="
         }
       ]
     },
@@ -1562,7 +1715,7 @@
       "type": "library",
       "bom-ref": "inst:node_modules/@formatjs/icu-skeleton-parser",
       "name": "@formatjs/icu-skeleton-parser",
-      "version": "1.8.16",
+      "version": "2.1.13",
       "scope": "required",
       "licenses": [
         {
@@ -1571,8 +1724,13 @@
           }
         }
       ],
-      "purl": "pkg:npm/@formatjs%2ficu-skeleton-parser@1.8.16",
-      "externalReferences": [],
+      "purl": "pkg:npm/@formatjs%2ficu-skeleton-parser@2.1.13",
+      "externalReferences": [
+        {
+          "type": "distribution",
+          "url": "https://registry.npmjs.org/@formatjs/icu-skeleton-parser/-/icu-skeleton-parser-2.1.13.tgz"
+        }
+      ],
       "properties": [
         {
           "name": "beanfx:lockfile-path",
@@ -1584,7 +1742,11 @@
         },
         {
           "name": "beanfx:license-evidence",
-          "value": "npm-registry"
+          "value": "installed-package"
+        },
+        {
+          "name": "beanfx:integrity",
+          "value": "sha512-IdAJ9NrHn7AF0zqncD9UpxQozTYyJtbwwrZnJMEKVxTcOOXtVkUb2XYTpNOGTAv58NCsk0rjRB9G+i2SvBmGAQ=="
         }
       ]
     },
@@ -1592,7 +1754,7 @@
       "type": "library",
       "bom-ref": "inst:node_modules/@formatjs/intl-localematcher",
       "name": "@formatjs/intl-localematcher",
-      "version": "0.5.10",
+      "version": "0.8.14",
       "scope": "required",
       "licenses": [
         {
@@ -1601,8 +1763,13 @@
           }
         }
       ],
-      "purl": "pkg:npm/@formatjs%2fintl-localematcher@0.5.10",
-      "externalReferences": [],
+      "purl": "pkg:npm/@formatjs%2fintl-localematcher@0.8.14",
+      "externalReferences": [
+        {
+          "type": "distribution",
+          "url": "https://registry.npmjs.org/@formatjs/intl-localematcher/-/intl-localematcher-0.8.14.tgz"
+        }
+      ],
       "properties": [
         {
           "name": "beanfx:lockfile-path",
@@ -1614,7 +1781,11 @@
         },
         {
           "name": "beanfx:license-evidence",
-          "value": "npm-registry"
+          "value": "installed-package"
+        },
+        {
+          "name": "beanfx:integrity",
+          "value": "sha512-8O7V38QmbB11+ryJ3KM/znrzXtiqgpXzqNoqDsndHZZ5/zDKTTL+cf5F0mzXkQEwhx8IlWnqYvEovf2S5EwLTw=="
         }
       ]
     },
@@ -1652,7 +1823,7 @@
       "type": "library",
       "bom-ref": "inst:node_modules/@img/colour",
       "name": "@img/colour",
-      "version": "1.0.0",
+      "version": "1.1.0",
       "scope": "required",
       "licenses": [
         {
@@ -1661,8 +1832,13 @@
           }
         }
       ],
-      "purl": "pkg:npm/@img%2fcolour@1.0.0",
-      "externalReferences": [],
+      "purl": "pkg:npm/@img%2fcolour@1.1.0",
+      "externalReferences": [
+        {
+          "type": "distribution",
+          "url": "https://registry.npmjs.org/@img/colour/-/colour-1.1.0.tgz"
+        }
+      ],
       "properties": [
         {
           "name": "beanfx:lockfile-path",
@@ -1674,7 +1850,11 @@
         },
         {
           "name": "beanfx:license-evidence",
-          "value": "npm-registry"
+          "value": "installed-package"
+        },
+        {
+          "name": "beanfx:integrity",
+          "value": "sha512-Td76q7j57o/tLVdgS746cYARfSyxk8iEfRxewL9h4OMzYhbW4TAcppl0mT4eyqXddh6L/jwoM75mo7ixa/pCeQ=="
         }
       ]
     },
@@ -1682,7 +1862,7 @@
       "type": "library",
       "bom-ref": "inst:node_modules/@img/sharp-darwin-arm64",
       "name": "@img/sharp-darwin-arm64",
-      "version": "0.34.5",
+      "version": "0.35.5",
       "scope": "optional",
       "licenses": [
         {
@@ -1691,11 +1871,11 @@
           }
         }
       ],
-      "purl": "pkg:npm/@img%2fsharp-darwin-arm64@0.34.5",
+      "purl": "pkg:npm/@img%2fsharp-darwin-arm64@0.35.5",
       "externalReferences": [
         {
           "type": "distribution",
-          "url": "https://registry.npmjs.org/@img/sharp-darwin-arm64/-/sharp-darwin-arm64-0.34.5.tgz"
+          "url": "https://registry.npmjs.org/@img/sharp-darwin-arm64/-/sharp-darwin-arm64-0.35.5.tgz"
         }
       ],
       "properties": [
@@ -1713,7 +1893,7 @@
         },
         {
           "name": "beanfx:integrity",
-          "value": "sha512-imtQ3WMJXbMY4fxb/Ndp6HBTNVtWCUI0WdobyheGf5+ad6xX8VIDO8u2xE4qc/fr08CKG/7dDseFtn6M6g/r3w=="
+          "value": "sha512-QRUlFQ0WxvdWyqqG/WtI3iupfD5rBzmCHXSdPsY91sAtVtTo7Q4cb6zOccZ3gqEqkr0f1As1ehLqmEpDsRf+lg=="
         },
         {
           "name": "beanfx:platform",
@@ -1725,7 +1905,7 @@
       "type": "library",
       "bom-ref": "inst:node_modules/@img/sharp-darwin-x64",
       "name": "@img/sharp-darwin-x64",
-      "version": "0.34.5",
+      "version": "0.35.5",
       "scope": "optional",
       "licenses": [
         {
@@ -1734,11 +1914,11 @@
           }
         }
       ],
-      "purl": "pkg:npm/@img%2fsharp-darwin-x64@0.34.5",
+      "purl": "pkg:npm/@img%2fsharp-darwin-x64@0.35.5",
       "externalReferences": [
         {
           "type": "distribution",
-          "url": "https://registry.npmjs.org/@img/sharp-darwin-x64/-/sharp-darwin-x64-0.34.5.tgz"
+          "url": "https://registry.npmjs.org/@img/sharp-darwin-x64/-/sharp-darwin-x64-0.35.5.tgz"
         }
       ],
       "properties": [
@@ -1756,7 +1936,7 @@
         },
         {
           "name": "beanfx:integrity",
-          "value": "sha512-YNEFAF/4KQ/PeW0N+r+aVVsoIY0/qxxikF2SWdp+NRkmMB7y9LBZAVqQ4yhGCm/H3H270OSykqmQMKLBhBJDEw=="
+          "value": "sha512-+BR255RhDlpygUpOc/Jdt1nT6DQ3XG/ERo5wbcdOf5Q320dKtPCKPLR1LJs9VGXRaMa8l1uUa0tkCNOXiAxZUw=="
         },
         {
           "name": "beanfx:platform",
@@ -1766,9 +1946,52 @@
     },
     {
       "type": "library",
+      "bom-ref": "inst:node_modules/@img/sharp-freebsd-wasm32",
+      "name": "@img/sharp-freebsd-wasm32",
+      "version": "0.35.5",
+      "scope": "optional",
+      "licenses": [
+        {
+          "license": {
+            "name": "Apache-2.0"
+          }
+        }
+      ],
+      "purl": "pkg:npm/@img%2fsharp-freebsd-wasm32@0.35.5",
+      "externalReferences": [
+        {
+          "type": "distribution",
+          "url": "https://registry.npmjs.org/@img/sharp-freebsd-wasm32/-/sharp-freebsd-wasm32-0.35.5.tgz"
+        }
+      ],
+      "properties": [
+        {
+          "name": "beanfx:lockfile-path",
+          "value": "node_modules/@img/sharp-freebsd-wasm32"
+        },
+        {
+          "name": "beanfx:nesting",
+          "value": "top-level"
+        },
+        {
+          "name": "beanfx:license-evidence",
+          "value": "npm-registry"
+        },
+        {
+          "name": "beanfx:integrity",
+          "value": "sha512-Y/z91nEZ4uIBX5X3nfTovjU9lHNKFYbL2lpHCLVNmXQK03VIZvXBBt0KxbPGp2SdGSF+2mQU4e+hQaWOt86iAw=="
+        },
+        {
+          "name": "beanfx:platform",
+          "value": "freebsd/any"
+        }
+      ]
+    },
+    {
+      "type": "library",
       "bom-ref": "inst:node_modules/@img/sharp-libvips-darwin-arm64",
       "name": "@img/sharp-libvips-darwin-arm64",
-      "version": "1.2.4",
+      "version": "1.3.4",
       "scope": "optional",
       "licenses": [
         {
@@ -1777,11 +2000,11 @@
           }
         }
       ],
-      "purl": "pkg:npm/@img%2fsharp-libvips-darwin-arm64@1.2.4",
+      "purl": "pkg:npm/@img%2fsharp-libvips-darwin-arm64@1.3.4",
       "externalReferences": [
         {
           "type": "distribution",
-          "url": "https://registry.npmjs.org/@img/sharp-libvips-darwin-arm64/-/sharp-libvips-darwin-arm64-1.2.4.tgz"
+          "url": "https://registry.npmjs.org/@img/sharp-libvips-darwin-arm64/-/sharp-libvips-darwin-arm64-1.3.4.tgz"
         }
       ],
       "properties": [
@@ -1799,7 +2022,7 @@
         },
         {
           "name": "beanfx:integrity",
-          "value": "sha512-zqjjo7RatFfFoP0MkQ51jfuFZBnVE2pRiaydKJ1G/rHZvnsrHAOcQALIi9sA5co5xenQdTugCvtb1cuf78Vf4g=="
+          "value": "sha512-5R89nBYiRdUlSWJxPhO+GVtaXzXSxKnRu/xqMn3KTA3L9EB9Oy/P+Nn2f2vlhPuUdy/Zusb2DarbyTpGCfEDuw=="
         },
         {
           "name": "beanfx:platform",
@@ -1811,7 +2034,7 @@
       "type": "library",
       "bom-ref": "inst:node_modules/@img/sharp-libvips-darwin-x64",
       "name": "@img/sharp-libvips-darwin-x64",
-      "version": "1.2.4",
+      "version": "1.3.4",
       "scope": "optional",
       "licenses": [
         {
@@ -1820,11 +2043,11 @@
           }
         }
       ],
-      "purl": "pkg:npm/@img%2fsharp-libvips-darwin-x64@1.2.4",
+      "purl": "pkg:npm/@img%2fsharp-libvips-darwin-x64@1.3.4",
       "externalReferences": [
         {
           "type": "distribution",
-          "url": "https://registry.npmjs.org/@img/sharp-libvips-darwin-x64/-/sharp-libvips-darwin-x64-1.2.4.tgz"
+          "url": "https://registry.npmjs.org/@img/sharp-libvips-darwin-x64/-/sharp-libvips-darwin-x64-1.3.4.tgz"
         }
       ],
       "properties": [
@@ -1842,7 +2065,7 @@
         },
         {
           "name": "beanfx:integrity",
-          "value": "sha512-1IOd5xfVhlGwX+zXv2N93k0yMONvUlANylbJw1eTah8K/Jtpi15KC+WSiaX/nBmbm2HxRM1gZ0nSdjSsrZbGKg=="
+          "value": "sha512-iR2OKH80yi0U+dUplyh3/xdpFvps6YkCwsXenIJxqxR1v9o+xtKTGbS9H7cps+2Vxjc8B1j96p75NmTGjIhtpQ=="
         },
         {
           "name": "beanfx:platform",
@@ -1854,7 +2077,7 @@
       "type": "library",
       "bom-ref": "inst:node_modules/@img/sharp-libvips-linux-arm",
       "name": "@img/sharp-libvips-linux-arm",
-      "version": "1.2.4",
+      "version": "1.3.4",
       "scope": "optional",
       "licenses": [
         {
@@ -1863,11 +2086,11 @@
           }
         }
       ],
-      "purl": "pkg:npm/@img%2fsharp-libvips-linux-arm@1.2.4",
+      "purl": "pkg:npm/@img%2fsharp-libvips-linux-arm@1.3.4",
       "externalReferences": [
         {
           "type": "distribution",
-          "url": "https://registry.npmjs.org/@img/sharp-libvips-linux-arm/-/sharp-libvips-linux-arm-1.2.4.tgz"
+          "url": "https://registry.npmjs.org/@img/sharp-libvips-linux-arm/-/sharp-libvips-linux-arm-1.3.4.tgz"
         }
       ],
       "properties": [
@@ -1885,7 +2108,7 @@
         },
         {
           "name": "beanfx:integrity",
-          "value": "sha512-bFI7xcKFELdiNCVov8e44Ia4u2byA+l3XtsAj+Q8tfCwO6BQ8iDojYdvoPMqsKDkuoOo+X6HZA0s0q11ANMQ8A=="
+          "value": "sha512-LmRtTsOHuvM2+wlO2Db37dx5MiZhB0FvSunciw48YjdOkZz9KAiRbm8ujeMOA1INqmei5NapFxYEK1D1ZSidmw=="
         },
         {
           "name": "beanfx:platform",
@@ -1897,7 +2120,7 @@
       "type": "library",
       "bom-ref": "inst:node_modules/@img/sharp-libvips-linux-arm64",
       "name": "@img/sharp-libvips-linux-arm64",
-      "version": "1.2.4",
+      "version": "1.3.4",
       "scope": "optional",
       "licenses": [
         {
@@ -1906,11 +2129,11 @@
           }
         }
       ],
-      "purl": "pkg:npm/@img%2fsharp-libvips-linux-arm64@1.2.4",
+      "purl": "pkg:npm/@img%2fsharp-libvips-linux-arm64@1.3.4",
       "externalReferences": [
         {
           "type": "distribution",
-          "url": "https://registry.npmjs.org/@img/sharp-libvips-linux-arm64/-/sharp-libvips-linux-arm64-1.2.4.tgz"
+          "url": "https://registry.npmjs.org/@img/sharp-libvips-linux-arm64/-/sharp-libvips-linux-arm64-1.3.4.tgz"
         }
       ],
       "properties": [
@@ -1928,7 +2151,7 @@
         },
         {
           "name": "beanfx:integrity",
-          "value": "sha512-excjX8DfsIcJ10x1Kzr4RcWe1edC9PquDRRPx3YVCvQv+U5p7Yin2s32ftzikXojb1PIFc/9Mt28/y+iRklkrw=="
+          "value": "sha512-Y3dgX/6lE2QhQb+Gxy0WZxfg9MEm/JBjamZpS2IklP7xIQoKN4hzAm7KcMVGtaVDt3neE9OKBC7vAfonA/Lr1A=="
         },
         {
           "name": "beanfx:platform",
@@ -1940,7 +2163,7 @@
       "type": "library",
       "bom-ref": "inst:node_modules/@img/sharp-libvips-linux-ppc64",
       "name": "@img/sharp-libvips-linux-ppc64",
-      "version": "1.2.4",
+      "version": "1.3.4",
       "scope": "optional",
       "licenses": [
         {
@@ -1949,11 +2172,11 @@
           }
         }
       ],
-      "purl": "pkg:npm/@img%2fsharp-libvips-linux-ppc64@1.2.4",
+      "purl": "pkg:npm/@img%2fsharp-libvips-linux-ppc64@1.3.4",
       "externalReferences": [
         {
           "type": "distribution",
-          "url": "https://registry.npmjs.org/@img/sharp-libvips-linux-ppc64/-/sharp-libvips-linux-ppc64-1.2.4.tgz"
+          "url": "https://registry.npmjs.org/@img/sharp-libvips-linux-ppc64/-/sharp-libvips-linux-ppc64-1.3.4.tgz"
         }
       ],
       "properties": [
@@ -1971,7 +2194,7 @@
         },
         {
           "name": "beanfx:integrity",
-          "value": "sha512-FMuvGijLDYG6lW+b/UvyilUWu5Ayu+3r2d1S8notiGCIyYU/76eig1UfMmkZ7vwgOrzKzlQbFSuQfgm7GYUPpA=="
+          "value": "sha512-Le6boB8Tai0Nis+gIxIpKx68UDVVIqdR8Tin5Yf1z2LJJQLDJvCDRqRu+jC2qCoD+eIomonmOwB4smBRxfVpYQ=="
         },
         {
           "name": "beanfx:platform",
@@ -1983,7 +2206,7 @@
       "type": "library",
       "bom-ref": "inst:node_modules/@img/sharp-libvips-linux-riscv64",
       "name": "@img/sharp-libvips-linux-riscv64",
-      "version": "1.2.4",
+      "version": "1.3.4",
       "scope": "optional",
       "licenses": [
         {
@@ -1992,11 +2215,11 @@
           }
         }
       ],
-      "purl": "pkg:npm/@img%2fsharp-libvips-linux-riscv64@1.2.4",
+      "purl": "pkg:npm/@img%2fsharp-libvips-linux-riscv64@1.3.4",
       "externalReferences": [
         {
           "type": "distribution",
-          "url": "https://registry.npmjs.org/@img/sharp-libvips-linux-riscv64/-/sharp-libvips-linux-riscv64-1.2.4.tgz"
+          "url": "https://registry.npmjs.org/@img/sharp-libvips-linux-riscv64/-/sharp-libvips-linux-riscv64-1.3.4.tgz"
         }
       ],
       "properties": [
@@ -2014,7 +2237,7 @@
         },
         {
           "name": "beanfx:integrity",
-          "value": "sha512-oVDbcR4zUC0ce82teubSm+x6ETixtKZBh/qbREIOcI3cULzDyb18Sr/Wcyx7NRQeQzOiHTNbZFF1UwPS2scyGA=="
+          "value": "sha512-aHkkIEHPRdQEegJN20MLmGtxYD9R2wQr3Cwpddnu5+YKMt6Uzax7S9h5gpZTo8wyrGuZSlfQ63OevL5mTyOC7Q=="
         },
         {
           "name": "beanfx:platform",
@@ -2026,7 +2249,7 @@
       "type": "library",
       "bom-ref": "inst:node_modules/@img/sharp-libvips-linux-s390x",
       "name": "@img/sharp-libvips-linux-s390x",
-      "version": "1.2.4",
+      "version": "1.3.4",
       "scope": "optional",
       "licenses": [
         {
@@ -2035,11 +2258,11 @@
           }
         }
       ],
-      "purl": "pkg:npm/@img%2fsharp-libvips-linux-s390x@1.2.4",
+      "purl": "pkg:npm/@img%2fsharp-libvips-linux-s390x@1.3.4",
       "externalReferences": [
         {
           "type": "distribution",
-          "url": "https://registry.npmjs.org/@img/sharp-libvips-linux-s390x/-/sharp-libvips-linux-s390x-1.2.4.tgz"
+          "url": "https://registry.npmjs.org/@img/sharp-libvips-linux-s390x/-/sharp-libvips-linux-s390x-1.3.4.tgz"
         }
       ],
       "properties": [
@@ -2057,7 +2280,7 @@
         },
         {
           "name": "beanfx:integrity",
-          "value": "sha512-qmp9VrzgPgMoGZyPvrQHqk02uyjA0/QrTO26Tqk6l4ZV0MPWIW6LTkqOIov+J1yEu7MbFQaDpwdwJKhbJvuRxQ=="
+          "value": "sha512-ra/mB6MikESDUO7Yg+Mi95bFBb9GsObURuhnOv3OqknjGe9sZrG8tCe9q0xSIGrtLgvgw0gKnFWcK4blSgQOuQ=="
         },
         {
           "name": "beanfx:platform",
@@ -2069,7 +2292,7 @@
       "type": "library",
       "bom-ref": "inst:node_modules/@img/sharp-libvips-linux-x64",
       "name": "@img/sharp-libvips-linux-x64",
-      "version": "1.2.4",
+      "version": "1.3.4",
       "scope": "optional",
       "licenses": [
         {
@@ -2078,8 +2301,13 @@
           }
         }
       ],
-      "purl": "pkg:npm/@img%2fsharp-libvips-linux-x64@1.2.4",
-      "externalReferences": [],
+      "purl": "pkg:npm/@img%2fsharp-libvips-linux-x64@1.3.4",
+      "externalReferences": [
+        {
+          "type": "distribution",
+          "url": "https://registry.npmjs.org/@img/sharp-libvips-linux-x64/-/sharp-libvips-linux-x64-1.3.4.tgz"
+        }
+      ],
       "properties": [
         {
           "name": "beanfx:lockfile-path",
@@ -2091,7 +2319,11 @@
         },
         {
           "name": "beanfx:license-evidence",
-          "value": "npm-registry"
+          "value": "installed-package"
+        },
+        {
+          "name": "beanfx:integrity",
+          "value": "sha512-GJ//SSXbnwSDes02umB3nDJLFcQzw8a18V8fyhqr6tV515tOEMdImjjxj1AoafMRz56F3PHgftnj1QEKSU1zkw=="
         },
         {
           "name": "beanfx:platform",
@@ -2103,7 +2335,7 @@
       "type": "library",
       "bom-ref": "inst:node_modules/@img/sharp-libvips-linuxmusl-arm64",
       "name": "@img/sharp-libvips-linuxmusl-arm64",
-      "version": "1.2.4",
+      "version": "1.3.4",
       "scope": "optional",
       "licenses": [
         {
@@ -2112,11 +2344,11 @@
           }
         }
       ],
-      "purl": "pkg:npm/@img%2fsharp-libvips-linuxmusl-arm64@1.2.4",
+      "purl": "pkg:npm/@img%2fsharp-libvips-linuxmusl-arm64@1.3.4",
       "externalReferences": [
         {
           "type": "distribution",
-          "url": "https://registry.npmjs.org/@img/sharp-libvips-linuxmusl-arm64/-/sharp-libvips-linuxmusl-arm64-1.2.4.tgz"
+          "url": "https://registry.npmjs.org/@img/sharp-libvips-linuxmusl-arm64/-/sharp-libvips-linuxmusl-arm64-1.3.4.tgz"
         }
       ],
       "properties": [
@@ -2134,7 +2366,7 @@
         },
         {
           "name": "beanfx:integrity",
-          "value": "sha512-FVQHuwx1IIuNow9QAbYUzJ+En8KcVm9Lk5+uGUQJHaZmMECZmOlix9HnH7n1TRkXMS0pGxIJokIVB9SuqZGGXw=="
+          "value": "sha512-hvulFwtjUcagsis6BBxHwGFwWoNZjgYmULGVrZcyfNbjA8hKILbRxGg15/7w5HDyXHXUos/j6baAWqnCyQ2DWA=="
         },
         {
           "name": "beanfx:platform",
@@ -2146,7 +2378,7 @@
       "type": "library",
       "bom-ref": "inst:node_modules/@img/sharp-libvips-linuxmusl-x64",
       "name": "@img/sharp-libvips-linuxmusl-x64",
-      "version": "1.2.4",
+      "version": "1.3.4",
       "scope": "optional",
       "licenses": [
         {
@@ -2155,8 +2387,13 @@
           }
         }
       ],
-      "purl": "pkg:npm/@img%2fsharp-libvips-linuxmusl-x64@1.2.4",
-      "externalReferences": [],
+      "purl": "pkg:npm/@img%2fsharp-libvips-linuxmusl-x64@1.3.4",
+      "externalReferences": [
+        {
+          "type": "distribution",
+          "url": "https://registry.npmjs.org/@img/sharp-libvips-linuxmusl-x64/-/sharp-libvips-linuxmusl-x64-1.3.4.tgz"
+        }
+      ],
       "properties": [
         {
           "name": "beanfx:lockfile-path",
@@ -2168,7 +2405,11 @@
         },
         {
           "name": "beanfx:license-evidence",
-          "value": "npm-registry"
+          "value": "installed-package"
+        },
+        {
+          "name": "beanfx:integrity",
+          "value": "sha512-6zXKeE/p39I1AmA3cJG35eyBGNqNddLnUXjhwBnsGjFPWqf5VKkDBEqaEkPDoTEtkxwi2vv8Tcr2mDyP4So7Fg=="
         },
         {
           "name": "beanfx:platform",
@@ -2180,7 +2421,7 @@
       "type": "library",
       "bom-ref": "inst:node_modules/@img/sharp-linux-arm",
       "name": "@img/sharp-linux-arm",
-      "version": "0.34.5",
+      "version": "0.35.5",
       "scope": "optional",
       "licenses": [
         {
@@ -2189,11 +2430,11 @@
           }
         }
       ],
-      "purl": "pkg:npm/@img%2fsharp-linux-arm@0.34.5",
+      "purl": "pkg:npm/@img%2fsharp-linux-arm@0.35.5",
       "externalReferences": [
         {
           "type": "distribution",
-          "url": "https://registry.npmjs.org/@img/sharp-linux-arm/-/sharp-linux-arm-0.34.5.tgz"
+          "url": "https://registry.npmjs.org/@img/sharp-linux-arm/-/sharp-linux-arm-0.35.5.tgz"
         }
       ],
       "properties": [
@@ -2211,7 +2452,7 @@
         },
         {
           "name": "beanfx:integrity",
-          "value": "sha512-9dLqsvwtg1uuXBGZKsxem9595+ujv0sJ6Vi8wcTANSFpwV/GONat5eCkzQo/1O6zRIkh0m/8+5BjrRr7jDUSZw=="
+          "value": "sha512-LEaXK2WdXVK5ykcw0buWyPMsmLLL2vpHLD6yrNSW+JGEL3BZPA4tpKN6iaMc4AxTTAoaX/sU1rOL51lcIz48ZQ=="
         },
         {
           "name": "beanfx:platform",
@@ -2223,7 +2464,7 @@
       "type": "library",
       "bom-ref": "inst:node_modules/@img/sharp-linux-arm64",
       "name": "@img/sharp-linux-arm64",
-      "version": "0.34.5",
+      "version": "0.35.5",
       "scope": "optional",
       "licenses": [
         {
@@ -2232,11 +2473,11 @@
           }
         }
       ],
-      "purl": "pkg:npm/@img%2fsharp-linux-arm64@0.34.5",
+      "purl": "pkg:npm/@img%2fsharp-linux-arm64@0.35.5",
       "externalReferences": [
         {
           "type": "distribution",
-          "url": "https://registry.npmjs.org/@img/sharp-linux-arm64/-/sharp-linux-arm64-0.34.5.tgz"
+          "url": "https://registry.npmjs.org/@img/sharp-linux-arm64/-/sharp-linux-arm64-0.35.5.tgz"
         }
       ],
       "properties": [
@@ -2254,7 +2495,7 @@
         },
         {
           "name": "beanfx:integrity",
-          "value": "sha512-bKQzaJRY/bkPOXyKx5EVup7qkaojECG6NLYswgktOZjaXecSAeCWiZwwiFf3/Y+O1HrauiE3FVsGxFg8c24rZg=="
+          "value": "sha512-LYVx5JTsOM2CBzmxreh+nl64/3H6Xb09iSLknqH47z2T2DFFxDeFLP5y4dJwe6H7uGQlHPyEEtIqyo3DYsRwdQ=="
         },
         {
           "name": "beanfx:platform",
@@ -2266,7 +2507,7 @@
       "type": "library",
       "bom-ref": "inst:node_modules/@img/sharp-linux-ppc64",
       "name": "@img/sharp-linux-ppc64",
-      "version": "0.34.5",
+      "version": "0.35.5",
       "scope": "optional",
       "licenses": [
         {
@@ -2275,11 +2516,11 @@
           }
         }
       ],
-      "purl": "pkg:npm/@img%2fsharp-linux-ppc64@0.34.5",
+      "purl": "pkg:npm/@img%2fsharp-linux-ppc64@0.35.5",
       "externalReferences": [
         {
           "type": "distribution",
-          "url": "https://registry.npmjs.org/@img/sharp-linux-ppc64/-/sharp-linux-ppc64-0.34.5.tgz"
+          "url": "https://registry.npmjs.org/@img/sharp-linux-ppc64/-/sharp-linux-ppc64-0.35.5.tgz"
         }
       ],
       "properties": [
@@ -2297,7 +2538,7 @@
         },
         {
           "name": "beanfx:integrity",
-          "value": "sha512-7zznwNaqW6YtsfrGGDA6BRkISKAAE1Jo0QdpNYXNMHu2+0dTrPflTLNkpc8l7MUP5M16ZJcUvysVWWrMefZquA=="
+          "value": "sha512-QVxAAq8evVRI9ia2vqgwrmWucn5Dfv+JdWzj75pD8omHLPSP7f8p20O8jxzjCcuCEQEOtYOZUmX1hkiZ0kdevA=="
         },
         {
           "name": "beanfx:platform",
@@ -2309,7 +2550,7 @@
       "type": "library",
       "bom-ref": "inst:node_modules/@img/sharp-linux-riscv64",
       "name": "@img/sharp-linux-riscv64",
-      "version": "0.34.5",
+      "version": "0.35.5",
       "scope": "optional",
       "licenses": [
         {
@@ -2318,11 +2559,11 @@
           }
         }
       ],
-      "purl": "pkg:npm/@img%2fsharp-linux-riscv64@0.34.5",
+      "purl": "pkg:npm/@img%2fsharp-linux-riscv64@0.35.5",
       "externalReferences": [
         {
           "type": "distribution",
-          "url": "https://registry.npmjs.org/@img/sharp-linux-riscv64/-/sharp-linux-riscv64-0.34.5.tgz"
+          "url": "https://registry.npmjs.org/@img/sharp-linux-riscv64/-/sharp-linux-riscv64-0.35.5.tgz"
         }
       ],
       "properties": [
@@ -2340,7 +2581,7 @@
         },
         {
           "name": "beanfx:integrity",
-          "value": "sha512-51gJuLPTKa7piYPaVs8GmByo7/U7/7TZOq+cnXJIHZKavIRHAP77e3N2HEl3dgiqdD/w0yUfiJnII77PuDDFdw=="
+          "value": "sha512-LtdreXguaavKODPIfzJ4kffx7UNt1omwtK0rch4EBbbSTXPnxWmYSayXdLJw0fJzQ97kHt1gL/yh4tvU+nCyRQ=="
         },
         {
           "name": "beanfx:platform",
@@ -2352,7 +2593,7 @@
       "type": "library",
       "bom-ref": "inst:node_modules/@img/sharp-linux-s390x",
       "name": "@img/sharp-linux-s390x",
-      "version": "0.34.5",
+      "version": "0.35.5",
       "scope": "optional",
       "licenses": [
         {
@@ -2361,11 +2602,11 @@
           }
         }
       ],
-      "purl": "pkg:npm/@img%2fsharp-linux-s390x@0.34.5",
+      "purl": "pkg:npm/@img%2fsharp-linux-s390x@0.35.5",
       "externalReferences": [
         {
           "type": "distribution",
-          "url": "https://registry.npmjs.org/@img/sharp-linux-s390x/-/sharp-linux-s390x-0.34.5.tgz"
+          "url": "https://registry.npmjs.org/@img/sharp-linux-s390x/-/sharp-linux-s390x-0.35.5.tgz"
         }
       ],
       "properties": [
@@ -2383,7 +2624,7 @@
         },
         {
           "name": "beanfx:integrity",
-          "value": "sha512-nQtCk0PdKfho3eC5MrbQoigJ2gd1CgddUMkabUj+rBevs8tZ2cULOx46E7oyX+04WGfABgIwmMC0VqieTiR4jg=="
+          "value": "sha512-UZasTOFiYzotTsGOCu42BfUzP6Tu6Do/947iRm1RsLKvlllxwGcn4RN27LibGWceix4Y+Pmw3jsnTcCQIgWjqA=="
         },
         {
           "name": "beanfx:platform",
@@ -2395,7 +2636,7 @@
       "type": "library",
       "bom-ref": "inst:node_modules/@img/sharp-linux-x64",
       "name": "@img/sharp-linux-x64",
-      "version": "0.34.5",
+      "version": "0.35.5",
       "scope": "optional",
       "licenses": [
         {
@@ -2404,8 +2645,13 @@
           }
         }
       ],
-      "purl": "pkg:npm/@img%2fsharp-linux-x64@0.34.5",
-      "externalReferences": [],
+      "purl": "pkg:npm/@img%2fsharp-linux-x64@0.35.5",
+      "externalReferences": [
+        {
+          "type": "distribution",
+          "url": "https://registry.npmjs.org/@img/sharp-linux-x64/-/sharp-linux-x64-0.35.5.tgz"
+        }
+      ],
       "properties": [
         {
           "name": "beanfx:lockfile-path",
@@ -2417,7 +2663,11 @@
         },
         {
           "name": "beanfx:license-evidence",
-          "value": "npm-registry"
+          "value": "installed-package"
+        },
+        {
+          "name": "beanfx:integrity",
+          "value": "sha512-SxFtLTeJInhAA9Q836kux2vZNeOBQEx658qvbboZScr0wIARym3IcGmW7KpVD5sbVg0Ojy+udFQdayYIZyoNog=="
         },
         {
           "name": "beanfx:platform",
@@ -2429,7 +2679,7 @@
       "type": "library",
       "bom-ref": "inst:node_modules/@img/sharp-linuxmusl-arm64",
       "name": "@img/sharp-linuxmusl-arm64",
-      "version": "0.34.5",
+      "version": "0.35.5",
       "scope": "optional",
       "licenses": [
         {
@@ -2438,11 +2688,11 @@
           }
         }
       ],
-      "purl": "pkg:npm/@img%2fsharp-linuxmusl-arm64@0.34.5",
+      "purl": "pkg:npm/@img%2fsharp-linuxmusl-arm64@0.35.5",
       "externalReferences": [
         {
           "type": "distribution",
-          "url": "https://registry.npmjs.org/@img/sharp-linuxmusl-arm64/-/sharp-linuxmusl-arm64-0.34.5.tgz"
+          "url": "https://registry.npmjs.org/@img/sharp-linuxmusl-arm64/-/sharp-linuxmusl-arm64-0.35.5.tgz"
         }
       ],
       "properties": [
@@ -2460,7 +2710,7 @@
         },
         {
           "name": "beanfx:integrity",
-          "value": "sha512-fprJR6GtRsMt6Kyfq44IsChVZeGN97gTD331weR1ex1c1rypDEABN6Tm2xa1wE6lYb5DdEnk03NZPqA7Id21yg=="
+          "value": "sha512-9HbMclmI1zlNkFRs3z9/eBtDjfD0sGlrX1z6b1qwmiFY5ElDLh4BC0LPBdVp7z1DXFiKlIcznf+ZlsuZzLxQqg=="
         },
         {
           "name": "beanfx:platform",
@@ -2472,7 +2722,7 @@
       "type": "library",
       "bom-ref": "inst:node_modules/@img/sharp-linuxmusl-x64",
       "name": "@img/sharp-linuxmusl-x64",
-      "version": "0.34.5",
+      "version": "0.35.5",
       "scope": "optional",
       "licenses": [
         {
@@ -2481,8 +2731,13 @@
           }
         }
       ],
-      "purl": "pkg:npm/@img%2fsharp-linuxmusl-x64@0.34.5",
-      "externalReferences": [],
+      "purl": "pkg:npm/@img%2fsharp-linuxmusl-x64@0.35.5",
+      "externalReferences": [
+        {
+          "type": "distribution",
+          "url": "https://registry.npmjs.org/@img/sharp-linuxmusl-x64/-/sharp-linuxmusl-x64-0.35.5.tgz"
+        }
+      ],
       "properties": [
         {
           "name": "beanfx:lockfile-path",
@@ -2494,7 +2749,11 @@
         },
         {
           "name": "beanfx:license-evidence",
-          "value": "npm-registry"
+          "value": "installed-package"
+        },
+        {
+          "name": "beanfx:integrity",
+          "value": "sha512-4KOphqB035HrVdqLZfCgMzzERrQkkzOwRhl4OAkRO1YCldbaFjySXMaK534Mo0V+LndnlJk+sbUyLeU0ULyD1A=="
         },
         {
           "name": "beanfx:platform",
@@ -2506,7 +2765,7 @@
       "type": "library",
       "bom-ref": "inst:node_modules/@img/sharp-wasm32",
       "name": "@img/sharp-wasm32",
-      "version": "0.34.5",
+      "version": "0.35.5",
       "scope": "optional",
       "licenses": [
         {
@@ -2515,11 +2774,11 @@
           }
         }
       ],
-      "purl": "pkg:npm/@img%2fsharp-wasm32@0.34.5",
+      "purl": "pkg:npm/@img%2fsharp-wasm32@0.35.5",
       "externalReferences": [
         {
           "type": "distribution",
-          "url": "https://registry.npmjs.org/@img/sharp-wasm32/-/sharp-wasm32-0.34.5.tgz"
+          "url": "https://registry.npmjs.org/@img/sharp-wasm32/-/sharp-wasm32-0.35.5.tgz"
         }
       ],
       "properties": [
@@ -2537,7 +2796,46 @@
         },
         {
           "name": "beanfx:integrity",
-          "value": "sha512-OdWTEiVkY2PHwqkbBI8frFxQQFekHaSSkUIJkwzclWZe64O1X4UlUjqqqLaPbUpMOQk6FBu/HtlGXNblIs0huw=="
+          "value": "sha512-Ptsga1su4tQx+LLF1ECS9U6nz5kmrXKo6XVbtR48Ke3ZRxxgaWBu7IDtEe1quo8hiupwm6WFqxVlXaSf7IINGQ=="
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "bom-ref": "inst:node_modules/@img/sharp-webcontainers-wasm32",
+      "name": "@img/sharp-webcontainers-wasm32",
+      "version": "0.35.5",
+      "scope": "optional",
+      "licenses": [
+        {
+          "license": {
+            "name": "Apache-2.0"
+          }
+        }
+      ],
+      "purl": "pkg:npm/@img%2fsharp-webcontainers-wasm32@0.35.5",
+      "externalReferences": [
+        {
+          "type": "distribution",
+          "url": "https://registry.npmjs.org/@img/sharp-webcontainers-wasm32/-/sharp-webcontainers-wasm32-0.35.5.tgz"
+        }
+      ],
+      "properties": [
+        {
+          "name": "beanfx:lockfile-path",
+          "value": "node_modules/@img/sharp-webcontainers-wasm32"
+        },
+        {
+          "name": "beanfx:nesting",
+          "value": "top-level"
+        },
+        {
+          "name": "beanfx:license-evidence",
+          "value": "npm-registry"
+        },
+        {
+          "name": "beanfx:integrity",
+          "value": "sha512-hfhF/FmoQyTUkA0bIKFOtw536BQSeBMe6BF6QyWlrPxT754+TFLaZ7sKKTfvvM0yJgKgaYTwnFCIZ/GuDw5SUA=="
         },
         {
           "name": "beanfx:platform",
@@ -2549,7 +2847,7 @@
       "type": "library",
       "bom-ref": "inst:node_modules/@img/sharp-win32-arm64",
       "name": "@img/sharp-win32-arm64",
-      "version": "0.34.5",
+      "version": "0.35.5",
       "scope": "optional",
       "licenses": [
         {
@@ -2558,11 +2856,11 @@
           }
         }
       ],
-      "purl": "pkg:npm/@img%2fsharp-win32-arm64@0.34.5",
+      "purl": "pkg:npm/@img%2fsharp-win32-arm64@0.35.5",
       "externalReferences": [
         {
           "type": "distribution",
-          "url": "https://registry.npmjs.org/@img/sharp-win32-arm64/-/sharp-win32-arm64-0.34.5.tgz"
+          "url": "https://registry.npmjs.org/@img/sharp-win32-arm64/-/sharp-win32-arm64-0.35.5.tgz"
         }
       ],
       "properties": [
@@ -2580,7 +2878,7 @@
         },
         {
           "name": "beanfx:integrity",
-          "value": "sha512-WQ3AgWCWYSb2yt+IG8mnC6Jdk9Whs7O0gxphblsLvdhSpSTtmu69ZG1Gkb6NuvxsNACwiPV6cNSZNzt0KPsw7g=="
+          "value": "sha512-X4t7g+7ZA5DKblCBEXGjUqqemj4vczING/5viFwAL8h4N3qYeyjwdCvRLHi4EdOUI+2Z7UFlp1VM+p/AuEtm6Q=="
         },
         {
           "name": "beanfx:platform",
@@ -2592,7 +2890,7 @@
       "type": "library",
       "bom-ref": "inst:node_modules/@img/sharp-win32-ia32",
       "name": "@img/sharp-win32-ia32",
-      "version": "0.34.5",
+      "version": "0.35.5",
       "scope": "optional",
       "licenses": [
         {
@@ -2601,11 +2899,11 @@
           }
         }
       ],
-      "purl": "pkg:npm/@img%2fsharp-win32-ia32@0.34.5",
+      "purl": "pkg:npm/@img%2fsharp-win32-ia32@0.35.5",
       "externalReferences": [
         {
           "type": "distribution",
-          "url": "https://registry.npmjs.org/@img/sharp-win32-ia32/-/sharp-win32-ia32-0.34.5.tgz"
+          "url": "https://registry.npmjs.org/@img/sharp-win32-ia32/-/sharp-win32-ia32-0.35.5.tgz"
         }
       ],
       "properties": [
@@ -2623,7 +2921,7 @@
         },
         {
           "name": "beanfx:integrity",
-          "value": "sha512-FV9m/7NmeCmSHDD5j4+4pNI8Cp3aW+JvLoXcTUo0IqyjSfAZJ8dIUmijx1qaJsIiU+Hosw6xM5KijAWRJCSgNg=="
+          "value": "sha512-5Zm82LoBc43nhwNybZlG7Y1KO//Zhsn306fQl29ZOuStHLGTo3BWL83q3cznX0poxSAMuYL1On/BHBxkBeKr6A=="
         },
         {
           "name": "beanfx:platform",
@@ -2635,7 +2933,7 @@
       "type": "library",
       "bom-ref": "inst:node_modules/@img/sharp-win32-x64",
       "name": "@img/sharp-win32-x64",
-      "version": "0.34.5",
+      "version": "0.35.5",
       "scope": "optional",
       "licenses": [
         {
@@ -2644,11 +2942,11 @@
           }
         }
       ],
-      "purl": "pkg:npm/@img%2fsharp-win32-x64@0.34.5",
+      "purl": "pkg:npm/@img%2fsharp-win32-x64@0.35.5",
       "externalReferences": [
         {
           "type": "distribution",
-          "url": "https://registry.npmjs.org/@img/sharp-win32-x64/-/sharp-win32-x64-0.34.5.tgz"
+          "url": "https://registry.npmjs.org/@img/sharp-win32-x64/-/sharp-win32-x64-0.35.5.tgz"
         }
       ],
       "properties": [
@@ -2666,7 +2964,7 @@
         },
         {
           "name": "beanfx:integrity",
-          "value": "sha512-+29YMsqY2/9eFEiW93eqWnuLcWcufowXewwSNIT6UwZdUUCrM3oFjMWH/Z6/TMmb4hlFenmfAVbpWeup2jryCw=="
+          "value": "sha512-x76eH0vEiHlcMQu8Y8IenntaACtddpT6W0wmXtWrnKcnKI7ME5DdgqhAD6SEWOEl1v2zDvkZDhFA9KnURwpfqg=="
         },
         {
           "name": "beanfx:platform",
@@ -3938,7 +4236,7 @@
       "type": "library",
       "bom-ref": "inst:node_modules/@next/env",
       "name": "@next/env",
-      "version": "16.1.3",
+      "version": "16.4.6",
       "scope": "required",
       "licenses": [
         {
@@ -3947,8 +4245,13 @@
           }
         }
       ],
-      "purl": "pkg:npm/@next%2fenv@16.1.3",
-      "externalReferences": [],
+      "purl": "pkg:npm/@next%2fenv@16.4.6",
+      "externalReferences": [
+        {
+          "type": "distribution",
+          "url": "https://registry.npmjs.org/@next/env/-/env-16.4.6.tgz"
+        }
+      ],
       "properties": [
         {
           "name": "beanfx:lockfile-path",
@@ -3960,7 +4263,11 @@
         },
         {
           "name": "beanfx:license-evidence",
-          "value": "npm-registry"
+          "value": "installed-package"
+        },
+        {
+          "name": "beanfx:integrity",
+          "value": "sha512-SunBjJ6t+oBtecS3dTjdVuMhUogP5wD/vrGL5EVuQYM1iS4O5ilL51HkiJ3sPjMzRHiCChvr4dbaSJbR7F3lxA=="
         }
       ]
     },
@@ -3968,7 +4275,7 @@
       "type": "library",
       "bom-ref": "inst:node_modules/@next/swc-darwin-arm64",
       "name": "@next/swc-darwin-arm64",
-      "version": "16.1.3",
+      "version": "16.4.6",
       "scope": "optional",
       "licenses": [
         {
@@ -3977,11 +4284,11 @@
           }
         }
       ],
-      "purl": "pkg:npm/@next%2fswc-darwin-arm64@16.1.3",
+      "purl": "pkg:npm/@next%2fswc-darwin-arm64@16.4.6",
       "externalReferences": [
         {
           "type": "distribution",
-          "url": "https://registry.npmjs.org/@next/swc-darwin-arm64/-/swc-darwin-arm64-16.1.3.tgz"
+          "url": "https://registry.npmjs.org/@next/swc-darwin-arm64/-/swc-darwin-arm64-16.4.6.tgz"
         }
       ],
       "properties": [
@@ -3999,7 +4306,7 @@
         },
         {
           "name": "beanfx:integrity",
-          "value": "sha512-CpOD3lmig6VflihVoGxiR/l5Jkjfi4uLaOR4ziriMv0YMDoF6cclI+p5t2nstM8TmaFiY6PCTBgRWB57/+LiBA=="
+          "value": "sha512-kJ4VVZkley17xKaJx72QN2IBqjrj7zenCQZaUF0l9ShS/1Mt2kW4+Z5KGG6vgr3L/J562xTOizVyM1iA/u5nlg=="
         },
         {
           "name": "beanfx:platform",
@@ -4011,7 +4318,7 @@
       "type": "library",
       "bom-ref": "inst:node_modules/@next/swc-darwin-x64",
       "name": "@next/swc-darwin-x64",
-      "version": "16.1.3",
+      "version": "16.4.6",
       "scope": "optional",
       "licenses": [
         {
@@ -4020,11 +4327,11 @@
           }
         }
       ],
-      "purl": "pkg:npm/@next%2fswc-darwin-x64@16.1.3",
+      "purl": "pkg:npm/@next%2fswc-darwin-x64@16.4.6",
       "externalReferences": [
         {
           "type": "distribution",
-          "url": "https://registry.npmjs.org/@next/swc-darwin-x64/-/swc-darwin-x64-16.1.3.tgz"
+          "url": "https://registry.npmjs.org/@next/swc-darwin-x64/-/swc-darwin-x64-16.4.6.tgz"
         }
       ],
       "properties": [
@@ -4042,7 +4349,7 @@
         },
         {
           "name": "beanfx:integrity",
-          "value": "sha512-aF4us2JXh0zn3hNxvL1Bx3BOuh8Lcw3p3Xnurlvca/iptrDH1BrpObwkw9WZra7L7/0qB9kjlREq3hN/4x4x+Q=="
+          "value": "sha512-eIPGZIqC+8JKaeZmvnCANJQF4xWkkHqSnAAajtFxgwDMAOnCgxNvP52SeWZ41PyVwoe+Le/NQuZSaQ8j7YshSA=="
         },
         {
           "name": "beanfx:platform",
@@ -4054,7 +4361,7 @@
       "type": "library",
       "bom-ref": "inst:node_modules/@next/swc-linux-arm64-gnu",
       "name": "@next/swc-linux-arm64-gnu",
-      "version": "16.1.3",
+      "version": "16.4.6",
       "scope": "optional",
       "licenses": [
         {
@@ -4063,11 +4370,11 @@
           }
         }
       ],
-      "purl": "pkg:npm/@next%2fswc-linux-arm64-gnu@16.1.3",
+      "purl": "pkg:npm/@next%2fswc-linux-arm64-gnu@16.4.6",
       "externalReferences": [
         {
           "type": "distribution",
-          "url": "https://registry.npmjs.org/@next/swc-linux-arm64-gnu/-/swc-linux-arm64-gnu-16.1.3.tgz"
+          "url": "https://registry.npmjs.org/@next/swc-linux-arm64-gnu/-/swc-linux-arm64-gnu-16.4.6.tgz"
         }
       ],
       "properties": [
@@ -4085,7 +4392,7 @@
         },
         {
           "name": "beanfx:integrity",
-          "value": "sha512-8VRkcpcfBtYvhGgXAF7U3MBx6+G1lACM1XCo1JyaUr4KmAkTNP8Dv2wdMq7BI+jqRBw3zQE7c57+lmp7jCFfKA=="
+          "value": "sha512-9nI6O8vvczH2D9ZNdMGqb/3NuT15T9ksOZnAmx9/gjF2cOi74+xxyf1Hk96uIMfm14c9y6wHeBq6SH8g6udvcA=="
         },
         {
           "name": "beanfx:platform",
@@ -4097,7 +4404,7 @@
       "type": "library",
       "bom-ref": "inst:node_modules/@next/swc-linux-arm64-musl",
       "name": "@next/swc-linux-arm64-musl",
-      "version": "16.1.3",
+      "version": "16.4.6",
       "scope": "optional",
       "licenses": [
         {
@@ -4106,11 +4413,11 @@
           }
         }
       ],
-      "purl": "pkg:npm/@next%2fswc-linux-arm64-musl@16.1.3",
+      "purl": "pkg:npm/@next%2fswc-linux-arm64-musl@16.4.6",
       "externalReferences": [
         {
           "type": "distribution",
-          "url": "https://registry.npmjs.org/@next/swc-linux-arm64-musl/-/swc-linux-arm64-musl-16.1.3.tgz"
+          "url": "https://registry.npmjs.org/@next/swc-linux-arm64-musl/-/swc-linux-arm64-musl-16.4.6.tgz"
         }
       ],
       "properties": [
@@ -4128,7 +4435,7 @@
         },
         {
           "name": "beanfx:integrity",
-          "value": "sha512-UbFx69E2UP7MhzogJRMFvV9KdEn4sLGPicClwgqnLht2TEi204B71HuVfps3ymGAh0c44QRAF+ZmvZZhLLmhNg=="
+          "value": "sha512-7/qPhTxDp2ScluOJOhLuhWmlA17o1yZ0SIgpISBCpBxXgtnK4+KGywBpFkfLPiU1rnSM1faFGzYkH6i7JdTrqA=="
         },
         {
           "name": "beanfx:platform",
@@ -4140,7 +4447,7 @@
       "type": "library",
       "bom-ref": "inst:node_modules/@next/swc-linux-x64-gnu",
       "name": "@next/swc-linux-x64-gnu",
-      "version": "16.1.3",
+      "version": "16.4.6",
       "scope": "optional",
       "licenses": [
         {
@@ -4149,8 +4456,13 @@
           }
         }
       ],
-      "purl": "pkg:npm/@next%2fswc-linux-x64-gnu@16.1.3",
-      "externalReferences": [],
+      "purl": "pkg:npm/@next%2fswc-linux-x64-gnu@16.4.6",
+      "externalReferences": [
+        {
+          "type": "distribution",
+          "url": "https://registry.npmjs.org/@next/swc-linux-x64-gnu/-/swc-linux-x64-gnu-16.4.6.tgz"
+        }
+      ],
       "properties": [
         {
           "name": "beanfx:lockfile-path",
@@ -4162,7 +4474,11 @@
         },
         {
           "name": "beanfx:license-evidence",
-          "value": "npm-registry"
+          "value": "installed-package"
+        },
+        {
+          "name": "beanfx:integrity",
+          "value": "sha512-oOpbNa8XOW1qCGd9VvzC4fbkkRxEls7/WI6tz+YHC0xRA7KpV1U7DrAnCPjzVyOk/karzWEepCOcTIDmwK8FwQ=="
         },
         {
           "name": "beanfx:platform",
@@ -4174,7 +4490,7 @@
       "type": "library",
       "bom-ref": "inst:node_modules/@next/swc-linux-x64-musl",
       "name": "@next/swc-linux-x64-musl",
-      "version": "16.1.3",
+      "version": "16.4.6",
       "scope": "optional",
       "licenses": [
         {
@@ -4183,8 +4499,13 @@
           }
         }
       ],
-      "purl": "pkg:npm/@next%2fswc-linux-x64-musl@16.1.3",
-      "externalReferences": [],
+      "purl": "pkg:npm/@next%2fswc-linux-x64-musl@16.4.6",
+      "externalReferences": [
+        {
+          "type": "distribution",
+          "url": "https://registry.npmjs.org/@next/swc-linux-x64-musl/-/swc-linux-x64-musl-16.4.6.tgz"
+        }
+      ],
       "properties": [
         {
           "name": "beanfx:lockfile-path",
@@ -4196,7 +4517,11 @@
         },
         {
           "name": "beanfx:license-evidence",
-          "value": "npm-registry"
+          "value": "installed-package"
+        },
+        {
+          "name": "beanfx:integrity",
+          "value": "sha512-aM8CZ+OR2EwXaAYw7KGkW2GDmNDsLBIRe1MMRZCJPTdw/xhTD0IMUVO4sf3KqrzuRouGzwwLZn34+gFeVXiUQA=="
         },
         {
           "name": "beanfx:platform",
@@ -4208,7 +4533,7 @@
       "type": "library",
       "bom-ref": "inst:node_modules/@next/swc-win32-arm64-msvc",
       "name": "@next/swc-win32-arm64-msvc",
-      "version": "16.1.3",
+      "version": "16.4.6",
       "scope": "optional",
       "licenses": [
         {
@@ -4217,11 +4542,11 @@
           }
         }
       ],
-      "purl": "pkg:npm/@next%2fswc-win32-arm64-msvc@16.1.3",
+      "purl": "pkg:npm/@next%2fswc-win32-arm64-msvc@16.4.6",
       "externalReferences": [
         {
           "type": "distribution",
-          "url": "https://registry.npmjs.org/@next/swc-win32-arm64-msvc/-/swc-win32-arm64-msvc-16.1.3.tgz"
+          "url": "https://registry.npmjs.org/@next/swc-win32-arm64-msvc/-/swc-win32-arm64-msvc-16.4.6.tgz"
         }
       ],
       "properties": [
@@ -4239,7 +4564,7 @@
         },
         {
           "name": "beanfx:integrity",
-          "value": "sha512-3gFCp83/LSduZMSIa+lBREP7+5e7FxpdBoc9QrCdmp+dapmTK9I+SLpY60Z39GDmTXSZA4huGg9WwmYbr6+WRw=="
+          "value": "sha512-U0p7/tEtqvHX2crhd841CDwKtp5CFkKXVjOhmfccR3Pvp64sj8KBwRqsvltqLOwVBbj0NtkxwXSDpEHYGbxeXQ=="
         },
         {
           "name": "beanfx:platform",
@@ -4251,7 +4576,7 @@
       "type": "library",
       "bom-ref": "inst:node_modules/@next/swc-win32-x64-msvc",
       "name": "@next/swc-win32-x64-msvc",
-      "version": "16.1.3",
+      "version": "16.4.6",
       "scope": "optional",
       "licenses": [
         {
@@ -4260,11 +4585,11 @@
           }
         }
       ],
-      "purl": "pkg:npm/@next%2fswc-win32-x64-msvc@16.1.3",
+      "purl": "pkg:npm/@next%2fswc-win32-x64-msvc@16.4.6",
       "externalReferences": [
         {
           "type": "distribution",
-          "url": "https://registry.npmjs.org/@next/swc-win32-x64-msvc/-/swc-win32-x64-msvc-16.1.3.tgz"
+          "url": "https://registry.npmjs.org/@next/swc-win32-x64-msvc/-/swc-win32-x64-msvc-16.4.6.tgz"
         }
       ],
       "properties": [
@@ -4282,7 +4607,7 @@
         },
         {
           "name": "beanfx:integrity",
-          "value": "sha512-1SZVfFT8zmMB+Oblrh5OKDvUo5mYQOkX2We6VGzpg7JUVZlqe4DYOFGKYZKTweSx1gbMixyO1jnFT4thU+nNHQ=="
+          "value": "sha512-3ZG15/5WIdlTQsIEvc9sPTTSL5XFrlLklIKmfF4fwsDnoAhu6NcBDXsk3mbGxNyo6aVLEGex+fHCv2MahY7a9g=="
         },
         {
           "name": "beanfx:platform",
@@ -4354,7 +4679,7 @@
       "type": "library",
       "bom-ref": "inst:node_modules/@parcel/watcher",
       "name": "@parcel/watcher",
-      "version": "2.5.4",
+      "version": "2.6.0",
       "scope": "required",
       "licenses": [
         {
@@ -4363,8 +4688,13 @@
           }
         }
       ],
-      "purl": "pkg:npm/@parcel%2fwatcher@2.5.4",
-      "externalReferences": [],
+      "purl": "pkg:npm/@parcel%2fwatcher@2.6.0",
+      "externalReferences": [
+        {
+          "type": "distribution",
+          "url": "https://registry.npmjs.org/@parcel/watcher/-/watcher-2.6.0.tgz"
+        }
+      ],
       "properties": [
         {
           "name": "beanfx:lockfile-path",
@@ -4376,7 +4706,11 @@
         },
         {
           "name": "beanfx:license-evidence",
-          "value": "installed-package"
+          "value": "npm-registry"
+        },
+        {
+          "name": "beanfx:integrity",
+          "value": "sha512-7FNeNl8NCE7aINx7WXiKQrPYZWC/hvrTsmk6zmxbI7LTXE7hVek/n8AfVgpe2y82zl3w0HvCHN0bVKMBoJcC0w=="
         }
       ]
     },
@@ -4384,7 +4718,7 @@
       "type": "library",
       "bom-ref": "inst:node_modules/@parcel/watcher-android-arm64",
       "name": "@parcel/watcher-android-arm64",
-      "version": "2.5.4",
+      "version": "2.6.0",
       "scope": "optional",
       "licenses": [
         {
@@ -4393,11 +4727,11 @@
           }
         }
       ],
-      "purl": "pkg:npm/@parcel%2fwatcher-android-arm64@2.5.4",
+      "purl": "pkg:npm/@parcel%2fwatcher-android-arm64@2.6.0",
       "externalReferences": [
         {
           "type": "distribution",
-          "url": "https://registry.npmjs.org/@parcel/watcher-android-arm64/-/watcher-android-arm64-2.5.4.tgz"
+          "url": "https://registry.npmjs.org/@parcel/watcher-android-arm64/-/watcher-android-arm64-2.6.0.tgz"
         }
       ],
       "properties": [
@@ -4415,7 +4749,7 @@
         },
         {
           "name": "beanfx:integrity",
-          "value": "sha512-hoh0vx4v+b3BNI7Cjoy2/B0ARqcwVNrzN/n7DLq9ZB4I3lrsvhrkCViJyfTj/Qi5xM9YFiH4AmHGK6pgH1ss7g=="
+          "value": "sha512-trgpLSCKRC/huFjXX/Smh+0sWe4+YtKfktIToiMl59ghz7z+qkH6kMvNnUbLyRs9N11t8l4svSCs1+5B3rOAhA=="
         },
         {
           "name": "beanfx:platform",
@@ -4427,7 +4761,7 @@
       "type": "library",
       "bom-ref": "inst:node_modules/@parcel/watcher-darwin-arm64",
       "name": "@parcel/watcher-darwin-arm64",
-      "version": "2.5.4",
+      "version": "2.6.0",
       "scope": "optional",
       "licenses": [
         {
@@ -4436,11 +4770,11 @@
           }
         }
       ],
-      "purl": "pkg:npm/@parcel%2fwatcher-darwin-arm64@2.5.4",
+      "purl": "pkg:npm/@parcel%2fwatcher-darwin-arm64@2.6.0",
       "externalReferences": [
         {
           "type": "distribution",
-          "url": "https://registry.npmjs.org/@parcel/watcher-darwin-arm64/-/watcher-darwin-arm64-2.5.4.tgz"
+          "url": "https://registry.npmjs.org/@parcel/watcher-darwin-arm64/-/watcher-darwin-arm64-2.6.0.tgz"
         }
       ],
       "properties": [
@@ -4458,7 +4792,7 @@
         },
         {
           "name": "beanfx:integrity",
-          "value": "sha512-kphKy377pZiWpAOyTgQYPE5/XEKVMaj6VUjKT5VkNyUJlr2qZAn8gIc7CPzx+kbhvqHDT9d7EqdOqRXT6vk0zw=="
+          "value": "sha512-Y3QV0gl7Q1zbfueunkWIERICbEojQFCgpyG7YqOGNFLsckXyI1xu9mAIUpKY9QBYzBtSkN8dBPwd3yiAO9ovMw=="
         },
         {
           "name": "beanfx:platform",
@@ -4470,7 +4804,7 @@
       "type": "library",
       "bom-ref": "inst:node_modules/@parcel/watcher-darwin-x64",
       "name": "@parcel/watcher-darwin-x64",
-      "version": "2.5.4",
+      "version": "2.6.0",
       "scope": "optional",
       "licenses": [
         {
@@ -4479,11 +4813,11 @@
           }
         }
       ],
-      "purl": "pkg:npm/@parcel%2fwatcher-darwin-x64@2.5.4",
+      "purl": "pkg:npm/@parcel%2fwatcher-darwin-x64@2.6.0",
       "externalReferences": [
         {
           "type": "distribution",
-          "url": "https://registry.npmjs.org/@parcel/watcher-darwin-x64/-/watcher-darwin-x64-2.5.4.tgz"
+          "url": "https://registry.npmjs.org/@parcel/watcher-darwin-x64/-/watcher-darwin-x64-2.6.0.tgz"
         }
       ],
       "properties": [
@@ -4501,7 +4835,7 @@
         },
         {
           "name": "beanfx:integrity",
-          "value": "sha512-UKaQFhCtNJW1A9YyVz3Ju7ydf6QgrpNQfRZ35wNKUhTQ3dxJ/3MULXN5JN/0Z80V/KUBDGa3RZaKq1EQT2a2gg=="
+          "value": "sha512-Ohv6OpzhUfKYD7Beb8kDvG0jbIxORCYY1JRdZnaBtnjjkJxgD7ZVL0nw2sCYd0yTMKTvz3nnTnOF3cDifK+kvw=="
         },
         {
           "name": "beanfx:platform",
@@ -4513,7 +4847,7 @@
       "type": "library",
       "bom-ref": "inst:node_modules/@parcel/watcher-freebsd-x64",
       "name": "@parcel/watcher-freebsd-x64",
-      "version": "2.5.4",
+      "version": "2.6.0",
       "scope": "optional",
       "licenses": [
         {
@@ -4522,11 +4856,11 @@
           }
         }
       ],
-      "purl": "pkg:npm/@parcel%2fwatcher-freebsd-x64@2.5.4",
+      "purl": "pkg:npm/@parcel%2fwatcher-freebsd-x64@2.6.0",
       "externalReferences": [
         {
           "type": "distribution",
-          "url": "https://registry.npmjs.org/@parcel/watcher-freebsd-x64/-/watcher-freebsd-x64-2.5.4.tgz"
+          "url": "https://registry.npmjs.org/@parcel/watcher-freebsd-x64/-/watcher-freebsd-x64-2.6.0.tgz"
         }
       ],
       "properties": [
@@ -4544,7 +4878,7 @@
         },
         {
           "name": "beanfx:integrity",
-          "value": "sha512-Dib0Wv3Ow/m2/ttvLdeI2DBXloO7t3Z0oCp4bAb2aqyqOjKPPGrg10pMJJAQ7tt8P4V2rwYwywkDhUia/FgS+Q=="
+          "value": "sha512-5HmXvDgs8VK+74jF9y9/2FE3/OnlcKmc56tjmSrEuZjpSZOGL+fvAu+HKJBdPs9uwoP2hE6TlSUpXZ/C5jUFmQ=="
         },
         {
           "name": "beanfx:platform",
@@ -4556,7 +4890,7 @@
       "type": "library",
       "bom-ref": "inst:node_modules/@parcel/watcher-linux-arm-glibc",
       "name": "@parcel/watcher-linux-arm-glibc",
-      "version": "2.5.4",
+      "version": "2.6.0",
       "scope": "optional",
       "licenses": [
         {
@@ -4565,11 +4899,11 @@
           }
         }
       ],
-      "purl": "pkg:npm/@parcel%2fwatcher-linux-arm-glibc@2.5.4",
+      "purl": "pkg:npm/@parcel%2fwatcher-linux-arm-glibc@2.6.0",
       "externalReferences": [
         {
           "type": "distribution",
-          "url": "https://registry.npmjs.org/@parcel/watcher-linux-arm-glibc/-/watcher-linux-arm-glibc-2.5.4.tgz"
+          "url": "https://registry.npmjs.org/@parcel/watcher-linux-arm-glibc/-/watcher-linux-arm-glibc-2.6.0.tgz"
         }
       ],
       "properties": [
@@ -4587,7 +4921,7 @@
         },
         {
           "name": "beanfx:integrity",
-          "value": "sha512-I5Vb769pdf7Q7Sf4KNy8Pogl/URRCKu9ImMmnVKYayhynuyGYMzuI4UOWnegQNa2sGpsPSbzDsqbHNMyeyPCgw=="
+          "value": "sha512-Ps/hui3A+vMbjdqlqAowK2ZL8+BO8dBjxeWXj6npTBs3jx4wWmbPpaLuqwrQrSqIVMCnpWo238bJ1U37GhQOYg=="
         },
         {
           "name": "beanfx:platform",
@@ -4599,7 +4933,7 @@
       "type": "library",
       "bom-ref": "inst:node_modules/@parcel/watcher-linux-arm-musl",
       "name": "@parcel/watcher-linux-arm-musl",
-      "version": "2.5.4",
+      "version": "2.6.0",
       "scope": "optional",
       "licenses": [
         {
@@ -4608,11 +4942,11 @@
           }
         }
       ],
-      "purl": "pkg:npm/@parcel%2fwatcher-linux-arm-musl@2.5.4",
+      "purl": "pkg:npm/@parcel%2fwatcher-linux-arm-musl@2.6.0",
       "externalReferences": [
         {
           "type": "distribution",
-          "url": "https://registry.npmjs.org/@parcel/watcher-linux-arm-musl/-/watcher-linux-arm-musl-2.5.4.tgz"
+          "url": "https://registry.npmjs.org/@parcel/watcher-linux-arm-musl/-/watcher-linux-arm-musl-2.6.0.tgz"
         }
       ],
       "properties": [
@@ -4630,7 +4964,7 @@
         },
         {
           "name": "beanfx:integrity",
-          "value": "sha512-kGO8RPvVrcAotV4QcWh8kZuHr9bXi9a3bSZw7kFarYR0+fGliU7hd/zevhjw8fnvIKG3J9EO5G6sXNGCSNMYPQ=="
+          "value": "sha512-9c6AUHgHoG+IY88MRIHupztQiQnrbqHYQjkM2btA+Bf/wQnQMuiD0Wfk1EVv3TlNT3x41uU71rn6E4xh/+zvkw=="
         },
         {
           "name": "beanfx:platform",
@@ -4642,7 +4976,7 @@
       "type": "library",
       "bom-ref": "inst:node_modules/@parcel/watcher-linux-arm64-glibc",
       "name": "@parcel/watcher-linux-arm64-glibc",
-      "version": "2.5.4",
+      "version": "2.6.0",
       "scope": "optional",
       "licenses": [
         {
@@ -4651,11 +4985,11 @@
           }
         }
       ],
-      "purl": "pkg:npm/@parcel%2fwatcher-linux-arm64-glibc@2.5.4",
+      "purl": "pkg:npm/@parcel%2fwatcher-linux-arm64-glibc@2.6.0",
       "externalReferences": [
         {
           "type": "distribution",
-          "url": "https://registry.npmjs.org/@parcel/watcher-linux-arm64-glibc/-/watcher-linux-arm64-glibc-2.5.4.tgz"
+          "url": "https://registry.npmjs.org/@parcel/watcher-linux-arm64-glibc/-/watcher-linux-arm64-glibc-2.6.0.tgz"
         }
       ],
       "properties": [
@@ -4673,7 +5007,7 @@
         },
         {
           "name": "beanfx:integrity",
-          "value": "sha512-KU75aooXhqGFY2W5/p8DYYHt4hrjHZod8AhcGAmhzPn/etTa+lYCDB2b1sJy3sWJ8ahFVTdy+EbqSBvMx3iFlw=="
+          "value": "sha512-yHRqS2owEXe6Hic9z6Mh1ECsCd+ODVOGvZDyciqRd21+v+o+DnXMOrw50DSpIG2sb8GPEaPPmfeCAWKPJdq46g=="
         },
         {
           "name": "beanfx:platform",
@@ -4685,7 +5019,7 @@
       "type": "library",
       "bom-ref": "inst:node_modules/@parcel/watcher-linux-arm64-musl",
       "name": "@parcel/watcher-linux-arm64-musl",
-      "version": "2.5.4",
+      "version": "2.6.0",
       "scope": "optional",
       "licenses": [
         {
@@ -4694,11 +5028,11 @@
           }
         }
       ],
-      "purl": "pkg:npm/@parcel%2fwatcher-linux-arm64-musl@2.5.4",
+      "purl": "pkg:npm/@parcel%2fwatcher-linux-arm64-musl@2.6.0",
       "externalReferences": [
         {
           "type": "distribution",
-          "url": "https://registry.npmjs.org/@parcel/watcher-linux-arm64-musl/-/watcher-linux-arm64-musl-2.5.4.tgz"
+          "url": "https://registry.npmjs.org/@parcel/watcher-linux-arm64-musl/-/watcher-linux-arm64-musl-2.6.0.tgz"
         }
       ],
       "properties": [
@@ -4716,7 +5050,7 @@
         },
         {
           "name": "beanfx:integrity",
-          "value": "sha512-Qx8uNiIekVutnzbVdrgSanM+cbpDD3boB1f8vMtnuG5Zau4/bdDbXyKwIn0ToqFhIuob73bcxV9NwRm04/hzHQ=="
+          "value": "sha512-WhB2e/V7rqdHHWZusBSPuy5Ei8S6lSz6FE5TKKQz5h3a0O+C+mhY7vxU9b/stqvMb8beLnPY82ZrFTLKs+SrKA=="
         },
         {
           "name": "beanfx:platform",
@@ -4728,7 +5062,7 @@
       "type": "library",
       "bom-ref": "inst:node_modules/@parcel/watcher-linux-x64-glibc",
       "name": "@parcel/watcher-linux-x64-glibc",
-      "version": "2.5.4",
+      "version": "2.6.0",
       "scope": "optional",
       "licenses": [
         {
@@ -4737,8 +5071,13 @@
           }
         }
       ],
-      "purl": "pkg:npm/@parcel%2fwatcher-linux-x64-glibc@2.5.4",
-      "externalReferences": [],
+      "purl": "pkg:npm/@parcel%2fwatcher-linux-x64-glibc@2.6.0",
+      "externalReferences": [
+        {
+          "type": "distribution",
+          "url": "https://registry.npmjs.org/@parcel/watcher-linux-x64-glibc/-/watcher-linux-x64-glibc-2.6.0.tgz"
+        }
+      ],
       "properties": [
         {
           "name": "beanfx:lockfile-path",
@@ -4750,7 +5089,11 @@
         },
         {
           "name": "beanfx:license-evidence",
-          "value": "installed-package"
+          "value": "npm-registry"
+        },
+        {
+          "name": "beanfx:integrity",
+          "value": "sha512-ulGE6x6Oz6iAwg75T8YQSoguBWasniIbX+QWpaYPcCnDOpdWX3k+4xbEYPZVLxOuoJI+svJJPD3sEj8G7lrQ3A=="
         },
         {
           "name": "beanfx:platform",
@@ -4762,7 +5105,7 @@
       "type": "library",
       "bom-ref": "inst:node_modules/@parcel/watcher-linux-x64-musl",
       "name": "@parcel/watcher-linux-x64-musl",
-      "version": "2.5.4",
+      "version": "2.6.0",
       "scope": "optional",
       "licenses": [
         {
@@ -4771,8 +5114,13 @@
           }
         }
       ],
-      "purl": "pkg:npm/@parcel%2fwatcher-linux-x64-musl@2.5.4",
-      "externalReferences": [],
+      "purl": "pkg:npm/@parcel%2fwatcher-linux-x64-musl@2.6.0",
+      "externalReferences": [
+        {
+          "type": "distribution",
+          "url": "https://registry.npmjs.org/@parcel/watcher-linux-x64-musl/-/watcher-linux-x64-musl-2.6.0.tgz"
+        }
+      ],
       "properties": [
         {
           "name": "beanfx:lockfile-path",
@@ -4784,7 +5132,11 @@
         },
         {
           "name": "beanfx:license-evidence",
-          "value": "installed-package"
+          "value": "npm-registry"
+        },
+        {
+          "name": "beanfx:integrity",
+          "value": "sha512-tkBYKt7YQrjIJWYDnto2YgO8MRkjlMTSNoRHzsXinBqbLdeOM3L32wPZJvIZxqaLMfSlS/4sUjH/6STVP/XDLw=="
         },
         {
           "name": "beanfx:platform",
@@ -4796,7 +5148,7 @@
       "type": "library",
       "bom-ref": "inst:node_modules/@parcel/watcher-win32-arm64",
       "name": "@parcel/watcher-win32-arm64",
-      "version": "2.5.4",
+      "version": "2.6.0",
       "scope": "optional",
       "licenses": [
         {
@@ -4805,11 +5157,11 @@
           }
         }
       ],
-      "purl": "pkg:npm/@parcel%2fwatcher-win32-arm64@2.5.4",
+      "purl": "pkg:npm/@parcel%2fwatcher-win32-arm64@2.6.0",
       "externalReferences": [
         {
           "type": "distribution",
-          "url": "https://registry.npmjs.org/@parcel/watcher-win32-arm64/-/watcher-win32-arm64-2.5.4.tgz"
+          "url": "https://registry.npmjs.org/@parcel/watcher-win32-arm64/-/watcher-win32-arm64-2.6.0.tgz"
         }
       ],
       "properties": [
@@ -4827,7 +5179,7 @@
         },
         {
           "name": "beanfx:integrity",
-          "value": "sha512-iby+D/YNXWkiQNYcIhg8P5hSjzXEHaQrk2SLrWOUD7VeC4Ohu0WQvmV+HDJokZVJ2UjJ4AGXW3bx7Lls9Ln4TQ=="
+          "value": "sha512-gIZAP23jaHjGWasY/TY6yL7NHFClf0Ga7FN+iINvk+KN94rhm94lYZhFsbYFNcA04/onvGD9kKmiJLJB2HbNwQ=="
         },
         {
           "name": "beanfx:platform",
@@ -4837,52 +5189,9 @@
     },
     {
       "type": "library",
-      "bom-ref": "inst:node_modules/@parcel/watcher-win32-ia32",
-      "name": "@parcel/watcher-win32-ia32",
-      "version": "2.5.4",
-      "scope": "optional",
-      "licenses": [
-        {
-          "license": {
-            "name": "MIT"
-          }
-        }
-      ],
-      "purl": "pkg:npm/@parcel%2fwatcher-win32-ia32@2.5.4",
-      "externalReferences": [
-        {
-          "type": "distribution",
-          "url": "https://registry.npmjs.org/@parcel/watcher-win32-ia32/-/watcher-win32-ia32-2.5.4.tgz"
-        }
-      ],
-      "properties": [
-        {
-          "name": "beanfx:lockfile-path",
-          "value": "node_modules/@parcel/watcher-win32-ia32"
-        },
-        {
-          "name": "beanfx:nesting",
-          "value": "top-level"
-        },
-        {
-          "name": "beanfx:license-evidence",
-          "value": "npm-registry"
-        },
-        {
-          "name": "beanfx:integrity",
-          "value": "sha512-vQN+KIReG0a2ZDpVv8cgddlf67J8hk1WfZMMP7sMeZmJRSmEax5xNDNWKdgqSe2brOKTQQAs3aCCUal2qBHAyg=="
-        },
-        {
-          "name": "beanfx:platform",
-          "value": "win32/ia32"
-        }
-      ]
-    },
-    {
-      "type": "library",
       "bom-ref": "inst:node_modules/@parcel/watcher-win32-x64",
       "name": "@parcel/watcher-win32-x64",
-      "version": "2.5.4",
+      "version": "2.6.0",
       "scope": "optional",
       "licenses": [
         {
@@ -4891,11 +5200,11 @@
           }
         }
       ],
-      "purl": "pkg:npm/@parcel%2fwatcher-win32-x64@2.5.4",
+      "purl": "pkg:npm/@parcel%2fwatcher-win32-x64@2.6.0",
       "externalReferences": [
         {
           "type": "distribution",
-          "url": "https://registry.npmjs.org/@parcel/watcher-win32-x64/-/watcher-win32-x64-2.5.4.tgz"
+          "url": "https://registry.npmjs.org/@parcel/watcher-win32-x64/-/watcher-win32-x64-2.6.0.tgz"
         }
       ],
       "properties": [
@@ -4913,7 +5222,7 @@
         },
         {
           "name": "beanfx:integrity",
-          "value": "sha512-3A6efb6BOKwyw7yk9ro2vus2YTt2nvcd56AuzxdMiVOxL9umDyN5PKkKfZ/gZ9row41SjVmTVQNWQhaRRGpOKw=="
+          "value": "sha512-cA+/pXV2YkfxlIcXOQ5fSWqAzzPyD78/x5qbK/I0vUkrlYHA8TIz+MXjAbGouguKVSI4bOmkTSJ1/poVSsgt+A=="
         },
         {
           "name": "beanfx:platform",
@@ -7455,7 +7764,12 @@
         }
       ],
       "purl": "pkg:npm/@schummar%2ficu-type-parser@1.21.5",
-      "externalReferences": [],
+      "externalReferences": [
+        {
+          "type": "distribution",
+          "url": "https://registry.npmjs.org/@schummar/icu-type-parser/-/icu-type-parser-1.21.5.tgz"
+        }
+      ],
       "properties": [
         {
           "name": "beanfx:lockfile-path",
@@ -7468,6 +7782,10 @@
         {
           "name": "beanfx:license-evidence",
           "value": "installed-package"
+        },
+        {
+          "name": "beanfx:integrity",
+          "value": "sha512-bXHSaW5jRTmke9Vd0h5P7BtWZG9Znqb8gSDxZnxaGSJnGwPLDPfS+3g0BKzeWqzgZPsIVZkM7m2tbo18cm5HBw=="
         }
       ]
     },
@@ -7565,7 +7883,7 @@
       "type": "library",
       "bom-ref": "inst:node_modules/@swc/core",
       "name": "@swc/core",
-      "version": "1.15.8",
+      "version": "1.16.22",
       "scope": "required",
       "licenses": [
         {
@@ -7574,8 +7892,13 @@
           }
         }
       ],
-      "purl": "pkg:npm/@swc%2fcore@1.15.8",
-      "externalReferences": [],
+      "purl": "pkg:npm/@swc%2fcore@1.16.22",
+      "externalReferences": [
+        {
+          "type": "distribution",
+          "url": "https://registry.npmjs.org/@swc/core/-/core-1.16.22.tgz"
+        }
+      ],
       "properties": [
         {
           "name": "beanfx:lockfile-path",
@@ -7587,7 +7910,11 @@
         },
         {
           "name": "beanfx:license-evidence",
-          "value": "npm-registry"
+          "value": "installed-package"
+        },
+        {
+          "name": "beanfx:integrity",
+          "value": "sha512-kFqhtSmmNSZqJXIK0l9rF+oNg2efaZoeNbN/4qwbNTWfMRKApc6n7rKx827bw8K+4kmu7iH0LZ144QJTQzulHw=="
         }
       ]
     },
@@ -7595,7 +7922,7 @@
       "type": "library",
       "bom-ref": "inst:node_modules/@swc/core-darwin-arm64",
       "name": "@swc/core-darwin-arm64",
-      "version": "1.15.8",
+      "version": "1.16.22",
       "scope": "optional",
       "licenses": [
         {
@@ -7604,11 +7931,11 @@
           }
         }
       ],
-      "purl": "pkg:npm/@swc%2fcore-darwin-arm64@1.15.8",
+      "purl": "pkg:npm/@swc%2fcore-darwin-arm64@1.16.22",
       "externalReferences": [
         {
           "type": "distribution",
-          "url": "https://registry.npmjs.org/@swc/core-darwin-arm64/-/core-darwin-arm64-1.15.8.tgz"
+          "url": "https://registry.npmjs.org/@swc/core-darwin-arm64/-/core-darwin-arm64-1.16.22.tgz"
         }
       ],
       "properties": [
@@ -7626,7 +7953,7 @@
         },
         {
           "name": "beanfx:integrity",
-          "value": "sha512-M9cK5GwyWWRkRGwwCbREuj6r8jKdES/haCZ3Xckgkl8MUQJZA3XB7IXXK1IXRNeLjg6m7cnoMICpXv1v1hlJOg=="
+          "value": "sha512-PddkOjOK3MK01AVOvqG309iAJ0hn5vK37ug9g5Zt5e2aWF3IhVLdDLjMePXts1zi8yc4ild2h9FYCkVYb5+Qcw=="
         },
         {
           "name": "beanfx:platform",
@@ -7638,7 +7965,7 @@
       "type": "library",
       "bom-ref": "inst:node_modules/@swc/core-darwin-x64",
       "name": "@swc/core-darwin-x64",
-      "version": "1.15.8",
+      "version": "1.16.22",
       "scope": "optional",
       "licenses": [
         {
@@ -7647,11 +7974,11 @@
           }
         }
       ],
-      "purl": "pkg:npm/@swc%2fcore-darwin-x64@1.15.8",
+      "purl": "pkg:npm/@swc%2fcore-darwin-x64@1.16.22",
       "externalReferences": [
         {
           "type": "distribution",
-          "url": "https://registry.npmjs.org/@swc/core-darwin-x64/-/core-darwin-x64-1.15.8.tgz"
+          "url": "https://registry.npmjs.org/@swc/core-darwin-x64/-/core-darwin-x64-1.16.22.tgz"
         }
       ],
       "properties": [
@@ -7669,7 +7996,7 @@
         },
         {
           "name": "beanfx:integrity",
-          "value": "sha512-j47DasuOvXl80sKJHSi2X25l44CMc3VDhlJwA7oewC1nV1VsSzwX+KOwE5tLnfORvVJJyeiXgJORNYg4jeIjYQ=="
+          "value": "sha512-Zzia5cuIQFLTfZyf5mC1JvRMPW1VlxbvkZ0qNESoD4okE6T6Us2ZNVZ5XMVELqkYNw9eL2GeuMJgDIHBdYo7Gg=="
         },
         {
           "name": "beanfx:platform",
@@ -7681,7 +8008,7 @@
       "type": "library",
       "bom-ref": "inst:node_modules/@swc/core-linux-arm-gnueabihf",
       "name": "@swc/core-linux-arm-gnueabihf",
-      "version": "1.15.8",
+      "version": "1.16.22",
       "scope": "optional",
       "licenses": [
         {
@@ -7690,11 +8017,11 @@
           }
         }
       ],
-      "purl": "pkg:npm/@swc%2fcore-linux-arm-gnueabihf@1.15.8",
+      "purl": "pkg:npm/@swc%2fcore-linux-arm-gnueabihf@1.16.22",
       "externalReferences": [
         {
           "type": "distribution",
-          "url": "https://registry.npmjs.org/@swc/core-linux-arm-gnueabihf/-/core-linux-arm-gnueabihf-1.15.8.tgz"
+          "url": "https://registry.npmjs.org/@swc/core-linux-arm-gnueabihf/-/core-linux-arm-gnueabihf-1.16.22.tgz"
         }
       ],
       "properties": [
@@ -7712,7 +8039,7 @@
         },
         {
           "name": "beanfx:integrity",
-          "value": "sha512-siAzDENu2rUbwr9+fayWa26r5A9fol1iORG53HWxQL1J8ym4k7xt9eME0dMPXlYZDytK5r9sW8zEA10F2U3Xwg=="
+          "value": "sha512-GI6VICiuYc7mb61XenLtiEGoOXTXDdUda8w0bu29Mh3Z6rhuTkAiBAdDFpdww2QNV0iACY5ylUSL127I6Nx8yQ=="
         },
         {
           "name": "beanfx:platform",
@@ -7724,7 +8051,7 @@
       "type": "library",
       "bom-ref": "inst:node_modules/@swc/core-linux-arm64-gnu",
       "name": "@swc/core-linux-arm64-gnu",
-      "version": "1.15.8",
+      "version": "1.16.22",
       "scope": "optional",
       "licenses": [
         {
@@ -7733,11 +8060,11 @@
           }
         }
       ],
-      "purl": "pkg:npm/@swc%2fcore-linux-arm64-gnu@1.15.8",
+      "purl": "pkg:npm/@swc%2fcore-linux-arm64-gnu@1.16.22",
       "externalReferences": [
         {
           "type": "distribution",
-          "url": "https://registry.npmjs.org/@swc/core-linux-arm64-gnu/-/core-linux-arm64-gnu-1.15.8.tgz"
+          "url": "https://registry.npmjs.org/@swc/core-linux-arm64-gnu/-/core-linux-arm64-gnu-1.16.22.tgz"
         }
       ],
       "properties": [
@@ -7755,7 +8082,7 @@
         },
         {
           "name": "beanfx:integrity",
-          "value": "sha512-o+1y5u6k2FfPYbTRUPvurwzNt5qd0NTumCTFscCNuBksycloXY16J8L+SMW5QRX59n4Hp9EmFa3vpvNHRVv1+Q=="
+          "value": "sha512-Ic+qrMmV78QdlG9irJuc/37xSqY7+5ZFhg4kaYbF82UQkaEfWgqGSUbU75Y4To21eaBB07c05kbXmTWTrvPURA=="
         },
         {
           "name": "beanfx:platform",
@@ -7767,7 +8094,7 @@
       "type": "library",
       "bom-ref": "inst:node_modules/@swc/core-linux-arm64-musl",
       "name": "@swc/core-linux-arm64-musl",
-      "version": "1.15.8",
+      "version": "1.16.22",
       "scope": "optional",
       "licenses": [
         {
@@ -7776,11 +8103,11 @@
           }
         }
       ],
-      "purl": "pkg:npm/@swc%2fcore-linux-arm64-musl@1.15.8",
+      "purl": "pkg:npm/@swc%2fcore-linux-arm64-musl@1.16.22",
       "externalReferences": [
         {
           "type": "distribution",
-          "url": "https://registry.npmjs.org/@swc/core-linux-arm64-musl/-/core-linux-arm64-musl-1.15.8.tgz"
+          "url": "https://registry.npmjs.org/@swc/core-linux-arm64-musl/-/core-linux-arm64-musl-1.16.22.tgz"
         }
       ],
       "properties": [
@@ -7798,7 +8125,7 @@
         },
         {
           "name": "beanfx:integrity",
-          "value": "sha512-koiCqL09EwOP1S2RShCI7NbsQuG6r2brTqUYE7pV7kZm9O17wZ0LSz22m6gVibpwEnw8jI3IE1yYsQTVpluALw=="
+          "value": "sha512-ophleEwlj0SqkzYPDJ7xMPK0+MnWfc4+u9GzDYLLFG1TkIJuwj0rHNWto4MmKo00TylHFwGx9+5bLs/+YZ00IQ=="
         },
         {
           "name": "beanfx:platform",
@@ -7808,9 +8135,9 @@
     },
     {
       "type": "library",
-      "bom-ref": "inst:node_modules/@swc/core-linux-x64-gnu",
-      "name": "@swc/core-linux-x64-gnu",
-      "version": "1.15.8",
+      "bom-ref": "inst:node_modules/@swc/core-linux-ppc64-gnu",
+      "name": "@swc/core-linux-ppc64-gnu",
+      "version": "1.16.22",
       "scope": "optional",
       "licenses": [
         {
@@ -7819,8 +8146,99 @@
           }
         }
       ],
-      "purl": "pkg:npm/@swc%2fcore-linux-x64-gnu@1.15.8",
-      "externalReferences": [],
+      "purl": "pkg:npm/@swc%2fcore-linux-ppc64-gnu@1.16.22",
+      "externalReferences": [
+        {
+          "type": "distribution",
+          "url": "https://registry.npmjs.org/@swc/core-linux-ppc64-gnu/-/core-linux-ppc64-gnu-1.16.22.tgz"
+        }
+      ],
+      "properties": [
+        {
+          "name": "beanfx:lockfile-path",
+          "value": "node_modules/@swc/core-linux-ppc64-gnu"
+        },
+        {
+          "name": "beanfx:nesting",
+          "value": "top-level"
+        },
+        {
+          "name": "beanfx:license-evidence",
+          "value": "npm-registry"
+        },
+        {
+          "name": "beanfx:integrity",
+          "value": "sha512-/4kR7SafFsVqY8N4HSepTs4Ni9YA0OY6n/SVBk/V15PhDiw97stG9SVqvgc8EzC+3XOe4pTmwlvFLWzNYfuNWg=="
+        },
+        {
+          "name": "beanfx:platform",
+          "value": "linux/ppc64"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "bom-ref": "inst:node_modules/@swc/core-linux-s390x-gnu",
+      "name": "@swc/core-linux-s390x-gnu",
+      "version": "1.16.22",
+      "scope": "optional",
+      "licenses": [
+        {
+          "license": {
+            "name": "Apache-2.0 AND MIT"
+          }
+        }
+      ],
+      "purl": "pkg:npm/@swc%2fcore-linux-s390x-gnu@1.16.22",
+      "externalReferences": [
+        {
+          "type": "distribution",
+          "url": "https://registry.npmjs.org/@swc/core-linux-s390x-gnu/-/core-linux-s390x-gnu-1.16.22.tgz"
+        }
+      ],
+      "properties": [
+        {
+          "name": "beanfx:lockfile-path",
+          "value": "node_modules/@swc/core-linux-s390x-gnu"
+        },
+        {
+          "name": "beanfx:nesting",
+          "value": "top-level"
+        },
+        {
+          "name": "beanfx:license-evidence",
+          "value": "npm-registry"
+        },
+        {
+          "name": "beanfx:integrity",
+          "value": "sha512-b3GQqKmHBHUFQby1sh/QLtNQMMXTSBUhnmXcJ5qSrWbkYnhljIW3Y+30eMrrxCfy7HXLLDug1sjlhJDhf3tPhA=="
+        },
+        {
+          "name": "beanfx:platform",
+          "value": "linux/s390x"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "bom-ref": "inst:node_modules/@swc/core-linux-x64-gnu",
+      "name": "@swc/core-linux-x64-gnu",
+      "version": "1.16.22",
+      "scope": "optional",
+      "licenses": [
+        {
+          "license": {
+            "name": "Apache-2.0 AND MIT"
+          }
+        }
+      ],
+      "purl": "pkg:npm/@swc%2fcore-linux-x64-gnu@1.16.22",
+      "externalReferences": [
+        {
+          "type": "distribution",
+          "url": "https://registry.npmjs.org/@swc/core-linux-x64-gnu/-/core-linux-x64-gnu-1.16.22.tgz"
+        }
+      ],
       "properties": [
         {
           "name": "beanfx:lockfile-path",
@@ -7832,7 +8250,11 @@
         },
         {
           "name": "beanfx:license-evidence",
-          "value": "npm-registry"
+          "value": "installed-package"
+        },
+        {
+          "name": "beanfx:integrity",
+          "value": "sha512-u9hdfNEI3oI/dTRJ+In8G32EgfFpZDvMoI5elIERl6/XfaIzE9gpv4WomhKblAXA1+EYyLfDCS1EFFKQlBXTQQ=="
         },
         {
           "name": "beanfx:platform",
@@ -7844,7 +8266,7 @@
       "type": "library",
       "bom-ref": "inst:node_modules/@swc/core-linux-x64-musl",
       "name": "@swc/core-linux-x64-musl",
-      "version": "1.15.8",
+      "version": "1.16.22",
       "scope": "optional",
       "licenses": [
         {
@@ -7853,8 +8275,13 @@
           }
         }
       ],
-      "purl": "pkg:npm/@swc%2fcore-linux-x64-musl@1.15.8",
-      "externalReferences": [],
+      "purl": "pkg:npm/@swc%2fcore-linux-x64-musl@1.16.22",
+      "externalReferences": [
+        {
+          "type": "distribution",
+          "url": "https://registry.npmjs.org/@swc/core-linux-x64-musl/-/core-linux-x64-musl-1.16.22.tgz"
+        }
+      ],
       "properties": [
         {
           "name": "beanfx:lockfile-path",
@@ -7866,7 +8293,11 @@
         },
         {
           "name": "beanfx:license-evidence",
-          "value": "npm-registry"
+          "value": "installed-package"
+        },
+        {
+          "name": "beanfx:integrity",
+          "value": "sha512-C3YVRL717kKSSU8n6HaC7sesFSGnHjRuHN3609Wl4epPYVDDutzD6aj7CMcx9cg3WWJ/oE8woDZ8qrCfzmxvnw=="
         },
         {
           "name": "beanfx:platform",
@@ -7878,7 +8309,7 @@
       "type": "library",
       "bom-ref": "inst:node_modules/@swc/core-win32-arm64-msvc",
       "name": "@swc/core-win32-arm64-msvc",
-      "version": "1.15.8",
+      "version": "1.16.22",
       "scope": "optional",
       "licenses": [
         {
@@ -7887,11 +8318,11 @@
           }
         }
       ],
-      "purl": "pkg:npm/@swc%2fcore-win32-arm64-msvc@1.15.8",
+      "purl": "pkg:npm/@swc%2fcore-win32-arm64-msvc@1.16.22",
       "externalReferences": [
         {
           "type": "distribution",
-          "url": "https://registry.npmjs.org/@swc/core-win32-arm64-msvc/-/core-win32-arm64-msvc-1.15.8.tgz"
+          "url": "https://registry.npmjs.org/@swc/core-win32-arm64-msvc/-/core-win32-arm64-msvc-1.16.22.tgz"
         }
       ],
       "properties": [
@@ -7909,7 +8340,7 @@
         },
         {
           "name": "beanfx:integrity",
-          "value": "sha512-djQPJ9Rh9vP8GTS/Df3hcc6XP6xnG5c8qsngWId/BLA9oX6C7UzCPAn74BG/wGb9a6j4w3RINuoaieJB3t+7iQ=="
+          "value": "sha512-+MpNuE45LMFo+6RF8vMUqZPmaOfRQIuzCUHJ+jSXwEhiR5KHeZiQ9MaJglZRDeMuML67voCiFLrxqYTqGCbcCQ=="
         },
         {
           "name": "beanfx:platform",
@@ -7921,7 +8352,7 @@
       "type": "library",
       "bom-ref": "inst:node_modules/@swc/core-win32-ia32-msvc",
       "name": "@swc/core-win32-ia32-msvc",
-      "version": "1.15.8",
+      "version": "1.16.22",
       "scope": "optional",
       "licenses": [
         {
@@ -7930,11 +8361,11 @@
           }
         }
       ],
-      "purl": "pkg:npm/@swc%2fcore-win32-ia32-msvc@1.15.8",
+      "purl": "pkg:npm/@swc%2fcore-win32-ia32-msvc@1.16.22",
       "externalReferences": [
         {
           "type": "distribution",
-          "url": "https://registry.npmjs.org/@swc/core-win32-ia32-msvc/-/core-win32-ia32-msvc-1.15.8.tgz"
+          "url": "https://registry.npmjs.org/@swc/core-win32-ia32-msvc/-/core-win32-ia32-msvc-1.16.22.tgz"
         }
       ],
       "properties": [
@@ -7952,7 +8383,7 @@
         },
         {
           "name": "beanfx:integrity",
-          "value": "sha512-/wfAgxORg2VBaUoFdytcVBVCgf1isWZIEXB9MZEUty4wwK93M/PxAkjifOho9RN3WrM3inPLabICRCEgdHpKKQ=="
+          "value": "sha512-z1p/CMDSRqvsE5Gs7axHVl6p+2zjoQTYuGcZ/q+3PMjAxx2bo/+lkpG9ot+725e6lj9os3WwYQrncmOWKVDrEQ=="
         },
         {
           "name": "beanfx:platform",
@@ -7964,7 +8395,7 @@
       "type": "library",
       "bom-ref": "inst:node_modules/@swc/core-win32-x64-msvc",
       "name": "@swc/core-win32-x64-msvc",
-      "version": "1.15.8",
+      "version": "1.16.22",
       "scope": "optional",
       "licenses": [
         {
@@ -7973,11 +8404,11 @@
           }
         }
       ],
-      "purl": "pkg:npm/@swc%2fcore-win32-x64-msvc@1.15.8",
+      "purl": "pkg:npm/@swc%2fcore-win32-x64-msvc@1.16.22",
       "externalReferences": [
         {
           "type": "distribution",
-          "url": "https://registry.npmjs.org/@swc/core-win32-x64-msvc/-/core-win32-x64-msvc-1.15.8.tgz"
+          "url": "https://registry.npmjs.org/@swc/core-win32-x64-msvc/-/core-win32-x64-msvc-1.16.22.tgz"
         }
       ],
       "properties": [
@@ -7995,7 +8426,7 @@
         },
         {
           "name": "beanfx:integrity",
-          "value": "sha512-GpMePrh9Sl4d61o4KAHOOv5is5+zt6BEXCOCgs/H0FLGeii7j9bWDE8ExvKFy2GRRZVNR1ugsnzaGWHKM6kuzA=="
+          "value": "sha512-IyBPJn/SpXsh7i5ZLfQUPJ+R+fuELPI7Sz51igmYMTv2wdnDn/tqnIlAUwQe6AgnclbuJdbOb6crUbyN/zwMzw=="
         },
         {
           "name": "beanfx:platform",
@@ -8017,7 +8448,12 @@
         }
       ],
       "purl": "pkg:npm/@swc%2fcounter@0.1.3",
-      "externalReferences": [],
+      "externalReferences": [
+        {
+          "type": "distribution",
+          "url": "https://registry.npmjs.org/@swc/counter/-/counter-0.1.3.tgz"
+        }
+      ],
       "properties": [
         {
           "name": "beanfx:lockfile-path",
@@ -8030,14 +8466,18 @@
         {
           "name": "beanfx:license-evidence",
           "value": "installed-package"
+        },
+        {
+          "name": "beanfx:integrity",
+          "value": "sha512-e2BR4lsJkkRlKZ/qCHPw9ZaSxc0MVUd7gtbtaB7aMvHeJVYe8sOB8DBZkP2DtISHGSku9sCK6T6cnY0CtXrOCQ=="
         }
       ]
     },
     {
       "type": "library",
-      "bom-ref": "inst:node_modules/@swc/types",
-      "name": "@swc/types",
-      "version": "0.1.25",
+      "bom-ref": "inst:node_modules/@swc/helpers",
+      "name": "@swc/helpers",
+      "version": "0.5.23",
       "scope": "required",
       "licenses": [
         {
@@ -8046,8 +8486,52 @@
           }
         }
       ],
-      "purl": "pkg:npm/@swc%2ftypes@0.1.25",
-      "externalReferences": [],
+      "purl": "pkg:npm/@swc%2fhelpers@0.5.23",
+      "externalReferences": [
+        {
+          "type": "distribution",
+          "url": "https://registry.npmjs.org/@swc/helpers/-/helpers-0.5.23.tgz"
+        }
+      ],
+      "properties": [
+        {
+          "name": "beanfx:lockfile-path",
+          "value": "node_modules/@swc/helpers"
+        },
+        {
+          "name": "beanfx:nesting",
+          "value": "top-level"
+        },
+        {
+          "name": "beanfx:license-evidence",
+          "value": "installed-package"
+        },
+        {
+          "name": "beanfx:integrity",
+          "value": "sha512-5lSsMOTXURePglDfvuAQUqkGek9Hg2kksOYay2m0+XR++b2NWYL/4sWyuvVBIs8oKnJaxkdi9whaL/sqN13afw=="
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "bom-ref": "inst:node_modules/@swc/types",
+      "name": "@swc/types",
+      "version": "0.1.28",
+      "scope": "required",
+      "licenses": [
+        {
+          "license": {
+            "name": "Apache-2.0"
+          }
+        }
+      ],
+      "purl": "pkg:npm/@swc%2ftypes@0.1.28",
+      "externalReferences": [
+        {
+          "type": "distribution",
+          "url": "https://registry.npmjs.org/@swc/types/-/types-0.1.28.tgz"
+        }
+      ],
       "properties": [
         {
           "name": "beanfx:lockfile-path",
@@ -8059,7 +8543,11 @@
         },
         {
           "name": "beanfx:license-evidence",
-          "value": "npm-registry"
+          "value": "installed-package"
+        },
+        {
+          "name": "beanfx:integrity",
+          "value": "sha512-V6Mnml8v09QALx6K0elJ7o9K/MkVDtW3t6L+7Ou/JcWtb3xwId2AH4FeOceySd2JaO87IMw4+6vSZxLm34LPbw=="
         }
       ]
     },
@@ -8967,7 +9455,7 @@
       "type": "library",
       "bom-ref": "inst:node_modules/baseline-browser-mapping",
       "name": "baseline-browser-mapping",
-      "version": "2.9.15",
+      "version": "2.11.40",
       "scope": "required",
       "licenses": [
         {
@@ -8976,8 +9464,13 @@
           }
         }
       ],
-      "purl": "pkg:npm/baseline-browser-mapping@2.9.15",
-      "externalReferences": [],
+      "purl": "pkg:npm/baseline-browser-mapping@2.11.40",
+      "externalReferences": [
+        {
+          "type": "distribution",
+          "url": "https://registry.npmjs.org/baseline-browser-mapping/-/baseline-browser-mapping-2.11.40.tgz"
+        }
+      ],
       "properties": [
         {
           "name": "beanfx:lockfile-path",
@@ -8990,6 +9483,10 @@
         {
           "name": "beanfx:license-evidence",
           "value": "npm-registry"
+        },
+        {
+          "name": "beanfx:integrity",
+          "value": "sha512-WJhaQ3kW5+5BpOduI64ewvykhCyK/IHHG5jCIzivmW2nkYPRowUjs0DbBXY4CAr1LLrN7QEzZGL9727aXH9sJA=="
         }
       ]
     },
@@ -10190,36 +10687,6 @@
         {
           "name": "beanfx:license-evidence",
           "value": "installed-package"
-        }
-      ]
-    },
-    {
-      "type": "library",
-      "bom-ref": "inst:node_modules/decimal.js",
-      "name": "decimal.js",
-      "version": "10.6.0",
-      "scope": "required",
-      "licenses": [
-        {
-          "license": {
-            "name": "MIT"
-          }
-        }
-      ],
-      "purl": "pkg:npm/decimal.js@10.6.0",
-      "externalReferences": [],
-      "properties": [
-        {
-          "name": "beanfx:lockfile-path",
-          "value": "node_modules/decimal.js"
-        },
-        {
-          "name": "beanfx:nesting",
-          "value": "top-level"
-        },
-        {
-          "name": "beanfx:license-evidence",
-          "value": "npm-registry"
         }
       ]
     },
@@ -11725,6 +12192,45 @@
     },
     {
       "type": "library",
+      "bom-ref": "inst:node_modules/icu-minify",
+      "name": "icu-minify",
+      "version": "4.15.3",
+      "scope": "required",
+      "licenses": [
+        {
+          "license": {
+            "name": "MIT"
+          }
+        }
+      ],
+      "purl": "pkg:npm/icu-minify@4.15.3",
+      "externalReferences": [
+        {
+          "type": "distribution",
+          "url": "https://registry.npmjs.org/icu-minify/-/icu-minify-4.15.3.tgz"
+        }
+      ],
+      "properties": [
+        {
+          "name": "beanfx:lockfile-path",
+          "value": "node_modules/icu-minify"
+        },
+        {
+          "name": "beanfx:nesting",
+          "value": "top-level"
+        },
+        {
+          "name": "beanfx:license-evidence",
+          "value": "npm-registry"
+        },
+        {
+          "name": "beanfx:integrity",
+          "value": "sha512-sDQdvX7BG43XOCO+TyR7lGQYyvhltSWpQBXcKwipu7bRF/afr22S5pzjtcwPsSxFQl34tQzy1jEp8DcqPc4Qhg=="
+        }
+      ]
+    },
+    {
+      "type": "library",
       "bom-ref": "inst:node_modules/ieee754",
       "name": "ieee754",
       "version": "1.2.1",
@@ -11877,7 +12383,7 @@
       "type": "library",
       "bom-ref": "inst:node_modules/intl-messageformat",
       "name": "intl-messageformat",
-      "version": "10.7.18",
+      "version": "12.2.1",
       "scope": "required",
       "licenses": [
         {
@@ -11886,8 +12392,13 @@
           }
         }
       ],
-      "purl": "pkg:npm/intl-messageformat@10.7.18",
-      "externalReferences": [],
+      "purl": "pkg:npm/intl-messageformat@12.2.1",
+      "externalReferences": [
+        {
+          "type": "distribution",
+          "url": "https://registry.npmjs.org/intl-messageformat/-/intl-messageformat-12.2.1.tgz"
+        }
+      ],
       "properties": [
         {
           "name": "beanfx:lockfile-path",
@@ -11900,6 +12411,49 @@
         {
           "name": "beanfx:license-evidence",
           "value": "npm-registry"
+        },
+        {
+          "name": "beanfx:integrity",
+          "value": "sha512-GvlBHj5Blu0ro39QT/QEbX3I23GAYvDh9/B+l33NnXjmYe/UoqFgZjNZoqPa6QdWwAliP/i27y5JeKjFkqlbRA=="
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "bom-ref": "inst:node_modules/intl-messageformat/node_modules/@formatjs/fast-memoize",
+      "name": "@formatjs/fast-memoize",
+      "version": "3.1.8",
+      "scope": "required",
+      "licenses": [
+        {
+          "license": {
+            "name": "MIT"
+          }
+        }
+      ],
+      "purl": "pkg:npm/@formatjs%2ffast-memoize@3.1.8",
+      "externalReferences": [
+        {
+          "type": "distribution",
+          "url": "https://registry.npmjs.org/@formatjs/fast-memoize/-/fast-memoize-3.1.8.tgz"
+        }
+      ],
+      "properties": [
+        {
+          "name": "beanfx:lockfile-path",
+          "value": "node_modules/intl-messageformat/node_modules/@formatjs/fast-memoize"
+        },
+        {
+          "name": "beanfx:nesting",
+          "value": "nested"
+        },
+        {
+          "name": "beanfx:license-evidence",
+          "value": "npm-registry"
+        },
+        {
+          "name": "beanfx:integrity",
+          "value": "sha512-Y9YFFfeBDkAWmLWD3LVNHbHlyELsP2lYRNoY6+QhtPh1/ujCiX5QYBzAqe0cWdkCxKVezHLt0qjWz1veEUV7UA=="
         }
       ]
     },
@@ -12127,7 +12681,12 @@
         }
       ],
       "purl": "pkg:npm/isomorphic.js@0.2.5",
-      "externalReferences": [],
+      "externalReferences": [
+        {
+          "type": "distribution",
+          "url": "https://registry.npmjs.org/isomorphic.js/-/isomorphic.js-0.2.5.tgz"
+        }
+      ],
       "properties": [
         {
           "name": "beanfx:lockfile-path",
@@ -12140,6 +12699,10 @@
         {
           "name": "beanfx:license-evidence",
           "value": "installed-package"
+        },
+        {
+          "name": "beanfx:integrity",
+          "value": "sha512-PIeMbHqMt4DnUP3MA/Flc0HElYjMXArsw1qwJZcm9sqR8mq3l8NYizFMty0pWwE/tzIGH3EKK5+jes5mAr85yw=="
         }
       ]
     },
@@ -12357,7 +12920,7 @@
       "type": "library",
       "bom-ref": "inst:node_modules/lib0",
       "name": "lib0",
-      "version": "0.2.117",
+      "version": "0.2.120",
       "scope": "required",
       "licenses": [
         {
@@ -12366,8 +12929,13 @@
           }
         }
       ],
-      "purl": "pkg:npm/lib0@0.2.117",
-      "externalReferences": [],
+      "purl": "pkg:npm/lib0@0.2.120",
+      "externalReferences": [
+        {
+          "type": "distribution",
+          "url": "https://registry.npmjs.org/lib0/-/lib0-0.2.120.tgz"
+        }
+      ],
       "properties": [
         {
           "name": "beanfx:lockfile-path",
@@ -12379,7 +12947,11 @@
         },
         {
           "name": "beanfx:license-evidence",
-          "value": "installed-package"
+          "value": "npm-registry"
+        },
+        {
+          "name": "beanfx:integrity",
+          "value": "sha512-/a2eRImR8sZbmMVKe2we1/KukDQkuPyPf8yol6epvCu2PH6hurjcRI3mdGFFAi0uGoRJGyns99JquZgxwW1tQg=="
         }
       ]
     },
@@ -14337,7 +14909,7 @@
       "type": "library",
       "bom-ref": "inst:node_modules/nanoid",
       "name": "nanoid",
-      "version": "3.3.11",
+      "version": "3.3.20",
       "scope": "required",
       "licenses": [
         {
@@ -14346,8 +14918,13 @@
           }
         }
       ],
-      "purl": "pkg:npm/nanoid@3.3.11",
-      "externalReferences": [],
+      "purl": "pkg:npm/nanoid@3.3.20",
+      "externalReferences": [
+        {
+          "type": "distribution",
+          "url": "https://registry.npmjs.org/nanoid/-/nanoid-3.3.20.tgz"
+        }
+      ],
       "properties": [
         {
           "name": "beanfx:lockfile-path",
@@ -14359,7 +14936,11 @@
         },
         {
           "name": "beanfx:license-evidence",
-          "value": "installed-package"
+          "value": "npm-registry"
+        },
+        {
+          "name": "beanfx:integrity",
+          "value": "sha512-uKdg2G3GNCKQn9byYOpxbGqrT2fGO5KRt5J/8b3pok8rT6qxGWF6hxMyJiEYtAf+FVyYuD9hRaDqX5uPFYJ4ZQ=="
         }
       ]
     },
@@ -14397,7 +14978,7 @@
       "type": "library",
       "bom-ref": "inst:node_modules/next",
       "name": "next",
-      "version": "16.1.3",
+      "version": "16.4.6",
       "scope": "required",
       "licenses": [
         {
@@ -14406,8 +14987,13 @@
           }
         }
       ],
-      "purl": "pkg:npm/next@16.1.3",
-      "externalReferences": [],
+      "purl": "pkg:npm/next@16.4.6",
+      "externalReferences": [
+        {
+          "type": "distribution",
+          "url": "https://registry.npmjs.org/next/-/next-16.4.6.tgz"
+        }
+      ],
       "properties": [
         {
           "name": "beanfx:lockfile-path",
@@ -14419,7 +15005,11 @@
         },
         {
           "name": "beanfx:license-evidence",
-          "value": "npm-registry"
+          "value": "installed-package"
+        },
+        {
+          "name": "beanfx:integrity",
+          "value": "sha512-QZJiYhaZLJMo2KpkQGQIwvmd79WVsAWeYIU554a8d7zArS3si/IRy3lBNV/rtYhE70oLwdLYhPAXLPx8HwcwtA=="
         }
       ]
     },
@@ -14427,7 +15017,7 @@
       "type": "library",
       "bom-ref": "inst:node_modules/next-auth",
       "name": "next-auth",
-      "version": "4.24.13",
+      "version": "4.24.15",
       "scope": "required",
       "licenses": [
         {
@@ -14436,8 +15026,13 @@
           }
         }
       ],
-      "purl": "pkg:npm/next-auth@4.24.13",
-      "externalReferences": [],
+      "purl": "pkg:npm/next-auth@4.24.15",
+      "externalReferences": [
+        {
+          "type": "distribution",
+          "url": "https://registry.npmjs.org/next-auth/-/next-auth-4.24.15.tgz"
+        }
+      ],
       "properties": [
         {
           "name": "beanfx:lockfile-path",
@@ -14449,37 +15044,11 @@
         },
         {
           "name": "beanfx:license-evidence",
-          "value": "npm-registry"
-        }
-      ]
-    },
-    {
-      "type": "library",
-      "bom-ref": "inst:node_modules/next-auth/node_modules/uuid",
-      "name": "uuid",
-      "version": "8.3.2",
-      "scope": "required",
-      "licenses": [
-        {
-          "license": {
-            "name": "MIT"
-          }
-        }
-      ],
-      "purl": "pkg:npm/uuid@8.3.2",
-      "externalReferences": [],
-      "properties": [
-        {
-          "name": "beanfx:lockfile-path",
-          "value": "node_modules/next-auth/node_modules/uuid"
+          "value": "installed-package"
         },
         {
-          "name": "beanfx:nesting",
-          "value": "nested"
-        },
-        {
-          "name": "beanfx:license-evidence",
-          "value": "npm-registry"
+          "name": "beanfx:integrity",
+          "value": "sha512-NnjYtjrSOAx/TIVFGTX4IfI/9yHnNpi4B7FuLUwuV20v2Zxgr2OGP/YN0ynJuI7y8QOnTBPitfOdEXZrVvhIuA=="
         }
       ]
     },
@@ -14487,7 +15056,7 @@
       "type": "library",
       "bom-ref": "inst:node_modules/next-intl",
       "name": "next-intl",
-      "version": "4.7.0",
+      "version": "4.16.2",
       "scope": "required",
       "licenses": [
         {
@@ -14496,8 +15065,13 @@
           }
         }
       ],
-      "purl": "pkg:npm/next-intl@4.7.0",
-      "externalReferences": [],
+      "purl": "pkg:npm/next-intl@4.16.2",
+      "externalReferences": [
+        {
+          "type": "distribution",
+          "url": "https://registry.npmjs.org/next-intl/-/next-intl-4.16.2.tgz"
+        }
+      ],
       "properties": [
         {
           "name": "beanfx:lockfile-path",
@@ -14510,6 +15084,10 @@
         {
           "name": "beanfx:license-evidence",
           "value": "npm-registry"
+        },
+        {
+          "name": "beanfx:integrity",
+          "value": "sha512-UEvQdkU9TV/hIbJy9DPnZ66g7nhyQhRtO3om99KuB66e0X1i3ijEwLo2w1eR4bLmQLL29Coa28ZSJbpN+NlHZA=="
         }
       ]
     },
@@ -14517,7 +15095,7 @@
       "type": "library",
       "bom-ref": "inst:node_modules/next-intl-swc-plugin-extractor",
       "name": "next-intl-swc-plugin-extractor",
-      "version": "4.7.0",
+      "version": "4.15.1",
       "scope": "required",
       "licenses": [
         {
@@ -14526,8 +15104,13 @@
           }
         }
       ],
-      "purl": "pkg:npm/next-intl-swc-plugin-extractor@4.7.0",
-      "externalReferences": [],
+      "purl": "pkg:npm/next-intl-swc-plugin-extractor@4.15.1",
+      "externalReferences": [
+        {
+          "type": "distribution",
+          "url": "https://registry.npmjs.org/next-intl-swc-plugin-extractor/-/next-intl-swc-plugin-extractor-4.15.1.tgz"
+        }
+      ],
       "properties": [
         {
           "name": "beanfx:lockfile-path",
@@ -14539,7 +15122,11 @@
         },
         {
           "name": "beanfx:license-evidence",
-          "value": "npm-registry"
+          "value": "installed-package"
+        },
+        {
+          "name": "beanfx:integrity",
+          "value": "sha512-n+CrfyQ3obIpZoaHtlHvtTLg6EuFcmSC3c71Yv0Kh4/5zenBJ8WeYP/xAnsiwQjZcaK9zie0SHwWeIG+5OJaBw=="
         }
       ]
     },
@@ -14605,75 +15192,6 @@
     },
     {
       "type": "library",
-      "bom-ref": "inst:node_modules/next/node_modules/@swc/helpers",
-      "name": "@swc/helpers",
-      "version": "0.5.15",
-      "scope": "required",
-      "licenses": [
-        {
-          "license": {
-            "name": "Apache-2.0"
-          }
-        }
-      ],
-      "purl": "pkg:npm/@swc%2fhelpers@0.5.15",
-      "externalReferences": [
-        {
-          "type": "distribution",
-          "url": "https://registry.npmjs.org/@swc/helpers/-/helpers-0.5.15.tgz"
-        }
-      ],
-      "properties": [
-        {
-          "name": "beanfx:lockfile-path",
-          "value": "node_modules/next/node_modules/@swc/helpers"
-        },
-        {
-          "name": "beanfx:nesting",
-          "value": "nested"
-        },
-        {
-          "name": "beanfx:license-evidence",
-          "value": "npm-registry"
-        },
-        {
-          "name": "beanfx:integrity",
-          "value": "sha512-JQ5TuMi45Owi4/BIMAJBoSQoOJu12oOk/gADqlcUL9JEdHB8vyjUSsxqeNXnmXHjYKMi2WcYtezGEEhqUI/E2g=="
-        }
-      ]
-    },
-    {
-      "type": "library",
-      "bom-ref": "inst:node_modules/next/node_modules/postcss",
-      "name": "postcss",
-      "version": "8.4.31",
-      "scope": "required",
-      "licenses": [
-        {
-          "license": {
-            "name": "MIT"
-          }
-        }
-      ],
-      "purl": "pkg:npm/postcss@8.4.31",
-      "externalReferences": [],
-      "properties": [
-        {
-          "name": "beanfx:lockfile-path",
-          "value": "node_modules/next/node_modules/postcss"
-        },
-        {
-          "name": "beanfx:nesting",
-          "value": "nested"
-        },
-        {
-          "name": "beanfx:license-evidence",
-          "value": "npm-registry"
-        }
-      ]
-    },
-    {
-      "type": "library",
       "bom-ref": "inst:node_modules/node-addon-api",
       "name": "node-addon-api",
       "version": "7.1.1",
@@ -14686,7 +15204,12 @@
         }
       ],
       "purl": "pkg:npm/node-addon-api@7.1.1",
-      "externalReferences": [],
+      "externalReferences": [
+        {
+          "type": "distribution",
+          "url": "https://registry.npmjs.org/node-addon-api/-/node-addon-api-7.1.1.tgz"
+        }
+      ],
       "properties": [
         {
           "name": "beanfx:lockfile-path",
@@ -14699,6 +15222,10 @@
         {
           "name": "beanfx:license-evidence",
           "value": "installed-package"
+        },
+        {
+          "name": "beanfx:integrity",
+          "value": "sha512-5m3bsyrjFWE1xf7nz7YXdN4udnVtXK6/Yfgn5qnahL6bCkf2yKt4k3nuTKAtT4r3IG8JNR2ncsIMdZuAzJjHQQ=="
         }
       ]
     },
@@ -14729,6 +15256,45 @@
         {
           "name": "beanfx:license-evidence",
           "value": "installed-package"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "bom-ref": "inst:node_modules/nodemailer",
+      "name": "nodemailer",
+      "version": "10.6.1",
+      "scope": "required",
+      "licenses": [
+        {
+          "license": {
+            "name": "MIT-0"
+          }
+        }
+      ],
+      "purl": "pkg:npm/nodemailer@10.6.1",
+      "externalReferences": [
+        {
+          "type": "distribution",
+          "url": "https://registry.npmjs.org/nodemailer/-/nodemailer-10.6.1.tgz"
+        }
+      ],
+      "properties": [
+        {
+          "name": "beanfx:lockfile-path",
+          "value": "node_modules/nodemailer"
+        },
+        {
+          "name": "beanfx:nesting",
+          "value": "top-level"
+        },
+        {
+          "name": "beanfx:license-evidence",
+          "value": "npm-registry"
+        },
+        {
+          "name": "beanfx:integrity",
+          "value": "sha512-d7kfFfS/tR4Aca+SBvRaQ+MXKNv7d2JiRe5TxaRcFT/kYMh4GGPnW9aKksTIEvyEbA7d/7HYWE4YPDEHxzJj/g=="
         }
       ]
     },
@@ -15126,7 +15692,7 @@
       "type": "library",
       "bom-ref": "inst:node_modules/picomatch",
       "name": "picomatch",
-      "version": "4.0.3",
+      "version": "4.0.7",
       "scope": "required",
       "licenses": [
         {
@@ -15135,8 +15701,13 @@
           }
         }
       ],
-      "purl": "pkg:npm/picomatch@4.0.3",
-      "externalReferences": [],
+      "purl": "pkg:npm/picomatch@4.0.7",
+      "externalReferences": [
+        {
+          "type": "distribution",
+          "url": "https://registry.npmjs.org/picomatch/-/picomatch-4.0.7.tgz"
+        }
+      ],
       "properties": [
         {
           "name": "beanfx:lockfile-path",
@@ -15148,7 +15719,11 @@
         },
         {
           "name": "beanfx:license-evidence",
-          "value": "installed-package"
+          "value": "npm-registry"
+        },
+        {
+          "name": "beanfx:integrity",
+          "value": "sha512-qcJu88Q2IWqJsDD529JKMdwGm/dvInW4HvQnRwiH9JtihJvzGOscDtHE3x1pBKeUOTysQ8kVmLnJ2kJu7yhcGA=="
         }
       ]
     },
@@ -15186,7 +15761,7 @@
       "type": "library",
       "bom-ref": "inst:node_modules/po-parser",
       "name": "po-parser",
-      "version": "2.1.1",
+      "version": "2.2.0",
       "scope": "required",
       "licenses": [
         {
@@ -15195,8 +15770,13 @@
           }
         }
       ],
-      "purl": "pkg:npm/po-parser@2.1.1",
-      "externalReferences": [],
+      "purl": "pkg:npm/po-parser@2.2.0",
+      "externalReferences": [
+        {
+          "type": "distribution",
+          "url": "https://registry.npmjs.org/po-parser/-/po-parser-2.2.0.tgz"
+        }
+      ],
       "properties": [
         {
           "name": "beanfx:lockfile-path",
@@ -15208,7 +15788,50 @@
         },
         {
           "name": "beanfx:license-evidence",
+          "value": "installed-package"
+        },
+        {
+          "name": "beanfx:integrity",
+          "value": "sha512-NdTrKgh0oO7+y+RFX8KKhOB438x/j94UGXEFzl/7pHH0JjWSn42iJ9tgmPksIO6n1JKDHmNDcejPJfKspljB9g=="
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "bom-ref": "inst:node_modules/postcss",
+      "name": "postcss",
+      "version": "8.5.23",
+      "scope": "required",
+      "licenses": [
+        {
+          "license": {
+            "name": "MIT"
+          }
+        }
+      ],
+      "purl": "pkg:npm/postcss@8.5.23",
+      "externalReferences": [
+        {
+          "type": "distribution",
+          "url": "https://registry.npmjs.org/postcss/-/postcss-8.5.23.tgz"
+        }
+      ],
+      "properties": [
+        {
+          "name": "beanfx:lockfile-path",
+          "value": "node_modules/postcss"
+        },
+        {
+          "name": "beanfx:nesting",
+          "value": "top-level"
+        },
+        {
+          "name": "beanfx:license-evidence",
           "value": "npm-registry"
+        },
+        {
+          "name": "beanfx:integrity",
+          "value": "sha512-g50586zr4bZmwFiTlflMu8E0bDTb5I5gertgwAKmsdUlTQIhZtunzUlD1WSzwcVWPoAVpsrA6vlfCD7oXvRwgg=="
         }
       ]
     },
@@ -16506,7 +17129,7 @@
       "type": "library",
       "bom-ref": "inst:node_modules/semver",
       "name": "semver",
-      "version": "7.7.3",
+      "version": "7.8.6",
       "scope": "required",
       "licenses": [
         {
@@ -16515,8 +17138,13 @@
           }
         }
       ],
-      "purl": "pkg:npm/semver@7.7.3",
-      "externalReferences": [],
+      "purl": "pkg:npm/semver@7.8.6",
+      "externalReferences": [
+        {
+          "type": "distribution",
+          "url": "https://registry.npmjs.org/semver/-/semver-7.8.6.tgz"
+        }
+      ],
       "properties": [
         {
           "name": "beanfx:lockfile-path",
@@ -16528,7 +17156,11 @@
         },
         {
           "name": "beanfx:license-evidence",
-          "value": "npm-registry"
+          "value": "installed-package"
+        },
+        {
+          "name": "beanfx:integrity",
+          "value": "sha512-9lpSSU4Mly3mrtruwLs1eLK6+gzbzqeBFwRNjIjE+9LuDpWdYctrQlQ3ej1Ilgi7gknpsTRnPoLP8DpCHqHIJw=="
         }
       ]
     },
@@ -16536,7 +17168,7 @@
       "type": "library",
       "bom-ref": "inst:node_modules/sharp",
       "name": "sharp",
-      "version": "0.34.5",
+      "version": "0.35.5",
       "scope": "required",
       "licenses": [
         {
@@ -16545,8 +17177,13 @@
           }
         }
       ],
-      "purl": "pkg:npm/sharp@0.34.5",
-      "externalReferences": [],
+      "purl": "pkg:npm/sharp@0.35.5",
+      "externalReferences": [
+        {
+          "type": "distribution",
+          "url": "https://registry.npmjs.org/sharp/-/sharp-0.35.5.tgz"
+        }
+      ],
       "properties": [
         {
           "name": "beanfx:lockfile-path",
@@ -16558,7 +17195,11 @@
         },
         {
           "name": "beanfx:license-evidence",
-          "value": "npm-registry"
+          "value": "installed-package"
+        },
+        {
+          "name": "beanfx:integrity",
+          "value": "sha512-Ywn4OnzGukp7CDMrp08RQ50YKmuwG47brZgIVPTvBaaAfQlRlygrRqSrxdCiL9M+LlzLBiJ68IR1QqvzHyjC7g=="
         }
       ]
     },
@@ -17466,7 +18107,7 @@
       "type": "library",
       "bom-ref": "inst:node_modules/use-intl",
       "name": "use-intl",
-      "version": "4.7.0",
+      "version": "4.15.1",
       "scope": "required",
       "licenses": [
         {
@@ -17475,8 +18116,13 @@
           }
         }
       ],
-      "purl": "pkg:npm/use-intl@4.7.0",
-      "externalReferences": [],
+      "purl": "pkg:npm/use-intl@4.15.1",
+      "externalReferences": [
+        {
+          "type": "distribution",
+          "url": "https://registry.npmjs.org/use-intl/-/use-intl-4.15.1.tgz"
+        }
+      ],
       "properties": [
         {
           "name": "beanfx:lockfile-path",
@@ -17488,7 +18134,11 @@
         },
         {
           "name": "beanfx:license-evidence",
-          "value": "npm-registry"
+          "value": "installed-package"
+        },
+        {
+          "name": "beanfx:integrity",
+          "value": "sha512-WJwcDTRzrg4JaEu3Jl1oEEXu5fLkWh+R8jZAhEYrTWMYqGYExKAi51MwtSBZZpYa7HzqluJPx2jmEap21kQlUQ=="
         }
       ]
     },
@@ -17556,7 +18206,7 @@
       "type": "library",
       "bom-ref": "inst:node_modules/uuid",
       "name": "uuid",
-      "version": "11.1.0",
+      "version": "11.1.1",
       "scope": "required",
       "licenses": [
         {
@@ -17565,8 +18215,13 @@
           }
         }
       ],
-      "purl": "pkg:npm/uuid@11.1.0",
-      "externalReferences": [],
+      "purl": "pkg:npm/uuid@11.1.1",
+      "externalReferences": [
+        {
+          "type": "distribution",
+          "url": "https://registry.npmjs.org/uuid/-/uuid-11.1.1.tgz"
+        }
+      ],
       "properties": [
         {
           "name": "beanfx:lockfile-path",
@@ -17578,7 +18233,11 @@
         },
         {
           "name": "beanfx:license-evidence",
-          "value": "npm-registry"
+          "value": "installed-package"
+        },
+        {
+          "name": "beanfx:integrity",
+          "value": "sha512-vIYxrBCC/N/K+Js3qSN88go7kIfNPssr/hHCesKCQNAjmgvYS2oqr69kIufEG+O4+PfezOH4EbIeHCfFov8ZgQ=="
         }
       ]
     },
@@ -17826,7 +18485,7 @@
       "type": "library",
       "bom-ref": "inst:node_modules/yjs",
       "name": "yjs",
-      "version": "13.6.29",
+      "version": "13.6.33",
       "scope": "required",
       "licenses": [
         {
@@ -17835,8 +18494,13 @@
           }
         }
       ],
-      "purl": "pkg:npm/yjs@13.6.29",
-      "externalReferences": [],
+      "purl": "pkg:npm/yjs@13.6.33",
+      "externalReferences": [
+        {
+          "type": "distribution",
+          "url": "https://registry.npmjs.org/yjs/-/yjs-13.6.33.tgz"
+        }
+      ],
       "properties": [
         {
           "name": "beanfx:lockfile-path",
@@ -17848,7 +18512,11 @@
         },
         {
           "name": "beanfx:license-evidence",
-          "value": "installed-package"
+          "value": "npm-registry"
+        },
+        {
+          "name": "beanfx:integrity",
+          "value": "sha512-q/UYvr1gOk4XII+Cu1CW2dINjYqJJFifTzogEaIARznrvX7uOlHsdTEXcnOBMuIsrCGEEKdNxi74kyMLZlKVfw=="
         }
       ]
     },
@@ -17886,7 +18554,7 @@
       "type": "library",
       "bom-ref": "inst:node_modules/zod",
       "name": "zod",
-      "version": "4.3.5",
+      "version": "4.6.7",
       "scope": "required",
       "licenses": [
         {
@@ -17895,8 +18563,13 @@
           }
         }
       ],
-      "purl": "pkg:npm/zod@4.3.5",
-      "externalReferences": [],
+      "purl": "pkg:npm/zod@4.6.7",
+      "externalReferences": [
+        {
+          "type": "distribution",
+          "url": "https://registry.npmjs.org/zod/-/zod-4.6.7.tgz"
+        }
+      ],
       "properties": [
         {
           "name": "beanfx:lockfile-path",
@@ -17908,7 +18581,11 @@
         },
         {
           "name": "beanfx:license-evidence",
-          "value": "npm-registry"
+          "value": "installed-package"
+        },
+        {
+          "name": "beanfx:integrity",
+          "value": "sha512-g8W2D2kU6a8untc053fX1uVBKzM7yqAxW/3zwk83+6RyF2+SKOuV+c0wBDhUwzV1PaGapmZH+rmcUzPf+3CGwg=="
         }
       ]
     },
@@ -20193,6 +20870,186 @@
         {
           "name": "beanfx:platform",
           "value": "any/wasm32"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "bom-ref": "inst:node_modules/@tailwindcss/oxide-wasm32-wasi/node_modules/@emnapi/core",
+      "name": "@emnapi/core",
+      "version": "1.7.1",
+      "scope": "excluded",
+      "licenses": [
+        {
+          "license": {
+            "name": "MIT"
+          }
+        }
+      ],
+      "purl": "pkg:npm/@emnapi%2fcore@1.7.1",
+      "externalReferences": [],
+      "properties": [
+        {
+          "name": "beanfx:lockfile-path",
+          "value": "node_modules/@tailwindcss/oxide-wasm32-wasi/node_modules/@emnapi/core"
+        },
+        {
+          "name": "beanfx:nesting",
+          "value": "nested"
+        },
+        {
+          "name": "beanfx:license-evidence",
+          "value": "npm-registry"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "bom-ref": "inst:node_modules/@tailwindcss/oxide-wasm32-wasi/node_modules/@emnapi/runtime",
+      "name": "@emnapi/runtime",
+      "version": "1.7.1",
+      "scope": "excluded",
+      "licenses": [
+        {
+          "license": {
+            "name": "MIT"
+          }
+        }
+      ],
+      "purl": "pkg:npm/@emnapi%2fruntime@1.7.1",
+      "externalReferences": [],
+      "properties": [
+        {
+          "name": "beanfx:lockfile-path",
+          "value": "node_modules/@tailwindcss/oxide-wasm32-wasi/node_modules/@emnapi/runtime"
+        },
+        {
+          "name": "beanfx:nesting",
+          "value": "nested"
+        },
+        {
+          "name": "beanfx:license-evidence",
+          "value": "npm-registry"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "bom-ref": "inst:node_modules/@tailwindcss/oxide-wasm32-wasi/node_modules/@emnapi/wasi-threads",
+      "name": "@emnapi/wasi-threads",
+      "version": "1.1.0",
+      "scope": "excluded",
+      "licenses": [
+        {
+          "license": {
+            "name": "MIT"
+          }
+        }
+      ],
+      "purl": "pkg:npm/@emnapi%2fwasi-threads@1.1.0",
+      "externalReferences": [],
+      "properties": [
+        {
+          "name": "beanfx:lockfile-path",
+          "value": "node_modules/@tailwindcss/oxide-wasm32-wasi/node_modules/@emnapi/wasi-threads"
+        },
+        {
+          "name": "beanfx:nesting",
+          "value": "nested"
+        },
+        {
+          "name": "beanfx:license-evidence",
+          "value": "npm-registry"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "bom-ref": "inst:node_modules/@tailwindcss/oxide-wasm32-wasi/node_modules/@napi-rs/wasm-runtime",
+      "name": "@napi-rs/wasm-runtime",
+      "version": "1.1.0",
+      "scope": "excluded",
+      "licenses": [
+        {
+          "license": {
+            "name": "MIT"
+          }
+        }
+      ],
+      "purl": "pkg:npm/@napi-rs%2fwasm-runtime@1.1.0",
+      "externalReferences": [],
+      "properties": [
+        {
+          "name": "beanfx:lockfile-path",
+          "value": "node_modules/@tailwindcss/oxide-wasm32-wasi/node_modules/@napi-rs/wasm-runtime"
+        },
+        {
+          "name": "beanfx:nesting",
+          "value": "nested"
+        },
+        {
+          "name": "beanfx:license-evidence",
+          "value": "npm-registry"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "bom-ref": "inst:node_modules/@tailwindcss/oxide-wasm32-wasi/node_modules/@tybys/wasm-util",
+      "name": "@tybys/wasm-util",
+      "version": "0.10.1",
+      "scope": "excluded",
+      "licenses": [
+        {
+          "license": {
+            "name": "MIT"
+          }
+        }
+      ],
+      "purl": "pkg:npm/@tybys%2fwasm-util@0.10.1",
+      "externalReferences": [],
+      "properties": [
+        {
+          "name": "beanfx:lockfile-path",
+          "value": "node_modules/@tailwindcss/oxide-wasm32-wasi/node_modules/@tybys/wasm-util"
+        },
+        {
+          "name": "beanfx:nesting",
+          "value": "nested"
+        },
+        {
+          "name": "beanfx:license-evidence",
+          "value": "npm-registry"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "bom-ref": "inst:node_modules/@tailwindcss/oxide-wasm32-wasi/node_modules/tslib",
+      "name": "tslib",
+      "version": "2.8.1",
+      "scope": "excluded",
+      "licenses": [
+        {
+          "license": {
+            "name": "0BSD"
+          }
+        }
+      ],
+      "purl": "pkg:npm/tslib@2.8.1",
+      "externalReferences": [],
+      "properties": [
+        {
+          "name": "beanfx:lockfile-path",
+          "value": "node_modules/@tailwindcss/oxide-wasm32-wasi/node_modules/tslib"
+        },
+        {
+          "name": "beanfx:nesting",
+          "value": "nested"
+        },
+        {
+          "name": "beanfx:license-evidence",
+          "value": "installed-package"
         }
       ]
     },
@@ -29103,36 +29960,6 @@
         {
           "name": "beanfx:lockfile-path",
           "value": "node_modules/possible-typed-array-names"
-        },
-        {
-          "name": "beanfx:nesting",
-          "value": "top-level"
-        },
-        {
-          "name": "beanfx:license-evidence",
-          "value": "installed-package"
-        }
-      ]
-    },
-    {
-      "type": "library",
-      "bom-ref": "inst:node_modules/postcss",
-      "name": "postcss",
-      "version": "8.5.6",
-      "scope": "excluded",
-      "licenses": [
-        {
-          "license": {
-            "name": "MIT"
-          }
-        }
-      ],
-      "purl": "pkg:npm/postcss@8.5.6",
-      "externalReferences": [],
-      "properties": [
-        {
-          "name": "beanfx:lockfile-path",
-          "value": "node_modules/postcss"
         },
         {
           "name": "beanfx:nesting",
