@@ -33,6 +33,9 @@ import { NotificationsBell } from "@/components/bean/notifications-bell";
 import { ProgramMonitor } from "@/components/bean/editor/monitor";
 import { EditorTimeline } from "@/components/bean/editor/timeline";
 import { ClipInspector } from "@/components/bean/editor/inspector";
+import { SourceMonitor } from "@/components/bean/editor/source-monitor";
+import { ScopesPanel } from "@/components/bean/editor/scopes";
+import { EMPTY_EDITOR_LINK_CONTEXT as EMPTY_CONTEXT, parseEditorHash, returnToChatHash, type EditorLinkContext } from "@/lib/editor/deep-link";
 import { EditingToolbar } from "@/components/bean/editor/editing-toolbar";
 import { MediaBrowser, useMediaImport } from "@/components/bean/editor/media-browser";
 import { EffectsBrowser } from "@/components/bean/editor/effects-browser";
@@ -81,6 +84,11 @@ export function EditorTool({ user }: { user: { id: string }; onLogout: () => voi
   });
   const [renaming, setRenaming] = useState(false);
   const [renameValue, setRenameValue] = useState("");
+  // M48-C — Source Monitor (three-point editing) visibility + loaded source.
+  const [sourceOpen, setSourceOpen] = useState(false);
+  const [sourceAssetId, setSourceAssetId] = useState<string | null>(null);
+  // M48-D — computed scopes visibility.
+  const [scopesOpen, setScopesOpen] = useState(false);
 
   const session = useEditorSession(projectId);
   const sequence = session.sequence;
@@ -90,10 +98,21 @@ export function EditorTool({ user }: { user: { id: string }; onLogout: () => voi
   }, []);
   const { importing, importFiles } = useMediaImport(refreshMedia, (m) => setNotice(m));
 
-  // Open a project directly via #/editor?project=<id> (dashboard deep link).
+  // M48-B — open a project via #/editor?project=<id>&conversation=<id>&plan=<id>&export=<id>.
+  // Parsed on mount AND on every hashchange (previously mount-only: navigating
+  // here from chat after the editor was already mounted did nothing). The
+  // conversation/plan/export values are context only — they never mutate the
+  // timeline; the canonical plan approval flow stays in the plans API.
+  const [linkContext, setLinkContext] = useState<EditorLinkContext>(EMPTY_CONTEXT);
   useEffect(() => {
-    const wanted = new URLSearchParams(window.location.hash.split("?")[1] ?? "").get("project");
-    if (wanted) setProjectId(wanted);
+    const syncFromHash = () => {
+      const parsed = parseEditorHash(window.location.hash);
+      if (parsed.projectId) setProjectId(parsed.projectId);
+      setLinkContext(parsed);
+    };
+    syncFromHash();
+    window.addEventListener("hashchange", syncFromHash);
+    return () => window.removeEventListener("hashchange", syncFromHash);
   }, []);
 
   const applyRiisheCuts = useCallback(async () => {
@@ -362,7 +381,7 @@ export function EditorTool({ user }: { user: { id: string }; onLogout: () => voi
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+     
   }, [togglePlay, step, splitAtPlayhead, deleteSelection, session, snap, range]);
 
   // Unsaved-changes guard: never discard a pending autosave silently.
@@ -517,7 +536,7 @@ export function EditorTool({ user }: { user: { id: string }; onLogout: () => voi
           <button type="button" onClick={() => setDrawer(drawer === "portability" ? null : "portability")} className={toolButton} title="Project portability: package, import, bulk relink"><Package className="h-4 w-4" /></button>
           <button type="button" onClick={() => setDrawer(drawer === "collab" ? null : "collab")} className={toolButton} title="Collaboration: workspace, invitations, review sessions, approvals"><Users className="h-4 w-4" /></button>
           <NotificationsBell compact />
-          <a href="#/studio" className="flex items-center gap-1 rounded border border-[#2a2a2a] px-2 py-1.5 text-[11px] text-[#d8d8d2] hover:border-[#d4a017] hover:text-[#d4a017]" title="Project dashboard">
+          <a href={returnToChatHash(linkContext.conversationId)} className="flex items-center gap-1 rounded border border-[#2a2a2a] px-2 py-1.5 text-[11px] text-[#d8d8d2] hover:border-[#d4a017] hover:text-[#d4a017]" title={linkContext.conversationId ? "Return to Studio Chat (conversation context preserved)" : "Project dashboard"}>
             <LayoutGrid className="h-3.5 w-3.5" />
           </a>
         </div>
@@ -544,7 +563,7 @@ export function EditorTool({ user }: { user: { id: string }; onLogout: () => voi
             <SlidersHorizontal className="ml-auto h-3 w-3 text-[#5a5a55]" />
           </div>
           {leftTab === "media" || workspaceMode === "essentials" ? (
-            <MediaBrowser media={media} onRefresh={refreshMedia} onPlace={(a) => void addMediaAtPlayhead(a)} importing={importing} onImport={(files) => void importFiles(files)} />
+            <MediaBrowser media={media} onRefresh={refreshMedia} onPlace={(a) => void addMediaAtPlayhead(a)} importing={importing} onImport={(files) => void importFiles(files)} onLoadSource={(a) => { setSourceAssetId(a.id); setSourceOpen(true); }} />
           ) : (
             <EffectsBrowser sequence={sequence} session={session} notice={setNotice} />
           )}
@@ -555,6 +574,7 @@ export function EditorTool({ user }: { user: { id: string }; onLogout: () => voi
         <div className="flex min-w-0 flex-1 flex-col">
           <div className="relative flex min-h-0 flex-1">
             <ProgramMonitor sequence={sequence} playhead={session.playheadFrame} playing={playing} onPlayhead={session.setPlayhead} onPlayingChange={setPlaying} session={session} activeTool={activeTool} guides={guides} snapEnabled={snap} onDecodeError={setNotice} />
+            {scopesOpen && sequence && <ScopesPanel sequence={sequence} playhead={session.playheadFrame} />}
           </div>
           {/* Transport bar */}
           <div className="flex items-center gap-2 border-y border-[#2a2a2a] bg-[#0d0d0c] px-3 py-1">
@@ -605,7 +625,7 @@ export function EditorTool({ user }: { user: { id: string }; onLogout: () => voi
             </div>
           )}
           <div className="border-b border-[#2a2a2a] px-3 py-1.5 bean-label text-[10px] text-[#8f8f8a]">PROPERTIES INSPECTOR</div>
-          {sequence && <ClipInspector sequence={sequence} session={session} notice={setNotice} />}
+          {sequence && <ClipInspector sequence={sequence} session={session} notice={setNotice} playhead={session.playheadFrame} />}
           {sequence && selectedClip && selectedClip.keyframes.length > 0 && (
             <div className="border-t border-[#2a2a2a] px-3 py-2 text-[10px] text-[#8f8f8a]">
               {selectedClip.keyframes.length} keyframe(s) — diamonds on the timeline block; edit via NIIKI (AI STUDIO) or effect parameters.
@@ -633,7 +653,10 @@ export function EditorTool({ user }: { user: { id: string }; onLogout: () => voi
               <button type="button" onClick={() => setDrawer(null)} className="text-[#8f8f8a] hover:text-[#d8d8d2]">✕</button>
             </div>
             <PublishingPanel projectId={projectId} />
-            <TimelineRenderPanel projectId={projectId} onNotice={setNotice} />
+            {sourceOpen && (
+              <SourceMonitor key={sourceAssetId ?? "none"} session={session} assets={media ?? []} onNotice={setNotice} initialAssetId={sourceAssetId} />
+            )}
+            <TimelineRenderPanel projectId={projectId} onNotice={setNotice} fps={sequence?.fps ?? null} range={range} />
             <BatchExportPanel projectId={projectId} onNotice={setNotice} />
           </div>
         </div>
@@ -701,11 +724,11 @@ export function EditorTool({ user }: { user: { id: string }; onLogout: () => voi
  * (real FFmpeg graph from the canonical sequence) and shows real job/ExportFile
  * state. No fake progress — the durable worker drives the stages.
  */
-function TimelineRenderPanel({ projectId, onNotice }: { projectId: string; onNotice: (m: string | null) => void }) {
+function TimelineRenderPanel({ projectId, onNotice, fps, range }: { projectId: string; onNotice: (m: string | null) => void; fps?: { num: number; den: number } | null; range?: { in: number; out: number } | null }) {
   const [state, setState] = useState<{ jobs: { id: string; status: string; stage: string | null; progress: number; message: string | null; createdAt: string; range?: { startFrame?: number; endFrame?: number } | null }[]; exports: { id: string; filename: string; sizeBytes: number; durationSec: number; createdAt: string }[] } | null>(null);
   const [busy, setBusy] = useState(false);
   // M25 P3 — real export range selection (backend-supported frames only).
-  const [rangeMode, setRangeMode] = useState<"full" | "preview" | "custom">("full");
+  const [rangeMode, setRangeMode] = useState<"full" | "inout" | "preview" | "custom">("full");
   const [startSec, setStartSec] = useState("0");
   const [endSec, setEndSec] = useState("");
   // M37 — real output formats: one durable RENDER_TIMELINE job, one FFmpeg
@@ -797,11 +820,22 @@ function TimelineRenderPanel({ projectId, onNotice }: { projectId: string; onNot
     onNotice(res.ok ? "Render cancelled." : "This job can no longer be cancelled.");
     load();
   };
-  const rangeFrames = (fps: number): { startFrame?: number; endFrame?: number } => {
+  // M48-B bugfix — use the REAL sequence fps (rational) for seconds→frames;
+  // this panel previously hardcoded 30 fps and produced wrong ranges at any
+  // other timebase. Rational mapping keeps the boundary frame-exact.
+  const fpsN = fps?.num ?? 30;
+  const fpsD = fps?.den ?? 1;
+  const secToFrames = (sec: number): number => Math.max(0, Math.round((sec * fpsN) / fpsD));
+  const rangeFrames = (): { startFrame?: number; endFrame?: number } => {
     if (rangeMode === "full") return {};
-    if (rangeMode === "preview") return { startFrame: 0, endFrame: Math.max(1, Math.round(10 * fps)) };
-    const st = Math.max(0, Math.round((Number(startSec) || 0) * fps));
-    const en = endSec ? Math.max(st + 1, Math.round(Number(endSec) * fps)) : undefined;
+    // M48-C — the timeline I/O range is now a first-class render range.
+    if (rangeMode === "inout") {
+      if (!range) return {};
+      return { startFrame: Math.max(0, Math.round(range.in)), endFrame: Math.max(Math.round(range.in) + 1, Math.round(range.out)) };
+    }
+    if (rangeMode === "preview") return { startFrame: 0, endFrame: Math.max(1, secToFrames(10)) };
+    const st = secToFrames(Number(startSec) || 0);
+    const en = endSec ? Math.max(st + 1, secToFrames(Number(endSec))) : undefined;
     return en ? { startFrame: st, endFrame: en } : { startFrame: st };
   };
   return (
@@ -810,12 +844,12 @@ function TimelineRenderPanel({ projectId, onNotice }: { projectId: string; onNot
         <span className="bean-label text-[10px] text-[#d4a017]">RENDER TIMELINE (FFmpeg)</span>
         <span className="flex items-center gap-1.5">
           {formats.size === 1 && (
-            <button type="button" onClick={() => void render(rangeFrames(30))} disabled={busy} className="rounded border border-[#d4a017] px-2 py-1 text-[10px] font-bold text-[#d4a017] hover:bg-[#d4a017] hover:text-[#0c0c0c] disabled:opacity-40">
+            <button type="button" onClick={() => void render(rangeFrames())} disabled={busy} className="rounded border border-[#d4a017] px-2 py-1 text-[10px] font-bold text-[#d4a017] hover:bg-[#d4a017] hover:text-[#0c0c0c] disabled:opacity-40">
               {busy ? "…" : "RENDER SEQUENCE"}
             </button>
           )}
           {formats.size > 1 && (
-            <button type="button" onClick={() => void render(rangeFrames(30))} disabled={busy} className="rounded border border-[#d4a017] px-2 py-1 text-[10px] font-bold text-[#d4a017] hover:bg-[#d4a017] hover:text-[#0c0c0c] disabled:opacity-40">
+            <button type="button" onClick={() => void render(rangeFrames())} disabled={busy} className="rounded border border-[#d4a017] px-2 py-1 text-[10px] font-bold text-[#d4a017] hover:bg-[#d4a017] hover:text-[#0c0c0c] disabled:opacity-40">
               {busy ? "…" : `BATCH EXPORT (${formats.size} FORMATS)`}
             </button>
           )}
@@ -823,9 +857,9 @@ function TimelineRenderPanel({ projectId, onNotice }: { projectId: string; onNot
       </div>
       {/* M25 P3 — export range presets (real backend range support). */}
       <div className="mb-2 flex flex-wrap items-center gap-1.5 text-[9px] text-[#8f8f8a]">
-        {(["full", "preview", "custom"] as const).map((m) => (
+        {(["full", "inout", "preview", "custom"] as const).map((m) => (
           <button key={m} type="button" onClick={() => setRangeMode(m)} className={`rounded border px-1.5 py-0.5 ${rangeMode === m ? "border-[#d4a017] text-[#d4a017]" : "border-[#2a2a2a] text-[#d8d8d2] hover:border-[#d4a017]"}`}>
-            {m === "full" ? "FULL SEQUENCE" : m === "preview" ? "PREVIEW (FIRST 10s)" : "CUSTOM RANGE"}
+            {m === "full" ? "FULL SEQUENCE" : m === "inout" ? `I/O RANGE${range ? ` (${range.in}–${range.out})` : " (none)"}` : m === "preview" ? "PREVIEW (FIRST 10s)" : "CUSTOM RANGE"}
           </button>
         ))}
         {rangeMode === "custom" && (

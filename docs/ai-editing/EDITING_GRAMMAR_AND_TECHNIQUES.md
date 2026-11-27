@@ -76,3 +76,16 @@ M42-C reference for RIISHE. Every entry: definition, when to use, execution requ
 | Split screen / PiP | E — overlay track placement + transform |
 
 **Rule**: any technique whose execution column says D must appear in the plan's `disclosedGaps`, and RIISHE must offer the closest supported alternative.
+
+## M48 addendum — recipe families and knowledge feed
+
+The 41-recipe registry (2026.11.27) maps families onto the grammar above:
+`cinematic` (5) uses suspense/comedic/montage timing; `documentary` (5) uses continuity/cutaways/J-L cuts;
+`social` (6) uses jump cuts/beat sync/loop seams; `commercial` (6) uses match cuts/rate stretch/CTA holds;
+`event` (4) uses reaction cuts/stabilization; `creator` (3) uses silence removal/reaction cut-ins;
+`education` (3) uses insert shots/zooms to detail; `music` (3) uses beat sync/direction-flow montage;
+`motion` (3) uses frame-exact keyframes/typographic timing; `gaming`/`sports` use speed ramps/clutch zooms.
+
+Unavailable techniques keep their disclosed alternatives (reverse playback, true datamosh, optical-flow
+time remap, diarization). The trend feed (`scripts/ai-editing/editing-trends.json`) is consulted by
+RIISHE for current platform patterns; it never overrides a user's chosen style automatically.

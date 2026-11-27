@@ -118,6 +118,59 @@ export function formatTimecode(frames: number, fps: Rational, drop = false): str
   return `${pad(hh)}:${pad(mm)}:${pad(ss)}${sep}${pad(ff)}`;
 }
 
+/**
+ * M48-C — parse a timecode string into an absolute frame count. Exact inverse
+ * of formatTimecode: `HH:MM:SS;FF` / `HH:MM:SS:FF` (drop families with the
+ * `;` separator undo the canonical drop-frame mapping), plus the short forms
+ * `MM:SS`, `SS` and `SS:FF` (missing fields default to 0). Throws on invalid
+ * input, mirroring formatTimecode's throwing contract.
+ */
+export function parseTimecode(value: string, fps: Rational, drop = false): number {
+  const text = value.trim();
+  if (!text) throw new Error("empty timecode");
+  const parts = text.split(/[;:.]/).map((seg) => seg.trim());
+  if (parts.length < 1 || parts.length > 4 || parts.some((seg) => seg === "" || !/^\d+$/.test(seg))) {
+    throw new Error(`invalid timecode "${value}"`);
+  }
+  const numbers = parts.map((seg) => Number(seg));
+  const isDropFamily = (fps.num === 30000 && fps.den === 1001) || (fps.num === 60000 && fps.den === 1001);
+  const useDrop = (drop || text.includes(";")) && isDropFamily;
+  const nominalFps = Math.round(rationalToNumber(fps));
+  let ff = 0;
+  let ss = 0;
+  let mm = 0;
+  let hh = 0;
+  if (numbers.length === 1) {
+    ff = numbers[0];
+  } else if (numbers.length === 2) {
+    [ss, ff] = numbers;
+  } else if (numbers.length === 3) {
+    [mm, ss, ff] = numbers;
+  } else {
+    [hh, mm, ss, ff] = numbers;
+  }
+  if (ff >= nominalFps || ss > 59 || mm > 59) throw new Error(`timecode field out of range in "${value}"`);
+  // Display value interpreted at the nominal fps (same numbering formatTimecode emits).
+  const display = ((hh * 60 + mm) * 60 + ss) * nominalFps + ff;
+  if (!useDrop) return display;
+  // Undo the drop-frame mapping. The closed-form inverse has a boundary
+  // asymmetry at the last frames of a minute (the adjustment shifts the
+  // remainder it is computed from), so we take the closed-form estimate and
+  // then verify against the formatter itself over a bounded window — the
+  // parse is exact for every string formatTimecode can emit.
+  const dropFrames = DROP_PER_MINUTE[nominalFps];
+  const framesPerMinute = nominalFps * 60 - dropFrames;
+  const framesPer10Minutes = nominalFps * 600 - dropFrames * 9;
+  const tenMinuteBlocks = Math.floor(display / framesPer10Minutes);
+  const remainder = display % framesPer10Minutes;
+  const adjustment = remainder > dropFrames ? dropFrames * Math.floor((remainder - dropFrames) / framesPerMinute) : 0;
+  const estimate = display - (dropFrames * 9 * tenMinuteBlocks + adjustment);
+  for (let candidate = Math.max(0, estimate - 8); candidate <= estimate + 8; candidate += 1) {
+    if (formatTimecode(candidate, fps, true) === text) return candidate;
+  }
+  throw new Error(`timecode "${value}" is not a valid drop-frame value`);
+}
+
 /** Zero-frame duration is invalid everywhere; durations are ≥ 1 frame. */
 export function assertValidRange(startFrame: number, endFrame: number, what: string): void {
   if (!Number.isInteger(startFrame) || !Number.isInteger(endFrame)) {

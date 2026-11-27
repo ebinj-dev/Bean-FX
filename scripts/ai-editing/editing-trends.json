@@ -1,0 +1,163 @@
+{
+  "version": "2026.11.27",
+  "note": "Curated editing-intelligence feed (M48 §13). Entries are evergreen platform specifications or established professional practice with verifiable official sources. NO proprietary presets, project files or copyrighted assets are copied. A trend never overwrites a user's chosen style; RIISHE surfaces it with evidence on request.",
+  "entries": [
+    {
+      "id": "yt-upload-spec-2026",
+      "name": "YouTube upload encoding standard",
+      "category": "platform-specification",
+      "description": "Recommended upload encoding: MP4 with fast-start moov atom, H.264 progressive High Profile CABAC 4:2:0 closed GOP at half the frame rate, AAC-LC/Opus at 48 kHz; SDR BT.709; VBR guidance ~8 Mbps 1080p30, 35-45 Mbps 4K; encode at the recorded frame rate.",
+      "firstObserved": "2026-11-27",
+      "lastVerified": "2026-11-27",
+      "platforms": [
+        "youtube"
+      ],
+      "visualGrammar": "n/a (delivery spec)",
+      "pacingPattern": "n/a",
+      "transitionStrategy": "n/a",
+      "colorStrategy": "SDR BT.709 color space",
+      "motionDesignStrategy": "n/a",
+      "audioStrategy": "48 kHz AAC-LC/Opus; 128 kbps mono / 384 kbps stereo",
+      "captionStrategy": "sidecar captions supported",
+      "bestContentTypes": [
+        "any YouTube delivery"
+      ],
+      "risksAndAntiPatterns": [
+        "edit lists in MP4",
+        "interlaced uploads",
+        "non-48kHz audio"
+      ],
+      "sources": [
+        "https://support.google.com/youtube/answer/1722171"
+      ],
+      "evidenceSummary": "Page fetched live on 2026-11-27: fast-start MP4, H.264 High Profile, closed GOP at half frame rate, BT.709 SDR, VBR bitrate table, deinterlace guidance.",
+      "confidence": "VERIFIED (official documentation, fetched live)",
+      "reviewDate": "2027-02-27",
+      "capabilityRequirements": [
+        "delivery profiles map: container mp4, codec h264, audio aac 48kHz"
+      ],
+      "licenseRestrictions": "none (public documentation, summarized not copied)",
+      "humanReviewStatus": "PENDING OWNER REVIEW"
+    },
+    {
+      "id": "shorts-vertical-retention",
+      "name": "Short-form hook-first vertical pattern",
+      "category": "established-professional-workflow",
+      "description": "Vertical short-form across YouTube Shorts / Instagram Reels / TikTok converges on: mid-action hook in the first ~2 seconds, beat-aligned cuts, caption-forward storytelling, loopable close, safe-area awareness for UI overlays.",
+      "firstObserved": "2026-11-27",
+      "lastVerified": "2026-11-27",
+      "platforms": [
+        "youtube-shorts",
+        "instagram-reels",
+        "tiktok"
+      ],
+      "visualGrammar": "vertical 9:16; center-weighted framing; text kept inside platform safe areas",
+      "pacingPattern": "0.6-2.0 s shots; hook before any title card",
+      "transitionStrategy": "hard cuts on beats; whip/pan matched transitions as accents",
+      "colorStrategy": "punchy contrast/saturation within skin-tone-safe bounds",
+      "motionDesignStrategy": "push-in accents on key beats",
+      "audioStrategy": "trend/bed audio (user-licensed) with voice dominant",
+      "captionStrategy": "bold 2-4 word caption cards, beat-synced",
+      "bestContentTypes": [
+        "shorts",
+        "reels",
+        "tiktok",
+        "product shorts",
+        "educational shorts"
+      ],
+      "risksAndAntiPatterns": [
+        "title-card openings (retention drop)",
+        "captions over faces",
+        "non-licensed trend audio",
+        "unloopable endings"
+      ],
+      "sources": [
+        "https://support.google.com/youtube/answer/1722171"
+      ],
+      "evidenceSummary": "Established cross-platform professional practice synthesized from platform delivery documentation and the M48 recipe registry; pattern claims are practice-level, not platform-official (confidence: ESTABLISHED-PRACTICE).",
+      "confidence": "ESTABLISHED-PRACTICE (delivery spec verified; retention pattern is practice consensus)",
+      "reviewDate": "2027-02-27",
+      "capabilityRequirements": [
+        "vertical sequence support (engine)",
+        "caption tracks (engine)",
+        "beat markers"
+      ],
+      "licenseRestrictions": "trend audio MUST be user-owned/licensed — never bundled or fetched",
+      "humanReviewStatus": "PENDING OWNER REVIEW"
+    },
+    {
+      "id": "broadcast-no-music-bed",
+      "name": "News/broadcast packages run without music beds",
+      "category": "evergreen-editing-principle",
+      "description": "Standard broadcast news practice: no music bed under factual reporting; actuality/nat-sound opens; archival material clearly labeled; lower-third identification discipline.",
+      "firstObserved": "2026-11-27",
+      "lastVerified": "2026-11-27",
+      "platforms": [
+        "broadcast",
+        "web-news"
+      ],
+      "visualGrammar": "neutral grade; archival visibly distinct",
+      "pacingPattern": "steady broadcast rhythm, actuality first",
+      "transitionStrategy": "hard cuts only",
+      "colorStrategy": "broadcast-neutral",
+      "motionDesignStrategy": "minimal; still-photo moves only",
+      "audioStrategy": "voice sacred; nat-sound under b-roll; NO music bed",
+      "captionStrategy": "lower thirds with verified names/titles",
+      "bestContentTypes": [
+        "news package",
+        "investigative documentary",
+        "interview documentary"
+      ],
+      "risksAndAntiPatterns": [
+        "music under factual claims",
+        "unlabeled archival",
+        "unverified name straps"
+      ],
+      "sources": [],
+      "evidenceSummary": "Evergreen professional principle encoded in the news-package recipe; no external source fetched (practice-level, confidence: ESTABLISHED-PRACTICE).",
+      "confidence": "ESTABLISHED-PRACTICE",
+      "reviewDate": "2027-05-27",
+      "capabilityRequirements": [
+        "strap graphics",
+        "transcription"
+      ],
+      "licenseRestrictions": "none",
+      "humanReviewStatus": "PENDING OWNER REVIEW"
+    },
+    {
+      "id": "aces-pipeline-awareness",
+      "name": "ACES color-managed finishing pipeline (awareness)",
+      "category": "professional-standards",
+      "description": "ACES/SMPTE color-managed pipelines standardize input interpretation, a working color space and output transforms for cross-device-consistent finishing. BEAN FX documents this as AWARENESS ONLY — no ACES transform or metadata path is implemented in M48.",
+      "firstObserved": "2026-11-27",
+      "lastVerified": "2026-11-27",
+      "platforms": [
+        "post-production"
+      ],
+      "visualGrammar": "n/a",
+      "pacingPattern": "n/a",
+      "transitionStrategy": "n/a",
+      "colorStrategy": "input transform → working space → output transform (documented concept; NOT implemented in BEAN FX)",
+      "motionDesignStrategy": "n/a",
+      "audioStrategy": "n/a",
+      "captionStrategy": "n/a",
+      "bestContentTypes": [
+        "future finishing roadmap"
+      ],
+      "risksAndAntiPatterns": [
+        "claiming ACES support without an implemented transform path"
+      ],
+      "sources": [
+        "https://www.smpte.org/standards/aces-standards"
+      ],
+      "evidenceSummary": "SMPTE ACES standards page referenced by the M48 specification; NOT fetched in this milestone — recorded as roadmap awareness with the URL for the owner's review.",
+      "confidence": "ROADMAP-AWARENESS (not implemented)",
+      "reviewDate": "2027-05-27",
+      "capabilityRequirements": [
+        "color management roadmap item — NOT IMPLEMENTED (disclosed)"
+      ],
+      "licenseRestrictions": "ACES is a SMPTE standard; implementation would follow the standard's terms",
+      "humanReviewStatus": "PENDING OWNER REVIEW"
+    }
+  ]
+}

@@ -250,6 +250,7 @@ export function ProgramMonitor({
   const videoARef = useRef<HTMLVideoElement | null>(null);
   const videoBRef = useRef<HTMLVideoElement | null>(null);
   const audioRefs = useRef<Array<HTMLAudioElement | null>>([]);
+  const containerRef = useRef<HTMLDivElement | null>(null); // M48-C fullscreen preview
   const seqRef = useRef(sequence);
   const playheadRef = useRef(playhead);
 
@@ -260,7 +261,7 @@ export function ProgramMonitor({
     // Recreate only when the sequence's timebase changes — frame continuity
     // survives ordinary edits. Primitive deps are deliberate (object identity
     // of `sequence` changes on every edit and would reset playback).
-    // eslint-disable-next-line react-hooks/preserve-manual-memoization -- intentional narrow deps
+     
     [sequence?.fps.num, sequence?.fps.den],
   );
   useEffect(() => {
@@ -508,9 +509,12 @@ export function ProgramMonitor({
       // M45: when the canvas VFX layer owns the picture, the element stays
       // decoded but invisible — its processed frame is drawn on the canvas.
       const hideForVfx = isActive && (activeVideo ? clipHasCanvasVfx(activeVideo.clip) : false);
+      // M48-D — picture fades are now VISIBLE in preview (parity with the
+      // export path, which already applies fadeMultiplierAt).
+      const fade = isActive && activeVideo && !hideForVfx ? fadeMultiplierAt(activeVideo.clip, playhead) : 1;
       if (isActive && activeTransform) {
         el.style.transform = activeTransform.transform ?? "";
-        el.style.opacity = hideForVfx ? "0" : activeTransform.opacity ?? "";
+        el.style.opacity = hideForVfx ? "0" : applyFade(activeTransform.opacity, fade);
       } else if (isActive && hideForVfx) {
         el.style.transform = "";
         el.style.opacity = "0";
@@ -519,7 +523,7 @@ export function ProgramMonitor({
         el.style.opacity = "";
       }
     }
-  }, [activeAssetId, isImageAsset, previewFilter, comparing, previewTransform, measureDisplayScale, activeVideo]);
+  }, [activeAssetId, isImageAsset, previewFilter, comparing, previewTransform, measureDisplayScale, activeVideo, playhead]);
   // M37: display size changes (window resize) re-measure the composition→
   // display factor; settled transforms re-apply on the next React pass.
   useEffect(() => {
@@ -537,11 +541,13 @@ export function ProgramMonitor({
       const active = activeVideoClipAt(seq, frame);
       if (!active) return;
       const t = cssTransformStyle(transformAt(active.clip, frame), displayScaleRef.current);
+      // M48-D — per-frame picture fade (export parity).
+      const fade = fadeMultiplierAt(active.clip, frame);
       for (const el of [videoARef.current, videoBRef.current]) {
         if (!el || el.className.includes("hidden")) continue;
         // M45 — the canvas VFX layer owns visibility while it is active.
         el.style.transform = t.transform ?? "";
-        if (!vfxOwnsPicture) el.style.opacity = t.opacity ?? "";
+        if (!vfxOwnsPicture) el.style.opacity = applyFade(t.opacity, fade);
       }
     });
   }, []);
@@ -707,7 +713,7 @@ export function ProgramMonitor({
   const fpsRational = sequence?.fps ?? { num: 30, den: 1 };
 
   return (
-    <div className="relative flex min-h-0 flex-1 flex-col rounded-lg border border-[#2a2a2a] bg-black">
+    <div ref={containerRef} className="relative flex min-h-0 flex-1 flex-col rounded-lg border border-[#2a2a2a] bg-black">
       {/* SVG filter defs for temperature/tint (same semantics as the export
           colorbalance mapping — see lib/editor/filters.ts). */}
       <svg width="0" height="0" className="absolute" aria-hidden="true">
@@ -820,10 +826,29 @@ export function ProgramMonitor({
             {comparing ? "BEFORE" : "COMPARE"}
           </button>
         )}
+        <button
+          type="button"
+          title="Fullscreen preview (Esc exits)"
+          onClick={() => {
+            const el = containerRef.current;
+            if (!el) return;
+            if (document.fullscreenElement) void document.exitFullscreen();
+            else void el.requestFullscreen().catch(() => undefined);
+          }}
+          className="absolute right-3 bottom-10 rounded border border-[#2a2a2a] bg-black/70 px-2 py-0.5 text-[10px] text-[#d8d8d2] hover:border-[#d4a017] hover:text-[#d4a017]"
+        >
+          FULLSCREEN
+        </button>
         {playing && <div className="pointer-events-none absolute right-3 top-2 rounded bg-[#d4a017]/20 px-2 py-0.5 text-[10px] text-[#d4a017]">PLAYING</div>}
       </div>
     </div>
   );
+}
+
+/** M48-D — multiply a CSS opacity string by a fade factor (clamped 0..1). */
+function applyFade(cssOpacity: string | null | undefined, fade: number): string {
+  const base = cssOpacity === undefined || cssOpacity === null || cssOpacity === "" ? 1 : Math.max(0, Math.min(1, parseFloat(cssOpacity)));
+  return String(Math.max(0, Math.min(1, base * fade)));
 }
 
 /** Timecode that follows the frame bus imperatively (no re-render per tick). */

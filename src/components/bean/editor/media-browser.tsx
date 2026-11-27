@@ -21,12 +21,15 @@ export function MediaBrowser({
   onPlace,
   importing,
   onImport,
+  onLoadSource,
 }: {
   media: MediaMeta[] | null;
   onRefresh: () => void;
   onPlace: (asset: MediaMeta) => void;
   importing: boolean;
   onImport: (files: FileList) => void;
+  /** M48-C — load the asset into the Source Monitor for in/out marking. */
+  onLoadSource?: (asset: MediaMeta) => void;
 }) {
   const [query, setQuery] = useState("");
   const [kindFilter, setKindFilter] = useState<"ALL" | "VIDEO" | "AUDIO" | "IMAGE">("ALL");
@@ -111,6 +114,14 @@ export function MediaBrowser({
                     title="Place at playhead on the first compatible track"
                   >
                     + place
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => onLoadSource?.(m)}
+                    className="rounded border border-[#2a2a2a] px-1.5 py-0.5 text-[10px] text-[#d8d8d2] hover:border-[#d4a017] hover:text-[#d4a017]"
+                    title="Load into the Source Monitor (mark IN/OUT, then insert/overwrite/append)"
+                  >
+                    source
                   </button>
                 </div>
                 </div>
