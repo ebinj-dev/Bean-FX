@@ -129,7 +129,8 @@ describe("M9 export profiles", () => {
   test("built-in registry validates and encodes VERIFIED platform facts", () => {
     const registry = profilesMod.exportProfileRegistry();
     expect(registry.source).toBe("built-in");
-    expect(registry.version).toBe("2026.11.13");
+    // M48-F — registry extended (5 delivery profiles); version bumped deliberately.
+    expect(registry.version).toBe("2026.11.27");
     for (const id of ["youtube_landscape", "youtube_shorts", "instagram_reels", "tiktok", "square_social", "custom_landscape", "custom_portrait"]) {
       expect(registry.profiles[id]).toBeDefined();
     }
