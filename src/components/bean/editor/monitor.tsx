@@ -250,6 +250,7 @@ export function ProgramMonitor({
   const videoARef = useRef<HTMLVideoElement | null>(null);
   const videoBRef = useRef<HTMLVideoElement | null>(null);
   const audioRefs = useRef<Array<HTMLAudioElement | null>>([]);
+  const containerRef = useRef<HTMLDivElement | null>(null); // M48-C fullscreen preview
   const seqRef = useRef(sequence);
   const playheadRef = useRef(playhead);
 
@@ -260,7 +261,7 @@ export function ProgramMonitor({
     // Recreate only when the sequence's timebase changes — frame continuity
     // survives ordinary edits. Primitive deps are deliberate (object identity
     // of `sequence` changes on every edit and would reset playback).
-    // eslint-disable-next-line react-hooks/preserve-manual-memoization -- intentional narrow deps
+     
     [sequence?.fps.num, sequence?.fps.den],
   );
   useEffect(() => {
@@ -707,7 +708,7 @@ export function ProgramMonitor({
   const fpsRational = sequence?.fps ?? { num: 30, den: 1 };
 
   return (
-    <div className="relative flex min-h-0 flex-1 flex-col rounded-lg border border-[#2a2a2a] bg-black">
+    <div ref={containerRef} className="relative flex min-h-0 flex-1 flex-col rounded-lg border border-[#2a2a2a] bg-black">
       {/* SVG filter defs for temperature/tint (same semantics as the export
           colorbalance mapping — see lib/editor/filters.ts). */}
       <svg width="0" height="0" className="absolute" aria-hidden="true">
@@ -820,6 +821,19 @@ export function ProgramMonitor({
             {comparing ? "BEFORE" : "COMPARE"}
           </button>
         )}
+        <button
+          type="button"
+          title="Fullscreen preview (Esc exits)"
+          onClick={() => {
+            const el = containerRef.current;
+            if (!el) return;
+            if (document.fullscreenElement) void document.exitFullscreen();
+            else void el.requestFullscreen().catch(() => undefined);
+          }}
+          className="absolute right-3 bottom-10 rounded border border-[#2a2a2a] bg-black/70 px-2 py-0.5 text-[10px] text-[#d8d8d2] hover:border-[#d4a017] hover:text-[#d4a017]"
+        >
+          FULLSCREEN
+        </button>
         {playing && <div className="pointer-events-none absolute right-3 top-2 rounded bg-[#d4a017]/20 px-2 py-0.5 text-[10px] text-[#d4a017]">PLAYING</div>}
       </div>
     </div>

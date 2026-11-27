@@ -47,7 +47,7 @@ disclosed gaps), **UNVERIFIED** (no test/evidence), **MISSING**, **CONDITIONAL**
 | Copy/paste attributes/effects | **PARTIAL** | effect clipboard is module-global; keyframe paste exists; attributes partial |
 | Track targeting | **MISSING** | placement always targets dropped/active track implicitly |
 | Track lock/sync-lock/mute/solo/visibility | lock/mute/solo/visible **VERIFIED**; sync-lock **MISSING** |
-| Waveforms / thumbnails | thumbnails **VERIFIED** (160px posters); waveforms: API exists (`/api/media/[id]/waveform`, real peaks, cached) but **timeline does not render them — MISSING wiring** |
+| Waveforms / thumbnails | thumbnails **VERIFIED** (160px posters); waveforms **VERIFIED** — the timeline renders real peaks from `/api/media/[id]/waveform` on AUDIO-track clips (min/max, per-asset cache; corrected during M48-C implementation — the initial component-scan missed it) |
 | Timeline range export | **PARTIAL** | manual seconds inputs; I/O range not wired; **BUG: custom-range math hardcodes 30 fps** |
 | Edit-point navigation (next/prev edit/marker) | **MISSING** |
 | Match frame / source-record nav | **MISSING** (no Source Monitor) |
@@ -89,7 +89,7 @@ disclosed gaps), **UNVERIFIED** (no test/evidence), **MISSING**, **CONDITIONAL**
 | --- | --- |
 | Clip volume/pan/fades/automation keyframes | **VERIFIED** preview(WebAudio)+export(volume expr/pan/afade) |
 | Track fader/mute/solo + real meters | **VERIFIED** |
-| Waveform display | **MISSING wiring** (API exists) |
+| Waveform display | **VERIFIED** — timeline AUDIO clips draw real min/max peaks from the cached waveform API (audio tracks only; video clips' embedded audio not drawn — acceptable, disclosed) |
 | EQ/compressor/limiter/ducking/buses | **MISSING** in engine — GANGZII offline processing pipeline **VERIFIED** (real ffmpeg chains: noise/hum/deess/click/DC/loudness/trim/compressor/limiter) |
 | Audio-track transitions as crossfades | **PARTIAL/BUG-adjacent**: model accepts them, export mixes additively (documented) |
 | Loudness measurement | **VERIFIED** (GANGZII measure); no live meter |

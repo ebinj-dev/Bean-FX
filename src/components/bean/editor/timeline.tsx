@@ -36,6 +36,8 @@ import {
 } from "@/lib/editor/interaction";
 import { sequenceEndFrame } from "@/lib/editor/preview";
 import { slipCommand, slideCommands, type EditToolId } from "@/lib/editor/tools";
+import { snapTargetFrames } from "@/lib/editor/interaction";
+import { parseTimecode } from "@/lib/editor/time";
 import { compileRoll, compileLift, compileExtract, compileGroupMove, compileAudioCrossfade } from "@/lib/editor/edits";
 import { subscribeFrame } from "@/lib/editor/playback";
 import { thumbnailFor } from "@/lib/editor/thumbnails";
@@ -158,6 +160,30 @@ export function EditorTimeline({
   // frame window are rendered (10k-clip projects must stay responsive).
   const [viewportWidth, setViewportWidth] = useState(1400);
   const [drag, setDrag] = useState<DragState | null>(null);
+  // M48-C — professional snap targets (clip edges, playhead, markers),
+  // captured when a drag starts and consumed by move/trim previews.
+  const snapTargetsRef = useRef<number[]>([]);
+  // M48-C — timecode navigation state.
+  const [gotoValue, setGotoValue] = useState("");
+  const editPoints = useMemo(() => {
+    const set = new Set<number>();
+    for (const c of sequence.clips) {
+      set.add(c.timelineStartFrame);
+      set.add(c.timelineStartFrame + c.timelineDurationFrames);
+    }
+    return [...set].sort((a, b) => a - b);
+  }, [sequence]);
+  const markerFrames = useMemo(() => sequence.markers.map((m) => m.frame).sort((a, b) => a - b), [sequence]);
+  const prevBoundary = useCallback((frames: number[]): number | null => {
+    const current = session.playheadFrame;
+    for (let i = frames.length - 1; i >= 0; i -= 1) if (frames[i] < current) return frames[i];
+    return null;
+  }, [session]);
+  const nextBoundary = useCallback((frames: number[]): number | null => {
+    const current = session.playheadFrame;
+    for (const f of frames) if (f > current) return f;
+    return null;
+  }, [session]);
   const [menu, setMenu] = useState<{ x: number; y: number; clipId: string | null } | null>(null);
   const [multiSelect, setMultiSelect] = useState<Set<string>>(new Set());
   const [trackHeights, setTrackHeights] = useState<Record<string, number>>({});
@@ -342,6 +368,7 @@ export function EditorTimeline({
         return new Set([hit.clip.id]);
       });
       if (hit.zone === "body") {
+        snapTargetsRef.current = snapTargetFrames(sequence, session.playheadFrame);
         setDrag({
           kind: "move",
           clipId: hit.clip.id,
@@ -350,10 +377,11 @@ export function EditorTimeline({
           move: { clipId: hit.clip.id, newTimelineStartFrame: hit.clip.timelineStartFrame },
         });
       } else {
+        snapTargetsRef.current = snapTargetFrames(sequence, session.playheadFrame);
         setDrag({ kind: "trim", clipId: hit.clip.id, zone: hit.zone, grabOffsetFrames: 0 });
       }
     },
-    [session, sequence.tracks, frameAtEvent, activeTool, razorAt, addCaptionAt, notice],
+    [session, sequence, sequence.tracks, frameAtEvent, activeTool, razorAt, addCaptionAt, notice],
   );
 
   const onDragMove = useCallback(
@@ -364,9 +392,9 @@ export function EditorTimeline({
       if (!clip) return;
       if (drag.kind === "move") {
         const target = snapTo(frame - drag.grabOffsetFrames);
-        setDrag({ ...drag, move: movePreview(clip, target, 1) });
+        setDrag({ ...drag, move: movePreview(clip, target, 1, snapTargetsRef.current) });
       } else if (drag.kind === "trim") {
-        setDrag({ ...drag, trim: trimPreview(sequence, clip, drag.zone as "trim-in" | "trim-out", snapTo(frame), fps, 1) });
+        setDrag({ ...drag, trim: trimPreview(sequence, clip, drag.zone as "trim-in" | "trim-out", snapTo(frame), fps, 1, snapTargetsRef.current) });
       } else if (drag.kind === "slip" && drag.slipBase) {
         const deltaFrames = Math.round((event.clientX - drag.slipBase.clientX) / ppf);
         setDrag({ ...drag, slipDelta: deltaFrames });
@@ -597,7 +625,7 @@ export function EditorTimeline({
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+     
   }, [sequence, session, pasteClipboard, notice, multiSelect]);
 
   const ticks = useMemo(() => {
@@ -733,6 +761,15 @@ export function EditorTimeline({
           <div className="flex flex-wrap items-center gap-1 border-b border-[#2a2a2a] bg-[#0b0b0a] px-2 py-1 text-[9px]">
             <span className="bean-label text-[8px] text-[#7a7a76]">EDIT</span>
             <button type="button" onClick={() => session.apply([{ type: "AddMarker", marker: { id: `mk-${Date.now().toString(36)}`, frame: playhead, label: "" } }])} className="rounded border border-[#2a2a2a] px-1.5 py-0.5 text-[#d8d8d2] hover:border-[#d4a017] hover:text-[#d4a017]" title="Add marker at playhead (M)">+ MARKER</button>
+            {/* M48-C — timecode navigation: Go-to field + edit-point/marker stepping. */}
+            <button type="button" onClick={() => { const t = prevBoundary(editPoints); if (t !== null) session.setPlayhead(t); else notice?.("No earlier edit point."); }} className="rounded border border-[#2a2a2a] px-1.5 py-0.5 text-[#d8d8d2] hover:border-[#d4a017] hover:text-[#d4a017]" title="Go to previous edit point">◀ EDIT</button>
+            <button type="button" onClick={() => { const t = nextBoundary(editPoints); if (t !== null) session.setPlayhead(t); else notice?.("No later edit point."); }} className="rounded border border-[#2a2a2a] px-1.5 py-0.5 text-[#d8d8d2] hover:border-[#d4a017] hover:text-[#d4a017]" title="Go to next edit point">EDIT ▶</button>
+            <button type="button" onClick={() => { const t = prevBoundary(markerFrames); if (t !== null) session.setPlayhead(t); else notice?.("No earlier marker."); }} className="rounded border border-[#2a2a2a] px-1.5 py-0.5 text-[#d8d8d2] hover:border-[#d4a017] hover:text-[#d4a017]" title="Go to previous marker">◀ MARK</button>
+            <button type="button" onClick={() => { const t = nextBoundary(markerFrames); if (t !== null) session.setPlayhead(t); else notice?.("No later marker."); }} className="rounded border border-[#2a2a2a] px-1.5 py-0.5 text-[#d8d8d2] hover:border-[#d4a017] hover:text-[#d4a017]" title="Go to next marker">MARK ▶</button>
+            <form onSubmit={(e) => { e.preventDefault(); try { const f = parseTimecode(gotoValue, sequence.fps, true); session.setPlayhead(f); notice?.(null); } catch (err) { notice?.(err instanceof Error ? err.message : "Invalid timecode."); } }} className="flex items-center gap-1">
+              <input value={gotoValue} onChange={(e) => setGotoValue(e.target.value)} placeholder="HH:MM:SS;FF" className="w-24 rounded border border-[#2a2a2a] bg-[#111110] px-1.5 py-0.5 text-[9px] text-[#e6e6e0] placeholder:text-[#5a5a56]" title="Go to timecode (Enter)" />
+              <button type="submit" className="rounded border border-[#2a2a2a] px-1.5 py-0.5 text-[#d8d8d2] hover:border-[#d4a017] hover:text-[#d4a017]" title="Go to timecode">GO</button>
+            </form>
             <button type="button" onClick={() => onRangeChange?.({ in: playhead, out: Math.max(playhead + 1, range?.out ?? playhead + 1) })} className="rounded border border-[#2a2a2a] px-1.5 py-0.5 text-[#d8d8d2] hover:border-[#4cc47f] hover:text-[#4cc47f]" title="Set range in-point (I)">IN</button>
             <button type="button" onClick={() => { if (range) onRangeChange?.({ in: range.in, out: Math.max(range.in + 1, playhead) }); else onRangeChange?.({ in: Math.max(0, playhead - 1), out: playhead }); }} className="rounded border border-[#2a2a2a] px-1.5 py-0.5 text-[#d8d8d2] hover:border-[#4cc47f] hover:text-[#4cc47f]" title="Set range out-point (O)">OUT</button>
             <button type="button" onClick={() => onRangeChange?.(null)} disabled={!range} className="rounded border border-[#2a2a2a] px-1.5 py-0.5 text-[#8f8f8a] hover:border-[#c45c4c] hover:text-[#c45c4c] disabled:opacity-40" title="Clear range (Esc)">CLR</button>

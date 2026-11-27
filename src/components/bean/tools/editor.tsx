@@ -33,6 +33,7 @@ import { NotificationsBell } from "@/components/bean/notifications-bell";
 import { ProgramMonitor } from "@/components/bean/editor/monitor";
 import { EditorTimeline } from "@/components/bean/editor/timeline";
 import { ClipInspector } from "@/components/bean/editor/inspector";
+import { SourceMonitor } from "@/components/bean/editor/source-monitor";
 import { EMPTY_EDITOR_LINK_CONTEXT as EMPTY_CONTEXT, parseEditorHash, returnToChatHash, type EditorLinkContext } from "@/lib/editor/deep-link";
 import { EditingToolbar } from "@/components/bean/editor/editing-toolbar";
 import { MediaBrowser, useMediaImport } from "@/components/bean/editor/media-browser";
@@ -82,6 +83,9 @@ export function EditorTool({ user }: { user: { id: string }; onLogout: () => voi
   });
   const [renaming, setRenaming] = useState(false);
   const [renameValue, setRenameValue] = useState("");
+  // M48-C — Source Monitor (three-point editing) visibility + loaded source.
+  const [sourceOpen, setSourceOpen] = useState(false);
+  const [sourceAssetId, setSourceAssetId] = useState<string | null>(null);
 
   const session = useEditorSession(projectId);
   const sequence = session.sequence;
@@ -556,7 +560,7 @@ export function EditorTool({ user }: { user: { id: string }; onLogout: () => voi
             <SlidersHorizontal className="ml-auto h-3 w-3 text-[#5a5a55]" />
           </div>
           {leftTab === "media" || workspaceMode === "essentials" ? (
-            <MediaBrowser media={media} onRefresh={refreshMedia} onPlace={(a) => void addMediaAtPlayhead(a)} importing={importing} onImport={(files) => void importFiles(files)} />
+            <MediaBrowser media={media} onRefresh={refreshMedia} onPlace={(a) => void addMediaAtPlayhead(a)} importing={importing} onImport={(files) => void importFiles(files)} onLoadSource={(a) => { setSourceAssetId(a.id); setSourceOpen(true); }} />
           ) : (
             <EffectsBrowser sequence={sequence} session={session} notice={setNotice} />
           )}
@@ -645,7 +649,10 @@ export function EditorTool({ user }: { user: { id: string }; onLogout: () => voi
               <button type="button" onClick={() => setDrawer(null)} className="text-[#8f8f8a] hover:text-[#d8d8d2]">✕</button>
             </div>
             <PublishingPanel projectId={projectId} />
-            <TimelineRenderPanel projectId={projectId} onNotice={setNotice} fps={sequence?.fps ?? null} />
+            {sourceOpen && (
+              <SourceMonitor key={sourceAssetId ?? "none"} session={session} assets={media ?? []} onNotice={setNotice} initialAssetId={sourceAssetId} />
+            )}
+            <TimelineRenderPanel projectId={projectId} onNotice={setNotice} fps={sequence?.fps ?? null} range={range} />
             <BatchExportPanel projectId={projectId} onNotice={setNotice} />
           </div>
         </div>
@@ -713,11 +720,11 @@ export function EditorTool({ user }: { user: { id: string }; onLogout: () => voi
  * (real FFmpeg graph from the canonical sequence) and shows real job/ExportFile
  * state. No fake progress — the durable worker drives the stages.
  */
-function TimelineRenderPanel({ projectId, onNotice, fps }: { projectId: string; onNotice: (m: string | null) => void; fps?: { num: number; den: number } | null }) {
+function TimelineRenderPanel({ projectId, onNotice, fps, range }: { projectId: string; onNotice: (m: string | null) => void; fps?: { num: number; den: number } | null; range?: { in: number; out: number } | null }) {
   const [state, setState] = useState<{ jobs: { id: string; status: string; stage: string | null; progress: number; message: string | null; createdAt: string; range?: { startFrame?: number; endFrame?: number } | null }[]; exports: { id: string; filename: string; sizeBytes: number; durationSec: number; createdAt: string }[] } | null>(null);
   const [busy, setBusy] = useState(false);
   // M25 P3 — real export range selection (backend-supported frames only).
-  const [rangeMode, setRangeMode] = useState<"full" | "preview" | "custom">("full");
+  const [rangeMode, setRangeMode] = useState<"full" | "inout" | "preview" | "custom">("full");
   const [startSec, setStartSec] = useState("0");
   const [endSec, setEndSec] = useState("");
   // M37 — real output formats: one durable RENDER_TIMELINE job, one FFmpeg
@@ -817,6 +824,11 @@ function TimelineRenderPanel({ projectId, onNotice, fps }: { projectId: string; 
   const secToFrames = (sec: number): number => Math.max(0, Math.round((sec * fpsN) / fpsD));
   const rangeFrames = (): { startFrame?: number; endFrame?: number } => {
     if (rangeMode === "full") return {};
+    // M48-C — the timeline I/O range is now a first-class render range.
+    if (rangeMode === "inout") {
+      if (!range) return {};
+      return { startFrame: Math.max(0, Math.round(range.in)), endFrame: Math.max(Math.round(range.in) + 1, Math.round(range.out)) };
+    }
     if (rangeMode === "preview") return { startFrame: 0, endFrame: Math.max(1, secToFrames(10)) };
     const st = secToFrames(Number(startSec) || 0);
     const en = endSec ? Math.max(st + 1, secToFrames(Number(endSec))) : undefined;
@@ -841,9 +853,9 @@ function TimelineRenderPanel({ projectId, onNotice, fps }: { projectId: string; 
       </div>
       {/* M25 P3 — export range presets (real backend range support). */}
       <div className="mb-2 flex flex-wrap items-center gap-1.5 text-[9px] text-[#8f8f8a]">
-        {(["full", "preview", "custom"] as const).map((m) => (
+        {(["full", "inout", "preview", "custom"] as const).map((m) => (
           <button key={m} type="button" onClick={() => setRangeMode(m)} className={`rounded border px-1.5 py-0.5 ${rangeMode === m ? "border-[#d4a017] text-[#d4a017]" : "border-[#2a2a2a] text-[#d8d8d2] hover:border-[#d4a017]"}`}>
-            {m === "full" ? "FULL SEQUENCE" : m === "preview" ? "PREVIEW (FIRST 10s)" : "CUSTOM RANGE"}
+            {m === "full" ? "FULL SEQUENCE" : m === "inout" ? `I/O RANGE${range ? ` (${range.in}–${range.out})` : " (none)"}` : m === "preview" ? "PREVIEW (FIRST 10s)" : "CUSTOM RANGE"}
           </button>
         ))}
         {rangeMode === "custom" && (

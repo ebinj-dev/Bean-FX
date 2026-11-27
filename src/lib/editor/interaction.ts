@@ -36,6 +36,37 @@ export function snapFrame(frame: number, gridFrames: number): number {
   return Math.max(0, Math.round(frame / gridFrames) * gridFrames);
 }
 
+/**
+ * M48-C — professional snap targets: every clip edge on every track, the
+ * playhead and every marker. Deduplicated and sorted; the caller snaps to the
+ * nearest target within the threshold instead of to the grid alone.
+ */
+export function snapTargetFrames(seq: Sequence, playhead: number): number[] {
+  const targets = new Set<number>([0, playhead]);
+  for (const clip of seq.clips) {
+    targets.add(clip.timelineStartFrame);
+    targets.add(clipEndFrame(seq, clip));
+  }
+  for (const marker of seq.markers) targets.add(marker.frame);
+  return [...targets].sort((a, b) => a - b);
+}
+
+/** Snap to the nearest target within `thresholdFrames` (falls back to the grid step). */
+export function snapFrameToTargets(frame: number, targets: number[], gridFrames: number, thresholdFrames = 6): number {
+  const rounded = Math.max(0, Math.round(frame));
+  let best: number | null = null;
+  let bestDist = thresholdFrames;
+  for (const t of targets) {
+    const dist = Math.abs(t - rounded);
+    if (dist <= bestDist) {
+      bestDist = dist;
+      best = t;
+    }
+  }
+  if (best !== null) return best;
+  return snapFrame(rounded, gridFrames);
+}
+
 export interface ClipHit {
   clip: Clip;
   /** Which drag affordance the point lands on. */
@@ -61,11 +92,14 @@ export interface MovePreview {
   newTimelineStartFrame: number;
 }
 
-/** Move preview: target frame clamps at 0 and snaps to the grid. */
-export function movePreview(clip: Clip, targetFrame: number, gridFrames: number): MovePreview {
+/** Move preview: target frame clamps at 0 and snaps to targets (M48-C) or the grid. */
+export function movePreview(clip: Clip, targetFrame: number, gridFrames: number, snapTargets?: number[]): MovePreview {
+  const snapped = snapTargets && snapTargets.length > 0
+    ? snapFrameToTargets(targetFrame, snapTargets, gridFrames)
+    : snapFrame(targetFrame, gridFrames);
   return {
     clipId: clip.id,
-    newTimelineStartFrame: Math.max(0, snapFrame(targetFrame, gridFrames)),
+    newTimelineStartFrame: Math.max(0, snapped),
   };
 }
 
@@ -90,8 +124,9 @@ export function trimPreview(
   targetFrame: number,
   seqFps: { num: number; den: number },
   gridFrames: number,
+  snapTargets?: number[],
 ): TrimPreview {
-  const target = Math.max(0, snapFrame(targetFrame, gridFrames));
+  const target = Math.max(0, snapTargets && snapTargets.length > 0 ? snapFrameToTargets(targetFrame, snapTargets, gridFrames) : snapFrame(targetFrame, gridFrames));
   const seqFpsR = makeRational(seqFps.num, seqFps.den);
   const srcFpsR = makeRational(clip.sourceFps.num, clip.sourceFps.den);
   if (zone === "trim-in") {
