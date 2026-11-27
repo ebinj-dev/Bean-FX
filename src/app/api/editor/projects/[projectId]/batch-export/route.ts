@@ -32,8 +32,10 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ projectId:
 
   const project = await db.project.findFirst({ where: { id: projectId, userId: user.id } });
   if (!project) return badRequest("Project not found or not owned by the caller.");
-  const master = await db.exportFile.findFirst({ where: { id: sourceExportId, userId: user.id, kind: "VIDEO" } });
-  if (!master) return badRequest("Master export not found (render the timeline first — kind VIDEO).");
+  // M48-B bugfix — timeline renders register kind TIMELINE_RENDER (legacy MEDIA
+  // exports are kind VIDEO); both are legitimate masters for aspect variants.
+  const master = await db.exportFile.findFirst({ where: { id: sourceExportId, userId: user.id, kind: { in: ["VIDEO", "TIMELINE_RENDER"] } } });
+  if (!master) return badRequest("Master export not found (render the timeline first — kind VIDEO or TIMELINE_RENDER).");
 
   const created: Array<{ profileId: string; variantId: string; reused: boolean; status: string }> = [];
   const rejected: Array<{ profileId: string; reason: string }> = [];

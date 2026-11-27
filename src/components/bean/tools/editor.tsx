@@ -33,6 +33,7 @@ import { NotificationsBell } from "@/components/bean/notifications-bell";
 import { ProgramMonitor } from "@/components/bean/editor/monitor";
 import { EditorTimeline } from "@/components/bean/editor/timeline";
 import { ClipInspector } from "@/components/bean/editor/inspector";
+import { EMPTY_EDITOR_LINK_CONTEXT as EMPTY_CONTEXT, parseEditorHash, returnToChatHash, type EditorLinkContext } from "@/lib/editor/deep-link";
 import { EditingToolbar } from "@/components/bean/editor/editing-toolbar";
 import { MediaBrowser, useMediaImport } from "@/components/bean/editor/media-browser";
 import { EffectsBrowser } from "@/components/bean/editor/effects-browser";
@@ -90,10 +91,21 @@ export function EditorTool({ user }: { user: { id: string }; onLogout: () => voi
   }, []);
   const { importing, importFiles } = useMediaImport(refreshMedia, (m) => setNotice(m));
 
-  // Open a project directly via #/editor?project=<id> (dashboard deep link).
+  // M48-B — open a project via #/editor?project=<id>&conversation=<id>&plan=<id>&export=<id>.
+  // Parsed on mount AND on every hashchange (previously mount-only: navigating
+  // here from chat after the editor was already mounted did nothing). The
+  // conversation/plan/export values are context only — they never mutate the
+  // timeline; the canonical plan approval flow stays in the plans API.
+  const [linkContext, setLinkContext] = useState<EditorLinkContext>(EMPTY_CONTEXT);
   useEffect(() => {
-    const wanted = new URLSearchParams(window.location.hash.split("?")[1] ?? "").get("project");
-    if (wanted) setProjectId(wanted);
+    const syncFromHash = () => {
+      const parsed = parseEditorHash(window.location.hash);
+      if (parsed.projectId) setProjectId(parsed.projectId);
+      setLinkContext(parsed);
+    };
+    syncFromHash();
+    window.addEventListener("hashchange", syncFromHash);
+    return () => window.removeEventListener("hashchange", syncFromHash);
   }, []);
 
   const applyRiisheCuts = useCallback(async () => {
@@ -362,7 +374,7 @@ export function EditorTool({ user }: { user: { id: string }; onLogout: () => voi
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+     
   }, [togglePlay, step, splitAtPlayhead, deleteSelection, session, snap, range]);
 
   // Unsaved-changes guard: never discard a pending autosave silently.
@@ -517,7 +529,7 @@ export function EditorTool({ user }: { user: { id: string }; onLogout: () => voi
           <button type="button" onClick={() => setDrawer(drawer === "portability" ? null : "portability")} className={toolButton} title="Project portability: package, import, bulk relink"><Package className="h-4 w-4" /></button>
           <button type="button" onClick={() => setDrawer(drawer === "collab" ? null : "collab")} className={toolButton} title="Collaboration: workspace, invitations, review sessions, approvals"><Users className="h-4 w-4" /></button>
           <NotificationsBell compact />
-          <a href="#/studio" className="flex items-center gap-1 rounded border border-[#2a2a2a] px-2 py-1.5 text-[11px] text-[#d8d8d2] hover:border-[#d4a017] hover:text-[#d4a017]" title="Project dashboard">
+          <a href={returnToChatHash(linkContext.conversationId)} className="flex items-center gap-1 rounded border border-[#2a2a2a] px-2 py-1.5 text-[11px] text-[#d8d8d2] hover:border-[#d4a017] hover:text-[#d4a017]" title={linkContext.conversationId ? "Return to Studio Chat (conversation context preserved)" : "Project dashboard"}>
             <LayoutGrid className="h-3.5 w-3.5" />
           </a>
         </div>
@@ -605,7 +617,7 @@ export function EditorTool({ user }: { user: { id: string }; onLogout: () => voi
             </div>
           )}
           <div className="border-b border-[#2a2a2a] px-3 py-1.5 bean-label text-[10px] text-[#8f8f8a]">PROPERTIES INSPECTOR</div>
-          {sequence && <ClipInspector sequence={sequence} session={session} notice={setNotice} />}
+          {sequence && <ClipInspector sequence={sequence} session={session} notice={setNotice} playhead={session.playheadFrame} />}
           {sequence && selectedClip && selectedClip.keyframes.length > 0 && (
             <div className="border-t border-[#2a2a2a] px-3 py-2 text-[10px] text-[#8f8f8a]">
               {selectedClip.keyframes.length} keyframe(s) — diamonds on the timeline block; edit via NIIKI (AI STUDIO) or effect parameters.
@@ -633,7 +645,7 @@ export function EditorTool({ user }: { user: { id: string }; onLogout: () => voi
               <button type="button" onClick={() => setDrawer(null)} className="text-[#8f8f8a] hover:text-[#d8d8d2]">✕</button>
             </div>
             <PublishingPanel projectId={projectId} />
-            <TimelineRenderPanel projectId={projectId} onNotice={setNotice} />
+            <TimelineRenderPanel projectId={projectId} onNotice={setNotice} fps={sequence?.fps ?? null} />
             <BatchExportPanel projectId={projectId} onNotice={setNotice} />
           </div>
         </div>
@@ -701,7 +713,7 @@ export function EditorTool({ user }: { user: { id: string }; onLogout: () => voi
  * (real FFmpeg graph from the canonical sequence) and shows real job/ExportFile
  * state. No fake progress — the durable worker drives the stages.
  */
-function TimelineRenderPanel({ projectId, onNotice }: { projectId: string; onNotice: (m: string | null) => void }) {
+function TimelineRenderPanel({ projectId, onNotice, fps }: { projectId: string; onNotice: (m: string | null) => void; fps?: { num: number; den: number } | null }) {
   const [state, setState] = useState<{ jobs: { id: string; status: string; stage: string | null; progress: number; message: string | null; createdAt: string; range?: { startFrame?: number; endFrame?: number } | null }[]; exports: { id: string; filename: string; sizeBytes: number; durationSec: number; createdAt: string }[] } | null>(null);
   const [busy, setBusy] = useState(false);
   // M25 P3 — real export range selection (backend-supported frames only).
@@ -797,11 +809,17 @@ function TimelineRenderPanel({ projectId, onNotice }: { projectId: string; onNot
     onNotice(res.ok ? "Render cancelled." : "This job can no longer be cancelled.");
     load();
   };
-  const rangeFrames = (fps: number): { startFrame?: number; endFrame?: number } => {
+  // M48-B bugfix — use the REAL sequence fps (rational) for seconds→frames;
+  // this panel previously hardcoded 30 fps and produced wrong ranges at any
+  // other timebase. Rational mapping keeps the boundary frame-exact.
+  const fpsN = fps?.num ?? 30;
+  const fpsD = fps?.den ?? 1;
+  const secToFrames = (sec: number): number => Math.max(0, Math.round((sec * fpsN) / fpsD));
+  const rangeFrames = (): { startFrame?: number; endFrame?: number } => {
     if (rangeMode === "full") return {};
-    if (rangeMode === "preview") return { startFrame: 0, endFrame: Math.max(1, Math.round(10 * fps)) };
-    const st = Math.max(0, Math.round((Number(startSec) || 0) * fps));
-    const en = endSec ? Math.max(st + 1, Math.round(Number(endSec) * fps)) : undefined;
+    if (rangeMode === "preview") return { startFrame: 0, endFrame: Math.max(1, secToFrames(10)) };
+    const st = secToFrames(Number(startSec) || 0);
+    const en = endSec ? Math.max(st + 1, secToFrames(Number(endSec))) : undefined;
     return en ? { startFrame: st, endFrame: en } : { startFrame: st };
   };
   return (
@@ -810,12 +828,12 @@ function TimelineRenderPanel({ projectId, onNotice }: { projectId: string; onNot
         <span className="bean-label text-[10px] text-[#d4a017]">RENDER TIMELINE (FFmpeg)</span>
         <span className="flex items-center gap-1.5">
           {formats.size === 1 && (
-            <button type="button" onClick={() => void render(rangeFrames(30))} disabled={busy} className="rounded border border-[#d4a017] px-2 py-1 text-[10px] font-bold text-[#d4a017] hover:bg-[#d4a017] hover:text-[#0c0c0c] disabled:opacity-40">
+            <button type="button" onClick={() => void render(rangeFrames())} disabled={busy} className="rounded border border-[#d4a017] px-2 py-1 text-[10px] font-bold text-[#d4a017] hover:bg-[#d4a017] hover:text-[#0c0c0c] disabled:opacity-40">
               {busy ? "…" : "RENDER SEQUENCE"}
             </button>
           )}
           {formats.size > 1 && (
-            <button type="button" onClick={() => void render(rangeFrames(30))} disabled={busy} className="rounded border border-[#d4a017] px-2 py-1 text-[10px] font-bold text-[#d4a017] hover:bg-[#d4a017] hover:text-[#0c0c0c] disabled:opacity-40">
+            <button type="button" onClick={() => void render(rangeFrames())} disabled={busy} className="rounded border border-[#d4a017] px-2 py-1 text-[10px] font-bold text-[#d4a017] hover:bg-[#d4a017] hover:text-[#0c0c0c] disabled:opacity-40">
               {busy ? "…" : `BATCH EXPORT (${formats.size} FORMATS)`}
             </button>
           )}

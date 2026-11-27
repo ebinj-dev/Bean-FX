@@ -410,6 +410,39 @@ export function ProductionHome({ user, onLogout }: { user: { name: string | null
     }
   }, []);
 
+  // M48-B — Return-to-Chat: the editor navigates to #/home?conversation=<id>;
+  // restore that conversation on mount so the chat continues with full context.
+  const conversationHashRestored = useRef(false);
+  useEffect(() => {
+    if (conversationHashRestored.current) return;
+    const params = new URLSearchParams(window.location.hash.split("?")[1] ?? "");
+    const wanted = params.get("conversation");
+    if (wanted) {
+      conversationHashRestored.current = true;
+      void openConversation(wanted);
+    }
+  }, [openConversation]);
+
+  // M48-B — approve/execute an editing plan DIRECTLY in chat (previously the
+  // card only linked to the editor; the loop required leaving the chat).
+  // Uses the canonical plans API — approval remains the user's explicit act.
+  const [planActionState, setPlanActionState] = useState<Record<string, "busy" | "approved" | "executed" | "error">>({});
+  const planAction = useCallback(async (planId: string, action: "approve" | "execute") => {
+    setPlanActionState((prev) => ({ ...prev, [planId]: "busy" }));
+    try {
+      const res = await fetch(`/api/my-ai/plans/${encodeURIComponent(planId)}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action }),
+      });
+      if (!res.ok) throw new Error(`plans:${res.status}`);
+      setPlanActionState((prev) => ({ ...prev, [planId]: action === "approve" ? "approved" : "executed" }));
+      if (action === "execute" && activeProjectIdRef.current) void loadRenders(activeProjectIdRef.current);
+    } catch {
+      setPlanActionState((prev) => ({ ...prev, [planId]: "error" }));
+    }
+  }, [loadRenders]);
+
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
   }, [messages, sending]);
@@ -868,19 +901,50 @@ export function ProductionHome({ user, onLogout }: { user: { name: string | null
                       <div className="max-w-[92%] whitespace-pre-wrap rounded-2xl rounded-bl-md border border-[#22221f] bg-[#111110] px-4 py-3 text-[13px] leading-relaxed text-[#e6e6e0]">
                         {m.content}
                       </div>
-                      {m.plan && (
+                      {m.plan && (() => {
+                        const plan = m.plan;
+                        return (
                         <div className="ml-2 max-w-[92%] rounded-xl border border-[#d4a017]/30 bg-[#d4a017]/5 px-3.5 py-2.5">
                           <p className="bean-label text-[9px] text-[#d4a017]">EDITING PLAN · AWAITING YOUR APPROVAL</p>
                           <p className="mt-1 text-xs text-[#c8c8c2]">{m.plan.requestSummary ?? "A structured editing plan was drafted."}</p>
                           <div className="mt-2 flex flex-wrap gap-2">
                             {activeProjectId && (
-                              <a href={`#/editor?project=${activeProjectId}`} className="rounded border border-[#d4a017]/40 px-2 py-1 text-[10px] font-bold uppercase tracking-wider text-[#d4a017] hover:bg-[#d4a017]/10">
+                              <a href={`#/editor?project=${activeProjectId}${plan.planId ? `&plan=${encodeURIComponent(plan.planId)}` : ""}`} className="rounded border border-[#d4a017]/40 px-2 py-1 text-[10px] font-bold uppercase tracking-wider text-[#d4a017] hover:bg-[#d4a017]/10">
                                 Review in Editor
                               </a>
                             )}
+                            {plan.planId && (
+                              <button
+                                type="button"
+                                disabled={planActionState[plan.planId] === "busy"}
+                                onClick={() => void planAction(plan.planId!, "approve")}
+                                className="rounded border border-[#d4a017] bg-[#d4a017] px-2 py-1 text-[10px] font-bold uppercase tracking-wider text-[#141414] hover:bg-[#e6b93a] disabled:opacity-40"
+                              >
+                                {planActionState[plan.planId] === "busy" ? "…" : "Approve"}
+                              </button>
+                            )}
+                            {plan.planId && planActionState[plan.planId] === "approved" && (
+                              <button
+                                type="button"
+                                disabled={planActionState[plan.planId] === "busy"}
+                                onClick={() => void planAction(plan.planId!, "execute")}
+                                className="rounded border border-[#2a2a2a] px-2 py-1 text-[10px] font-bold uppercase tracking-wider text-[#e6e6e0] hover:border-[#d4a017] hover:text-[#d4a017] disabled:opacity-40"
+                              >
+                                {planActionState[plan.planId] === "busy" ? "…" : "Execute"}
+                              </button>
+                            )}
+                            {plan.planId && (planActionState[plan.planId] === "approved" || planActionState[plan.planId] === "executed") && (
+                              <span className="self-center text-[10px] text-[#8f8f8a]">
+                                {planActionState[plan.planId] === "executed" ? "Executed — the timeline head carries these changes (undoable in the editor)." : "Approved — you can execute it here or review it in the editor first."}
+                              </span>
+                            )}
                           </div>
+                          {plan.planId && planActionState[plan.planId] === "error" && (
+                            <p className="mt-1.5 text-[10px] text-[#f87171]">The plan action failed — it may already be executed, or the revision moved. Open the editor to check the timeline head.</p>
+                          )}
                         </div>
-                      )}
+                        );
+                      })()}
                     </div>
                   )
                 ))}

@@ -61,7 +61,7 @@ export function EditingToolbar({
       <button
         type="button"
         onClick={() => onSnapChange(!snap)}
-        title={snap ? "Snapping on — clips and playhead snap to clip edges (S toggles)" : "Snapping off"}
+        title={snap ? "Snapping on — clips and playhead snap to clip edges (toggle via the toolbar button (S splits at the playhead)" : "Snapping off"}
         aria-pressed={snap}
         className={`rounded border px-2 py-0.5 text-[10px] uppercase tracking-wide transition-colors ${
           snap ? "border-[#d4a017]/60 text-[#d4a017]" : "border-[#2a2a2a] text-[#8f8f8a] hover:text-[#d8d8d2]"
