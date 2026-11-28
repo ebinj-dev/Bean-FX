@@ -188,7 +188,7 @@ async function latestExportFor(projectId: string): Promise<string> {
 
 describe("M20 §3 — durable long-form rendering", () => {
   test("setup: account, fixtures, projects", async () => {
-    const reg = await api("POST", "/api/auth/register", { email: EMAIL, password: PW, name: "M20 Render" });
+    const reg = await api("POST", "/api/auth/register", { email: EMAIL, password: PW, name: "M20 Render", acceptedDraftTerms: true });
     expect(reg.status).toBe(200);
     const login = await api("POST", "/api/auth/login", { email: EMAIL, password: PW });
     expect(login.status).toBe(200);
