@@ -86,7 +86,10 @@ results.multicamSectionVisible = await page.getByText(/MULTICAM — Interview/i)
 await page.screenshot({ path: `${SHOTS}/h3-multicam-inspector.png`, fullPage: false });
 
 // open the audio mixer drawer → add DIALOGUE + MUSIC buses through the UI
-const mixerBtn = page.getByRole("button", { name: /mixer/i }).first();
+// the mixer drawer lives in the PRO workspace mode — switch through the real mode control
+const proBtn = page.getByRole("button", { name: /^pro$/i }).first();
+if (await proBtn.count()) { await proBtn.click(); await page.waitForTimeout(600); }
+const mixerBtn = page.locator('button[title*="Per-track faders"]').first();
 if (await mixerBtn.count()) { await mixerBtn.click(); await page.waitForTimeout(800); }
 const addDia = page.getByRole("button", { name: "+DIA" }).first();
 if (await addDia.count()) {
