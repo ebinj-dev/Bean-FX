@@ -659,7 +659,7 @@ export function EditorTool({ user }: { user: { id: string }; onLogout: () => voi
             </div>
           )}
           <div className="border-b border-[#2a2a2a] px-3 py-1.5 bean-label text-[10px] text-[#8f8f8a]">PROPERTIES INSPECTOR</div>
-          {sequence && <ClipInspector sequence={sequence} session={session} notice={setNotice} playhead={session.playheadFrame} mediaFpsById={mediaFpsById} />}
+          {sequence && <ClipInspector sequence={sequence} session={session} notice={setNotice} playhead={session.playheadFrame} mediaFpsById={mediaFpsById} projectId={projectId ?? undefined} />}
           {sequence && selectedClip && selectedClip.keyframes.length > 0 && (
             <div className="border-t border-[#2a2a2a] px-3 py-2 text-[10px] text-[#8f8f8a]">
               {selectedClip.keyframes.length} keyframe(s) — diamonds on the timeline block; edit via NIIKI (AI STUDIO) or effect parameters.

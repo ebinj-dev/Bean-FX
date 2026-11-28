@@ -182,6 +182,42 @@ export const ClipSchema = z.object({
   multicamGroupId: z.string().max(64).nullable().default(null),
   multicamAngleId: z.string().max(64).nullable().default(null),
   effects: z.array(EffectSchema).max(32).default([]),
+  /** M48-I2 — primary grade. Null = ungraded (neutral). The transform math
+   *  lives in src/lib/color/grade-model.ts (the single grading model both
+   *  the WebGL preview and the lut3d export consume). Bounds mirror the
+   *  documented parameter ranges exactly. */
+  grade: z
+    .object({
+      bypass: z.boolean().default(false),
+      exposure: z.number().min(-4).max(4).default(0),
+      temperature: z.number().min(-1).max(1).default(0),
+      tint: z.number().min(-1).max(1).default(0),
+      contrast: z.number().min(0.25).max(4).default(1),
+      pivot: z.number().min(0).max(1).default(0.5),
+      highlights: z.number().min(-1).max(1).default(0),
+      shadows: z.number().min(-1).max(1).default(0),
+      whites: z.number().min(-1).max(1).default(0),
+      blacks: z.number().min(-1).max(1).default(0),
+      liftR: z.number().min(-0.5).max(0.5).default(0),
+      liftG: z.number().min(-0.5).max(0.5).default(0),
+      liftB: z.number().min(-0.5).max(0.5).default(0),
+      gammaR: z.number().min(0.25).max(4).default(1),
+      gammaG: z.number().min(0.25).max(4).default(1),
+      gammaB: z.number().min(0.25).max(4).default(1),
+      gainR: z.number().min(0).max(4).default(1),
+      gainG: z.number().min(0).max(4).default(1),
+      gainB: z.number().min(0).max(4).default(1),
+      red: z.number().min(0).max(2).default(1),
+      green: z.number().min(0).max(2).default(1),
+      blue: z.number().min(0).max(2).default(1),
+      saturation: z.number().min(0).max(3).default(1),
+      vibrance: z.number().min(-1).max(1).default(0),
+    })
+    .nullable()
+    .default(null),
+  /** M48-I3 — project LUT applied BEFORE the primary grade (input transform).
+   *  The id must reference sequence.luts; validated by SetClipLut. */
+  lutId: z.string().max(64).nullable().default(null),
   keyframes: z.array(KeyframeSchema).max(512).default([]),
 });
 export type Clip = z.infer<typeof ClipSchema>;
@@ -224,6 +260,19 @@ export const AudioBusSchema = z.object({
   solo: z.boolean().default(false),
 });
 export type AudioBus = z.infer<typeof AudioBusSchema>;
+
+/** M48-I3 — a user-imported 3D .cube LUT owned by the project. The binary
+ *  cube lives in project-scoped storage (upload API, ownership-checked);
+ *  this record carries provenance for the inspector and the render bridge. */
+export const LutSchema = z.object({
+  id: z.string().min(1).max(64),
+  name: z.string().min(1).max(120),
+  size: z.number().int().min(2).max(128), // N of the N³ grid
+  bytes: z.number().int().min(1).max(16 * 1024 * 1024),
+  createdAt: z.string().max(40),
+  sourceName: z.string().max(200).default(""), // original upload filename (provenance)
+});
+export type Lut = z.infer<typeof LutSchema>;
 
 // M6 NIIKI: added slide/push/zoom kinds (mapped 1:1 onto FFmpeg xfade in the
 // render path; the original six kinds are unchanged).
@@ -299,6 +348,9 @@ export const SequenceSchema = z.object({
    *  commands). Legacy sequences parse with an empty list (all tracks route
    *  straight to the master). */
   buses: z.array(AudioBusSchema).max(8).default([]),
+  /** M48-I3 — project-owned 3D LUT records. The cube data itself lives in
+   *  project-scoped storage; this registry is what commands validate against. */
+  luts: z.array(LutSchema).max(64).default([]),
   /** M48-H3 — multicamera source groups: several camera angles covering the
    *  same scene, each with a MANUAL sync offset (source frames of that
    *  angle's own clock) relative to the shared sync point. Synchronization

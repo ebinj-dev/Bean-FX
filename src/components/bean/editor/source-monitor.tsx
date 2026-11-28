@@ -128,6 +128,8 @@ export function SourceMonitor({
   avLinked: true,
   multicamGroupId: null,
   multicamAngleId: null,
+  grade: null,
+  lutId: null,
   keyframes: [],
     };
   }, [seq, asset, targetTrack, durationSource, inFrame, outFrame, assetFps, session]);
