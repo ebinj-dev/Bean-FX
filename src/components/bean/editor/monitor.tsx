@@ -719,16 +719,16 @@ export function ProgramMonitor({
       <svg width="0" height="0" className="absolute" aria-hidden="true">
         <defs>
           <filter id="beanfx-temperature-warm">
-            <feColorMatrix type="linear" values="1.25,0,0,0,0  0,1,0,0,0  0,0,0.75,0,0  0,0,0,1,0" />
+            <feColorMatrix type="matrix" values="1.25,0,0,0,0  0,1,0,0,0  0,0,0.75,0,0  0,0,0,1,0" />
           </filter>
           <filter id="beanfx-temperature-cool">
-            <feColorMatrix type="linear" values="0.75,0,0,0,0  0,1,0,0,0  0,0,1.25,0,0  0,0,0,1,0" />
+            <feColorMatrix type="matrix" values="0.75,0,0,0,0  0,1,0,0,0  0,0,1.25,0,0  0,0,0,1,0" />
           </filter>
           <filter id="beanfx-tint-green">
-            <feColorMatrix type="linear" values="1,0,0,0,0  0,1.25,0,0,0  0,0,1,0,0  0,0,0,1,0" />
+            <feColorMatrix type="matrix" values="1,0,0,0,0  0,1.25,0,0,0  0,0,1,0,0  0,0,0,1,0" />
           </filter>
           <filter id="beanfx-tint-magenta">
-            <feColorMatrix type="linear" values="1.25,0,0,0,0  0,0.75,0,0,0  0,0,1.25,0,0  0,0,0,1,0" />
+            <feColorMatrix type="matrix" values="1.25,0,0,0,0  0,0.75,0,0,0  0,0,1.25,0,0  0,0,0,1,0" />
           </filter>
           {[1, 3, 5, 7, 9].map((n) => (
             <filter key={n} id={`beanfx-vignette-${n}`}>
