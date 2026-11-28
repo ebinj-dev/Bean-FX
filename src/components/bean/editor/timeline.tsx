@@ -705,7 +705,7 @@ export function EditorTimeline({
         <div style={{ width: contentWidth, minWidth: "100%" }} className="relative">
           {/* Ruler */}
           <div
-            className="sticky top-0 z-20 cursor-col-resize select-none border-b border-[#2a2a2a] bg-[#111110]"
+            className="sticky top-0 z-20 cursor-col-resize select-none border-b border-[#2a2a2a] bg-[#111110] touch-none"
             style={{ height: RULER_HEIGHT }}
             data-ruler="scrub"
             onPointerDown={(e) => {
@@ -890,7 +890,7 @@ export function EditorTimeline({
                           <div
                             key={clip.id}
                             data-clip-id={clip.id}
-                            className={`absolute inset-y-1.5 overflow-hidden rounded border ${colors.block} ${colors.edge} ${
+                            className={`absolute inset-y-1.5 touch-none overflow-hidden rounded border ${colors.block} ${colors.edge} ${
                               selected || groupSelected ? "outline outline-2 outline-[#d4a017]" : ""
                             } ${dragging ? "z-10 opacity-90" : activeTool === "razor" ? "cursor-crosshair" : activeTool === "roll" ? "cursor-col-resize" : "cursor-grab"}`}
                             style={{ left: rect.left + slideShiftPx, width: rect.width }}

@@ -84,9 +84,12 @@ export function EditorTool({ user }: { user: { id: string }; onLogout: () => voi
   });
   const [renaming, setRenaming] = useState(false);
   const [renameValue, setRenameValue] = useState("");
-  // M48-F2 — responsive workspace: track the viewport so narrow screens get
-  // stacked docks instead of a squeezed desktop shell. Desktop (≥900px) keeps
-  // the exact same resizable-dock experience.
+  // M48-F2/F3 — responsive workspace: track the viewport so narrow screens
+  // get stacked docks instead of a squeezed desktop shell. Desktop (≥900px)
+  // keeps the exact same resizable-dock experience. The dock drag handlers
+  // clamp live (clampDockWidth); these width clamps additionally cover dock
+  // widths PERSISTED on a larger window and then reopened on a smaller one —
+  // the resize listener keeps them live across window resizes.
   const [viewportW, setViewportW] = useState(() => (typeof window === "undefined" ? 1440 : window.innerWidth));
   useEffect(() => {
     const onResize = () => setViewportW(window.innerWidth);
@@ -94,10 +97,8 @@ export function EditorTool({ user }: { user: { id: string }; onLogout: () => voi
     return () => window.removeEventListener("resize", onResize);
   }, []);
   const workspaceStacked = viewportW < 900;
-  const workspaceMobile = viewportW < 640;
-  // Clamp persisted dock widths so the center column always keeps usable space.
-  const effectiveLeftWidth = workspaceStacked ? Math.min(leftWidth, Math.round(viewportW * 0.42)) : leftWidth;
-  const effectiveRightWidth = workspaceStacked ? Math.min(rightWidth, Math.round(viewportW * 0.36)) : rightWidth;
+  const effectiveLeftWidth = Math.min(leftWidth, Math.round(viewportW * 0.42));
+  const effectiveRightWidth = Math.min(rightWidth, Math.round(viewportW * 0.36));
   // M48-C — Source Monitor (three-point editing) visibility + loaded source.
   const [sourceOpen, setSourceOpen] = useState(false);
   const [sourceAssetId, setSourceAssetId] = useState<string | null>(null);
@@ -569,7 +570,7 @@ export function EditorTool({ user }: { user: { id: string }; onLogout: () => voi
         {/* Left dock */}
         <div
           className={`flex shrink-0 flex-col overflow-hidden bg-[#0b0b0a] ${workspaceStacked ? "max-h-[38vh] w-full border-b border-[#2a2a2a]" : "border-r border-[#2a2a2a]"}`}
-          style={workspaceStacked ? undefined : { width: leftWidth }}
+          style={workspaceStacked ? undefined : { width: effectiveLeftWidth }}
         >
           <div className="flex items-center gap-1 border-b border-[#2a2a2a] px-2 py-1.5">
           {(["media", ...(workspaceMode === "pro" ? (["effects"] as const) : [])] as const).map((t) => (
@@ -630,12 +631,12 @@ export function EditorTool({ user }: { user: { id: string }; onLogout: () => voi
         {/* Right dock: inspector */}
         <div
           className={`flex shrink-0 flex-col overflow-y-auto bg-[#0b0b0a] ${workspaceStacked ? "w-full border-t border-[#2a2a2a]" : "border-l border-[#2a2a2a]"}`}
-          style={workspaceStacked ? undefined : { width: rightWidth }}
+          style={workspaceStacked ? undefined : { width: effectiveRightWidth }}
         >
           {/* M47 — persistent AI dock: knows the project + live timeline context;
               every proposal goes through the canonical approval-gated planner. */}
           {projectId && (
-            <div className="flex h-[300px] flex-shrink-0 flex-col border-b border-[#2a2a2a]">
+            <div className="flex h-[340px] flex-shrink-0 flex-col border-b border-[#2a2a2a]">
               <EditorAiDock
                 projectId={projectId}
                 timelineContext={() => ({
