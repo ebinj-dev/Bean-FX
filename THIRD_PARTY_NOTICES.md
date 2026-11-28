@@ -1,6 +1,6 @@
 # THIRD-PARTY NOTICES — BEAN FX
 
-Generated 2026-11-27 from `package.json` + `package-lock.json` + installed package metadata + npm registry metadata. The audit enumerates **instances** (lockfile install paths), not collapsed package names: 1007 lockfile entries = 584 production instances + 423 development instances; 548 unique package names; 37 nested production instances (of which 37 carry versions differing from their top-level counterpart). Full inventory: `docs/legal/OPEN_SOURCE_INVENTORY.md`. SBOM: `docs/legal/sbom.cdx.json`.
+Generated 2026-11-28 from `package.json` + `package-lock.json` + installed package metadata + npm registry metadata. The audit enumerates **instances** (lockfile install paths), not collapsed package names: 1008 lockfile entries = 584 production instances + 424 development instances; 548 unique package names; 37 nested production instances (of which 37 carry versions differing from their top-level counterpart). Full inventory: `docs/legal/OPEN_SOURCE_INVENTORY.md`. SBOM: `docs/legal/sbom.cdx.json`.
 
 > Required attributions and license notices for third-party material. Not legal advice: technical license DETECTION below is not legal CLEARANCE. License texts for direct production dependencies ship in `docs/legal/licenses/`.
 
@@ -596,4 +596,4 @@ Generated 2026-11-27 from `package.json` + `package-lock.json` + installed packa
 
 ## Development-only instances
 
-423 development instances (dev-only tooling) are enumerated in the audit JSON and SBOM (scope `excluded`) but are NOT shipped in this notices file; they are excluded from distribution claims. Classification: PERMISSIVE=410, COPYLEFT-WEAK=13.
+424 development instances (dev-only tooling) are enumerated in the audit JSON and SBOM (scope `excluded`) but are NOT shipped in this notices file; they are excluded from distribution claims. Classification: PERMISSIVE=411, COPYLEFT-WEAK=13.

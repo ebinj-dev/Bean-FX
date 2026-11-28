@@ -1,10 +1,10 @@
 # LICENSE RISK REPORT — BEAN FX
 
-Generated 2026-11-27T12:33:27.847Z. Engineering assessment of the complete instance inventory — technical detection is NOT legal clearance. Not legal advice. Items marked RESOLVE require owner/legal review before commercial distribution.
+Generated 2026-11-28T01:24:22.524Z. Engineering assessment of the complete instance inventory — technical detection is NOT legal clearance. Not legal advice. Items marked RESOLVE require owner/legal review before commercial distribution.
 
 ## Summary
 
-- 1007 lockfile entries → 584 production / 423 development instances (548 unique names, 570 unique versions).
+- 1008 lockfile entries → 584 production / 424 development instances (548 unique names, 570 unique versions).
 - Production classification: PERMISSIVE=568, NON-STANDARD=2, COPYLEFT-WEAK=14
 - Nested production instances: 37 (37 at versions differing from the top-level copy — evaluated as their OWN instances).
 - Unresolved license evidence: 0 instance(s) — EXCLUDED from commercial distribution until evaluated.
@@ -42,7 +42,7 @@ Not in the lockfile; loaded at runtime when the deployment provides it. Provider
 | @img/sharp-libvips-linux-s390x@1.3.4 | node_modules/@img/sharp-libvips-linux-s390x | LGPL-3.0-or-later (npm-registry) | COPYLEFT-WEAK | NOTICE — include license text if redistributed |
 | @img/sharp-libvips-linux-x64@1.3.4 | node_modules/@img/sharp-libvips-linux-x64 | LGPL-3.0-or-later (installed-package) | COPYLEFT-WEAK | NOTICE — include license text if redistributed |
 | @img/sharp-libvips-linuxmusl-arm64@1.3.4 | node_modules/@img/sharp-libvips-linuxmusl-arm64 | LGPL-3.0-or-later (npm-registry) | COPYLEFT-WEAK | NOTICE — include license text if redistributed |
-| @img/sharp-libvips-linuxmusl-x64@1.3.4 | node_modules/@img/sharp-libvips-linuxmusl-x64 | LGPL-3.0-or-later (installed-package) | COPYLEFT-WEAK | NOTICE — include license text if redistributed |
+| @img/sharp-libvips-linuxmusl-x64@1.3.4 | node_modules/@img/sharp-libvips-linuxmusl-x64 | LGPL-3.0-or-later (npm-registry) | COPYLEFT-WEAK | NOTICE — include license text if redistributed |
 | @img/sharp-wasm32@0.35.5 | node_modules/@img/sharp-wasm32 | Apache-2.0 AND LGPL-3.0-or-later AND MIT (npm-registry) | COPYLEFT-WEAK | NOTICE — include license text if redistributed |
 | @img/sharp-win32-arm64@0.35.5 | node_modules/@img/sharp-win32-arm64 | Apache-2.0 AND LGPL-3.0-or-later (npm-registry) | COPYLEFT-WEAK | NOTICE — include license text if redistributed |
 | @img/sharp-win32-ia32@0.35.5 | node_modules/@img/sharp-win32-ia32 | Apache-2.0 AND LGPL-3.0-or-later (npm-registry) | COPYLEFT-WEAK | NOTICE — include license text if redistributed |

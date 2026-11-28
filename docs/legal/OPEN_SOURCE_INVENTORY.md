@@ -1,14 +1,14 @@
 # OPEN SOURCE INVENTORY — BEAN FX
 
-Audit of the dependencies ACTUALLY INSTALLED by this repository's lockfile — every install path (instance), not just convenient top-level packages. Generated 2026-11-27T12:33:27.846Z by `scripts/generate-open-source-audit.mjs`. Regenerate after dependency changes. Classification rules: never guessed — an instance whose license cannot be confidently established is labeled UNRESOLVED and excluded from commercial distribution until resolved.
+Audit of the dependencies ACTUALLY INSTALLED by this repository's lockfile — every install path (instance), not just convenient top-level packages. Generated 2026-11-28T01:24:22.524Z by `scripts/generate-open-source-audit.mjs`. Regenerate after dependency changes. Classification rules: never guessed — an instance whose license cannot be confidently established is labeled UNRESOLVED and excluded from commercial distribution until resolved.
 
 ## Model — entries vs instances vs unique packages
 
 | Measure | Count |
 |---|---|
-| Lockfile entries (node_modules/** paths) | 1007 |
+| Lockfile entries (node_modules/** paths) | 1008 |
 | Production instances (installed for the product) | 584 |
-| Development-only instances (dev tooling, scope `excluded`) | 423 |
+| Development-only instances (dev tooling, scope `excluded`) | 424 |
 | Unique production package NAMES | 548 |
 | Unique production name@version pairs | 570 |
 | Nested production instances | 37 |
@@ -63,10 +63,10 @@ Why these differ: npm's lockfile records one entry per INSTALL PATH. A package c
 | @dnd-kit/sortable@10.0.0 | node_modules/@dnd-kit/sortable | direct | MIT | installed-package | PERMISSIVE |
 | @dnd-kit/utilities@3.2.2 | node_modules/@dnd-kit/utilities | direct | MIT | installed-package | PERMISSIVE |
 | @eloqnt/config@0.1.2 | node_modules/@eloqnt/config | transitive | MIT | installed-package | PERMISSIVE |
-| @eloqnt/extractor@0.1.0 | node_modules/@eloqnt/extractor | transitive | MIT | npm-registry | PERMISSIVE |
+| @eloqnt/extractor@0.1.0 | node_modules/@eloqnt/extractor | transitive | MIT | installed-package | PERMISSIVE |
 | @eloqnt/format-json@0.1.1 | node_modules/@eloqnt/format-json | transitive | MIT | installed-package | PERMISSIVE |
 | @eloqnt/format-po@0.1.2 | node_modules/@eloqnt/format-po | transitive | MIT | installed-package | PERMISSIVE |
-| @eloqnt/messages@0.1.0 | node_modules/@eloqnt/messages | transitive | MIT | npm-registry | PERMISSIVE |
+| @eloqnt/messages@0.1.0 | node_modules/@eloqnt/messages | transitive | MIT | installed-package | PERMISSIVE |
 | @emnapi/runtime@1.11.3 | node_modules/@emnapi/runtime | transitive (optional) | MIT | npm-registry | PERMISSIVE |
 | @floating-ui/core@1.7.3 | node_modules/@floating-ui/core | transitive | MIT | installed-package | PERMISSIVE |
 | @floating-ui/dom@1.7.4 | node_modules/@floating-ui/dom | transitive | MIT | installed-package | PERMISSIVE |
@@ -91,7 +91,7 @@ Why these differ: npm's lockfile records one entry per INSTALL PATH. A package c
 | @img/sharp-libvips-linux-s390x@1.3.4 | node_modules/@img/sharp-libvips-linux-s390x | transitive (optional) | LGPL-3.0-or-later | npm-registry | COPYLEFT-WEAK |
 | @img/sharp-libvips-linux-x64@1.3.4 | node_modules/@img/sharp-libvips-linux-x64 | transitive (optional) | LGPL-3.0-or-later | installed-package | COPYLEFT-WEAK |
 | @img/sharp-libvips-linuxmusl-arm64@1.3.4 | node_modules/@img/sharp-libvips-linuxmusl-arm64 | transitive (optional) | LGPL-3.0-or-later | npm-registry | COPYLEFT-WEAK |
-| @img/sharp-libvips-linuxmusl-x64@1.3.4 | node_modules/@img/sharp-libvips-linuxmusl-x64 | transitive (optional) | LGPL-3.0-or-later | installed-package | COPYLEFT-WEAK |
+| @img/sharp-libvips-linuxmusl-x64@1.3.4 | node_modules/@img/sharp-libvips-linuxmusl-x64 | transitive (optional) | LGPL-3.0-or-later | npm-registry | COPYLEFT-WEAK |
 | @img/sharp-linux-arm@0.35.5 | node_modules/@img/sharp-linux-arm | transitive (optional) | Apache-2.0 | npm-registry | PERMISSIVE |
 | @img/sharp-linux-arm64@0.35.5 | node_modules/@img/sharp-linux-arm64 | transitive (optional) | Apache-2.0 | npm-registry | PERMISSIVE |
 | @img/sharp-linux-ppc64@0.35.5 | node_modules/@img/sharp-linux-ppc64 | transitive (optional) | Apache-2.0 | npm-registry | PERMISSIVE |
@@ -99,7 +99,7 @@ Why these differ: npm's lockfile records one entry per INSTALL PATH. A package c
 | @img/sharp-linux-s390x@0.35.5 | node_modules/@img/sharp-linux-s390x | transitive (optional) | Apache-2.0 | npm-registry | PERMISSIVE |
 | @img/sharp-linux-x64@0.35.5 | node_modules/@img/sharp-linux-x64 | transitive (optional) | Apache-2.0 | installed-package | PERMISSIVE |
 | @img/sharp-linuxmusl-arm64@0.35.5 | node_modules/@img/sharp-linuxmusl-arm64 | transitive (optional) | Apache-2.0 | npm-registry | PERMISSIVE |
-| @img/sharp-linuxmusl-x64@0.35.5 | node_modules/@img/sharp-linuxmusl-x64 | transitive (optional) | Apache-2.0 | installed-package | PERMISSIVE |
+| @img/sharp-linuxmusl-x64@0.35.5 | node_modules/@img/sharp-linuxmusl-x64 | transitive (optional) | Apache-2.0 | npm-registry | PERMISSIVE |
 | @img/sharp-wasm32@0.35.5 | node_modules/@img/sharp-wasm32 | transitive (optional) | Apache-2.0 AND LGPL-3.0-or-later AND MIT | npm-registry | COPYLEFT-WEAK |
 | @img/sharp-webcontainers-wasm32@0.35.5 | node_modules/@img/sharp-webcontainers-wasm32 | transitive (optional) | Apache-2.0 | npm-registry | PERMISSIVE |
 | @img/sharp-win32-arm64@0.35.5 | node_modules/@img/sharp-win32-arm64 | transitive (optional) | Apache-2.0 AND LGPL-3.0-or-later | npm-registry | COPYLEFT-WEAK |
@@ -153,12 +153,12 @@ Why these differ: npm's lockfile records one entry per INSTALL PATH. A package c
 | @next/swc-linux-arm64-gnu@16.4.6 | node_modules/@next/swc-linux-arm64-gnu | transitive (optional) | MIT | npm-registry | PERMISSIVE |
 | @next/swc-linux-arm64-musl@16.4.6 | node_modules/@next/swc-linux-arm64-musl | transitive (optional) | MIT | npm-registry | PERMISSIVE |
 | @next/swc-linux-x64-gnu@16.4.6 | node_modules/@next/swc-linux-x64-gnu | transitive (optional) | MIT | installed-package | PERMISSIVE |
-| @next/swc-linux-x64-musl@16.4.6 | node_modules/@next/swc-linux-x64-musl | transitive (optional) | MIT | installed-package | PERMISSIVE |
+| @next/swc-linux-x64-musl@16.4.6 | node_modules/@next/swc-linux-x64-musl | transitive (optional) | MIT | npm-registry | PERMISSIVE |
 | @next/swc-win32-arm64-msvc@16.4.6 | node_modules/@next/swc-win32-arm64-msvc | transitive (optional) | MIT | npm-registry | PERMISSIVE |
 | @next/swc-win32-x64-msvc@16.4.6 | node_modules/@next/swc-win32-x64-msvc | transitive (optional) | MIT | npm-registry | PERMISSIVE |
 | @open-draft/deferred-promise@2.2.0 | node_modules/@open-draft/deferred-promise | transitive | MIT | installed-package | PERMISSIVE |
 | @panva/hkdf@1.2.1 | node_modules/@panva/hkdf | transitive | MIT | installed-package | PERMISSIVE |
-| @parcel/watcher@2.6.0 | node_modules/@parcel/watcher | transitive | MIT | npm-registry | PERMISSIVE |
+| @parcel/watcher@2.6.0 | node_modules/@parcel/watcher | transitive | MIT | installed-package | PERMISSIVE |
 | @parcel/watcher-android-arm64@2.6.0 | node_modules/@parcel/watcher-android-arm64 | transitive (optional) | MIT | npm-registry | PERMISSIVE |
 | @parcel/watcher-darwin-arm64@2.6.0 | node_modules/@parcel/watcher-darwin-arm64 | transitive (optional) | MIT | npm-registry | PERMISSIVE |
 | @parcel/watcher-darwin-x64@2.6.0 | node_modules/@parcel/watcher-darwin-x64 | transitive (optional) | MIT | npm-registry | PERMISSIVE |
@@ -167,7 +167,7 @@ Why these differ: npm's lockfile records one entry per INSTALL PATH. A package c
 | @parcel/watcher-linux-arm-musl@2.6.0 | node_modules/@parcel/watcher-linux-arm-musl | transitive (optional) | MIT | npm-registry | PERMISSIVE |
 | @parcel/watcher-linux-arm64-glibc@2.6.0 | node_modules/@parcel/watcher-linux-arm64-glibc | transitive (optional) | MIT | npm-registry | PERMISSIVE |
 | @parcel/watcher-linux-arm64-musl@2.6.0 | node_modules/@parcel/watcher-linux-arm64-musl | transitive (optional) | MIT | npm-registry | PERMISSIVE |
-| @parcel/watcher-linux-x64-glibc@2.6.0 | node_modules/@parcel/watcher-linux-x64-glibc | transitive (optional) | MIT | npm-registry | PERMISSIVE |
+| @parcel/watcher-linux-x64-glibc@2.6.0 | node_modules/@parcel/watcher-linux-x64-glibc | transitive (optional) | MIT | installed-package | PERMISSIVE |
 | @parcel/watcher-linux-x64-musl@2.6.0 | node_modules/@parcel/watcher-linux-x64-musl | transitive (optional) | MIT | npm-registry | PERMISSIVE |
 | @parcel/watcher-win32-arm64@2.6.0 | node_modules/@parcel/watcher-win32-arm64 | transitive (optional) | MIT | npm-registry | PERMISSIVE |
 | @parcel/watcher-win32-x64@2.6.0 | node_modules/@parcel/watcher-win32-x64 | transitive (optional) | MIT | npm-registry | PERMISSIVE |
@@ -268,7 +268,7 @@ Why these differ: npm's lockfile records one entry per INSTALL PATH. A package c
 | @swc/core-linux-ppc64-gnu@1.16.22 | node_modules/@swc/core-linux-ppc64-gnu | transitive (optional) | Apache-2.0 AND MIT | npm-registry | PERMISSIVE |
 | @swc/core-linux-s390x-gnu@1.16.22 | node_modules/@swc/core-linux-s390x-gnu | transitive (optional) | Apache-2.0 AND MIT | npm-registry | PERMISSIVE |
 | @swc/core-linux-x64-gnu@1.16.22 | node_modules/@swc/core-linux-x64-gnu | transitive (optional) | Apache-2.0 AND MIT | installed-package | PERMISSIVE |
-| @swc/core-linux-x64-musl@1.16.22 | node_modules/@swc/core-linux-x64-musl | transitive (optional) | Apache-2.0 AND MIT | installed-package | PERMISSIVE |
+| @swc/core-linux-x64-musl@1.16.22 | node_modules/@swc/core-linux-x64-musl | transitive (optional) | Apache-2.0 AND MIT | npm-registry | PERMISSIVE |
 | @swc/core-win32-arm64-msvc@1.16.22 | node_modules/@swc/core-win32-arm64-msvc | transitive (optional) | Apache-2.0 AND MIT | npm-registry | PERMISSIVE |
 | @swc/core-win32-ia32-msvc@1.16.22 | node_modules/@swc/core-win32-ia32-msvc | transitive (optional) | Apache-2.0 AND MIT | npm-registry | PERMISSIVE |
 | @swc/core-win32-x64-msvc@1.16.22 | node_modules/@swc/core-win32-x64-msvc | transitive (optional) | Apache-2.0 AND MIT | npm-registry | PERMISSIVE |
@@ -305,7 +305,7 @@ Why these differ: npm's lockfile records one entry per INSTALL PATH. A package c
 | aria-hidden@1.2.6 | node_modules/aria-hidden | transitive | MIT | installed-package | PERMISSIVE |
 | bail@2.0.2 | node_modules/bail | transitive | MIT | installed-package | PERMISSIVE |
 | base64-js@1.5.1 | node_modules/base64-js | transitive | MIT | installed-package | PERMISSIVE |
-| baseline-browser-mapping@2.11.40 | node_modules/baseline-browser-mapping | transitive | Apache-2.0 | npm-registry | PERMISSIVE |
+| baseline-browser-mapping@2.11.40 | node_modules/baseline-browser-mapping | transitive | Apache-2.0 | installed-package | PERMISSIVE |
 | buffer@6.0.3 | node_modules/buffer | transitive | MIT | installed-package | PERMISSIVE |
 | c12@3.1.0 | node_modules/c12 | transitive | MIT | installed-package | PERMISSIVE |
 | caniuse-lite@1.0.30001764 | node_modules/caniuse-lite | transitive | CC-BY-4.0 | installed-package | PERMISSIVE |
@@ -396,13 +396,13 @@ Why these differ: npm's lockfile records one entry per INSTALL PATH. A package c
 | highlight.js@10.7.3 | node_modules/highlight.js | transitive | BSD-3-Clause | installed-package | PERMISSIVE |
 | highlightjs-vue@1.0.0 | node_modules/highlightjs-vue | transitive | CC0-1.0 | installed-package | PERMISSIVE |
 | html-url-attributes@3.0.1 | node_modules/html-url-attributes | transitive | MIT | installed-package | PERMISSIVE |
-| icu-minify@4.15.3 | node_modules/icu-minify | transitive | MIT | npm-registry | PERMISSIVE |
+| icu-minify@4.15.3 | node_modules/icu-minify | transitive | MIT | installed-package | PERMISSIVE |
 | ieee754@1.2.1 | node_modules/ieee754 | transitive | BSD-3-Clause | installed-package | PERMISSIVE |
 | inline-style-parser@0.2.7 | node_modules/inline-style-parser | transitive | MIT | installed-package | PERMISSIVE |
 | input-otp@1.4.2 | node_modules/input-otp | direct | MIT | installed-package | PERMISSIVE |
 | internmap@2.0.3 | node_modules/internmap | transitive | ISC | installed-package | PERMISSIVE |
 | intersection-observer@0.10.0 | node_modules/intersection-observer | transitive | W3C-20150513 | installed-package | NON-STANDARD |
-| intl-messageformat@12.2.1 | node_modules/intl-messageformat | transitive | BSD-3-Clause | npm-registry | PERMISSIVE |
+| intl-messageformat@12.2.1 | node_modules/intl-messageformat | transitive | BSD-3-Clause | installed-package | PERMISSIVE |
 | @formatjs/fast-memoize@3.1.8 | node_modules/intl-messageformat/node_modules/@formatjs/fast-memoize | transitive | MIT | npm-registry | PERMISSIVE |
 | is-alphabetical@2.0.1 | node_modules/is-alphabetical | transitive | MIT | installed-package | PERMISSIVE |
 | is-alphanumerical@2.0.1 | node_modules/is-alphanumerical | transitive | MIT | installed-package | PERMISSIVE |
@@ -413,13 +413,13 @@ Why these differ: npm's lockfile records one entry per INSTALL PATH. A package c
 | is-plain-obj@4.1.0 | node_modules/is-plain-obj | transitive | MIT | installed-package | PERMISSIVE |
 | isomorphic.js@0.2.5 | node_modules/isomorphic.js | transitive | MIT | installed-package | PERMISSIVE |
 | jiti@2.6.1 | node_modules/jiti | transitive | MIT | installed-package | PERMISSIVE |
-| jose@4.15.9 | node_modules/jose | transitive | MIT | npm-registry | PERMISSIVE |
+| jose@4.15.9 | node_modules/jose | transitive | MIT | installed-package | PERMISSIVE |
 | js-cookie@3.0.5 | node_modules/js-cookie | transitive | MIT | installed-package | PERMISSIVE |
 | js-tokens@4.0.0 | node_modules/js-tokens | transitive | MIT | installed-package | PERMISSIVE |
 | js-yaml@4.1.1 | node_modules/js-yaml | transitive | MIT | installed-package | PERMISSIVE |
 | kleur@4.1.5 | node_modules/kleur | transitive | MIT | installed-package | PERMISSIVE |
 | lexical@0.35.0 | node_modules/lexical | transitive | MIT | installed-package | PERMISSIVE |
-| lib0@0.2.120 | node_modules/lib0 | transitive | MIT | npm-registry | PERMISSIVE |
+| lib0@0.2.120 | node_modules/lib0 | transitive | MIT | installed-package | PERMISSIVE |
 | lodash@4.17.21 | node_modules/lodash | transitive | MIT | installed-package | PERMISSIVE |
 | lodash-es@4.17.22 | node_modules/lodash-es | transitive | MIT | installed-package | PERMISSIVE |
 | longest-streak@3.1.0 | node_modules/longest-streak | transitive | MIT | installed-package | PERMISSIVE |
@@ -485,17 +485,17 @@ Why these differ: npm's lockfile records one entry per INSTALL PATH. A package c
 | motion-utils@12.24.10 | node_modules/motion-utils | transitive | MIT | installed-package | PERMISSIVE |
 | mri@1.2.0 | node_modules/mri | transitive | MIT | installed-package | PERMISSIVE |
 | ms@2.1.3 | node_modules/ms | transitive | MIT | installed-package | PERMISSIVE |
-| nanoid@3.3.20 | node_modules/nanoid | transitive | MIT | npm-registry | PERMISSIVE |
+| nanoid@3.3.20 | node_modules/nanoid | transitive | MIT | installed-package | PERMISSIVE |
 | negotiator@1.0.0 | node_modules/negotiator | transitive | MIT | installed-package | PERMISSIVE |
 | next@16.4.6 | node_modules/next | direct | MIT | installed-package | PERMISSIVE |
 | next-auth@4.24.15 | node_modules/next-auth | direct | ISC | installed-package | PERMISSIVE |
-| next-intl@4.16.2 | node_modules/next-intl | direct | MIT | npm-registry | PERMISSIVE |
+| next-intl@4.16.2 | node_modules/next-intl | direct | MIT | installed-package | PERMISSIVE |
 | next-intl-swc-plugin-extractor@4.15.1 | node_modules/next-intl-swc-plugin-extractor | transitive | MIT | installed-package | PERMISSIVE |
 | next-themes@0.4.6 | node_modules/next-themes | direct | MIT | installed-package | PERMISSIVE |
 | next-tick@1.1.0 | node_modules/next-tick | transitive | ISC | installed-package | PERMISSIVE |
 | node-addon-api@7.1.1 | node_modules/node-addon-api | transitive | MIT | installed-package | PERMISSIVE |
 | node-fetch-native@1.6.7 | node_modules/node-fetch-native | transitive | MIT | installed-package | PERMISSIVE |
-| nodemailer@10.6.1 | node_modules/nodemailer | direct | MIT-0 | npm-registry | PERMISSIVE |
+| nodemailer@10.6.1 | node_modules/nodemailer | direct | MIT-0 | installed-package | PERMISSIVE |
 | nypm@0.6.2 | node_modules/nypm | transitive | MIT | installed-package | PERMISSIVE |
 | oauth@0.9.15 | node_modules/oauth | transitive | MIT | installed-package | PERMISSIVE |
 | object-assign@4.1.1 | node_modules/object-assign | transitive | MIT | installed-package | PERMISSIVE |
@@ -509,10 +509,10 @@ Why these differ: npm's lockfile records one entry per INSTALL PATH. A package c
 | pathe@2.0.3 | node_modules/pathe | transitive | MIT | installed-package | PERMISSIVE |
 | perfect-debounce@1.0.0 | node_modules/perfect-debounce | transitive | MIT | installed-package | PERMISSIVE |
 | picocolors@1.1.1 | node_modules/picocolors | transitive | ISC | installed-package | PERMISSIVE |
-| picomatch@4.0.7 | node_modules/picomatch | transitive | MIT | npm-registry | PERMISSIVE |
+| picomatch@4.0.7 | node_modules/picomatch | transitive | MIT | installed-package | PERMISSIVE |
 | pkg-types@2.3.0 | node_modules/pkg-types | transitive | MIT | installed-package | PERMISSIVE |
 | po-parser@2.2.0 | node_modules/po-parser | transitive | MIT | installed-package | PERMISSIVE |
-| postcss@8.5.23 | node_modules/postcss | transitive | MIT | npm-registry | PERMISSIVE |
+| postcss@8.5.23 | node_modules/postcss | transitive | MIT | installed-package | PERMISSIVE |
 | preact@10.28.2 | node_modules/preact | transitive | MIT | installed-package | PERMISSIVE |
 | preact-render-to-string@5.2.6 | node_modules/preact-render-to-string | transitive | MIT | installed-package | PERMISSIVE |
 | pretty-format@3.8.0 | node_modules/pretty-format | transitive | MIT | installed-package | PERMISSIVE |
@@ -600,7 +600,7 @@ Why these differ: npm's lockfile records one entry per INSTALL PATH. A package c
 | w3c-keyname@2.2.8 | node_modules/w3c-keyname | transitive | MIT | installed-package | PERMISSIVE |
 | xtend@4.0.2 | node_modules/xtend | transitive | MIT | installed-package | PERMISSIVE |
 | yallist@4.0.0 | node_modules/yallist | transitive | ISC | installed-package | PERMISSIVE |
-| yjs@13.6.33 | node_modules/yjs | transitive | MIT | npm-registry | PERMISSIVE |
+| yjs@13.6.33 | node_modules/yjs | transitive | MIT | installed-package | PERMISSIVE |
 | z-ai-web-dev-sdk@0.0.18 | node_modules/z-ai-web-dev-sdk | direct | ISC | installed-package | PERMISSIVE |
 | zod@4.6.7 | node_modules/zod | direct | MIT | installed-package | PERMISSIVE |
 | zustand@5.0.10 | node_modules/zustand | direct | MIT | installed-package | PERMISSIVE |
@@ -608,7 +608,7 @@ Why these differ: npm's lockfile records one entry per INSTALL PATH. A package c
 
 ## 2. Development-only instances (not shipped, enumerated for completeness)
 
-423 instances — full list in `docs/legal/generated/dependency-audit.json` (`devPackages`) and the SBOM (scope `excluded`). Classification: PERMISSIVE=410, COPYLEFT-WEAK=13.
+424 instances — full list in `docs/legal/generated/dependency-audit.json` (`devPackages`) and the SBOM (scope `excluded`). Classification: PERMISSIVE=411, COPYLEFT-WEAK=13.
 
 ## 3. Adapted external code
 
