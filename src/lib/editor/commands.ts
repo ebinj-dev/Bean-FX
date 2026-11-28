@@ -27,6 +27,7 @@ import {
   type Sequence,
   type Track,
   AudioBusSchema,
+  LutSchema,
   MulticamGroupSchema,
 } from "./model";
 import { assertValidRange, makeRational, type Rational } from "./time";
@@ -233,6 +234,43 @@ export const CommandSchema = z.discriminatedUnion("type", [
     effect: EffectSchema,
   }),
   z.object({ type: z.literal("RemoveEffect"), clipId: idSchema, effectId: idSchema }),
+  z.object({
+    type: z.literal("SetClipGrade"),
+    clipId: idSchema,
+    /** Full replacement of the clip's primary grade; null clears it. */
+    grade: z
+      .object({
+        bypass: z.boolean(),
+        exposure: z.number().min(-4).max(4),
+        temperature: z.number().min(-1).max(1),
+        tint: z.number().min(-1).max(1),
+        contrast: z.number().min(0.25).max(4),
+        pivot: z.number().min(0).max(1),
+        highlights: z.number().min(-1).max(1),
+        shadows: z.number().min(-1).max(1),
+        whites: z.number().min(-1).max(1),
+        blacks: z.number().min(-1).max(1),
+        liftR: z.number().min(-0.5).max(0.5),
+        liftG: z.number().min(-0.5).max(0.5),
+        liftB: z.number().min(-0.5).max(0.5),
+        gammaR: z.number().min(0.25).max(4),
+        gammaG: z.number().min(0.25).max(4),
+        gammaB: z.number().min(0.25).max(4),
+        gainR: z.number().min(0).max(4),
+        gainG: z.number().min(0).max(4),
+        gainB: z.number().min(0).max(4),
+        red: z.number().min(0).max(2),
+        green: z.number().min(0).max(2),
+        blue: z.number().min(0).max(2),
+        saturation: z.number().min(0).max(3),
+        vibrance: z.number().min(-1).max(1),
+      })
+      .strict()
+      .nullable(),
+  }),
+  z.object({ type: z.literal("SetClipLut"), clipId: idSchema, lutId: idSchema.nullable() }),
+  z.object({ type: z.literal("AddLut"), lut: LutSchema.strict() }),
+  z.object({ type: z.literal("RemoveLut"), lutId: idSchema }),
   z.object({ type: z.literal("AddCaption"), clip: ClipCore }),
   z.object({ type: z.literal("AddGraphic"), clip: ClipCore }),
   z.object({
@@ -390,6 +428,8 @@ function buildClip(core: z.infer<typeof ClipCore>, seq: Sequence): Clip {
   return {
     ...core,
     timelineDurationFrames: duration,
+    grade: null,
+    lutId: null,
     keyframes: [...core.keyframes].sort((a, b) => a.frame - b.frame),
   };
 }
@@ -912,6 +952,42 @@ function applyRemoveEffect(seq: Sequence, cmd: Extract<Command, { type: "RemoveE
   inverse.unshift({ type: "AddEffect", clipId: clip.id, effect });
 }
 
+/** M48-I2 — primary grade. Full replacement keeps undo simple and exact. */
+function applySetClipGrade(seq: Sequence, cmd: Extract<Command, { type: "SetClipGrade" }>, inverse: Command[]): void {
+  const clip = findClip(seq, cmd.clipId);
+  inverse.unshift({ type: "SetClipGrade", clipId: clip.id, grade: clip.grade });
+  clip.grade = cmd.grade;
+}
+
+/** M48-I3 — per-clip LUT assignment (must reference sequence.luts). */
+function applySetClipLut(seq: Sequence, cmd: Extract<Command, { type: "SetClipLut" }>, inverse: Command[]): void {
+  const clip = findClip(seq, cmd.clipId);
+  if (cmd.lutId !== null && !seq.luts.some((l) => l.id === cmd.lutId)) {
+    throw new EditorError("INVALID_COMMAND", `LUT ${cmd.lutId} is not registered in this sequence`);
+  }
+  inverse.unshift({ type: "SetClipLut", clipId: clip.id, lutId: clip.lutId });
+  clip.lutId = cmd.lutId;
+}
+
+function applyAddLut(seq: Sequence, cmd: Extract<Command, { type: "AddLut" }>, inverse: Command[]): void {
+  if (seq.luts.some((l) => l.id === cmd.lut.id)) {
+    throw new EditorError("INVALID_COMMAND", `LUT ${cmd.lut.id} already exists`);
+  }
+  seq.luts.push(cmd.lut);
+  inverse.unshift({ type: "RemoveLut", lutId: cmd.lut.id });
+}
+
+function applyRemoveLut(seq: Sequence, cmd: Extract<Command, { type: "RemoveLut" }>, inverse: Command[]): void {
+  const lut = seq.luts.find((l) => l.id === cmd.lutId);
+  if (!lut) throw new EditorError("INVALID_COMMAND", `LUT ${cmd.lutId} does not exist`);
+  const usedBy = seq.clips.filter((c) => c.lutId === cmd.lutId);
+  if (usedBy.length > 0) {
+    throw new EditorError("INVALID_COMMAND", `LUT ${cmd.lutId} is referenced by ${usedBy.length} clip(s) — remove the clip assignment first`);
+  }
+  seq.luts = seq.luts.filter((l) => l.id !== cmd.lutId);
+  inverse.unshift({ type: "AddLut", lut });
+}
+
 function applyCaptionOrGraphic(
   seq: Sequence,
   clip: z.infer<typeof ClipCore>,
@@ -1395,6 +1471,18 @@ export function applyCommand(inputSeq: Sequence, input: unknown): ApplyResult {
       break;
     case "RemoveEffect":
       applyRemoveEffect(seq, cmd, inverse);
+      break;
+    case "SetClipGrade":
+      applySetClipGrade(seq, cmd, inverse);
+      break;
+    case "SetClipLut":
+      applySetClipLut(seq, cmd, inverse);
+      break;
+    case "AddLut":
+      applyAddLut(seq, cmd, inverse);
+      break;
+    case "RemoveLut":
+      applyRemoveLut(seq, cmd, inverse);
       break;
     case "AddCaption":
       applyCaptionOrGraphic(seq, cmd.clip, inverse, "CAPTION");

@@ -54,6 +54,7 @@ function defaultSequence(projectId: string, projectName: string, settings: Proje
     tracks,
     clips: [],
     buses: [],
+    luts: [],
     multicamGroups: [],
     transitions: [],
 		markers: [],
@@ -92,7 +93,8 @@ function settingsFromProject(settingsJson: string | null): ProjectSettings {
   }
 }
 
-async function requireOwnedProject(projectId: string, userId: string) {
+/** M48-I3 — LUT upload/serve share the same ownership gate (exported). */
+export async function requireOwnedProject(projectId: string, userId: string) {
   // M30: shared projects are editable by workspace ADMIN/EDITOR members and
   // per-project EDITOR shares; everything else answers the SAME "not found"
   // error (no existence leak). The project owner keeps full rights.

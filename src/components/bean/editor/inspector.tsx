@@ -14,6 +14,7 @@ import { formatTimecode } from "@/lib/editor/time";
 import type { EditorSession } from "@/hooks/use-editor-session";
 import type { Command } from "@/lib/editor/commands";
 import { FILTER_EFFECTS, filterSpec, APPROXIMATE_PREVIEW, ffmpegEffectChain, cssEffectFilter, audioGainMultiplier } from "@/lib/editor/filters";
+import { ColorGradePanel } from "@/components/bean/editor/color-panel";
 import type { Effect } from "@/lib/editor/model";
 
 const fieldLabel = "bean-label text-[9px] text-[#8f8f8a]";
@@ -31,6 +32,7 @@ export function ClipInspector({
   notice,
   playhead,
   mediaFpsById,
+  projectId,
 }: {
   sequence: Sequence;
   session: EditorSession;
@@ -39,6 +41,8 @@ export function ClipInspector({
   playhead?: number;
   /** M48-H3 — asset fps lookup for multicam angle switches. */
   mediaFpsById?: Map<string, { num: number; den: number }>;
+  /** M48-I3 — project id for the LUT upload API (panel hidden without it). */
+  projectId?: string;
 }) {
   const clip = useMemo(
     () => sequence.clips.find((c) => c.id === session.selectedClipId) ?? null,
@@ -267,6 +271,11 @@ export function ClipInspector({
             </select>
           </label>
         </div>
+      )}
+
+      {/* ── M48-I2/I3 — professional primary grade (canonical commands) ── */}
+      {track?.kind === "VIDEO" && projectId && (
+        <ColorGradePanel sequence={sequence} session={session} clipId={clip.id} projectId={projectId} onNotice={notice} />
       )}
 
       {/* ── M16 Effects + Color correction ─────────────────────────────── */}

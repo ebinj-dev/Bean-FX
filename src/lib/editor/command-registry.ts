@@ -25,7 +25,8 @@ export type CommandCategory =
   | "graphics"
   | "markers"
   | "groups"
-  | "keyframes";
+  | "keyframes"
+  | "color";
 
 export interface RegistryAvailability {
   ok: boolean;
@@ -286,6 +287,14 @@ export const COMMAND_DESCRIPTORS: CommandDescriptor[] = [
     "clipId, effectId, keyframes: [{id, param, frame, value, interpolation?}] (≤256), animatedParams: string[] (≤16)", needClips(1)),
   d("ToggleEffectParamAnimation", "Enable/disable animation of one effect parameter.", "keyframes", "low",
     "clipId, effectId, param, enabled (bool)", needClips(1)),
+  d("SetClipGrade", "M48-I2 — set the clip's full primary grade (exposure, temperature/tint, contrast+pivot, highlights/shadows, whites/blacks, per-channel lift/gamma/gain, RGB gains, saturation, vibrance, bypass). Null clears. Reversible (inverse = previous grade). The single grading model feeds both the WebGL preview and the lut3d export.", "color", "timeline",
+    "clipId, grade {all 24 fields, strict} | null", needClips(1)),
+  d("SetClipLut", "M48-I3 — assign a project 3D LUT to a clip (applied BEFORE the primary grade) or clear with null. The LUT id must exist in sequence.luts. Reversible.", "color", "timeline",
+    "clipId, lutId|null", needClips(1)),
+  d("AddLut", "M48-I3 — register a validated 3D .cube LUT with the sequence (the cube bytes live in project-scoped storage). Reversible.", "color", "low",
+    "lut { id, name, size 2..128, bytes, createdAt, sourceName }", needClips(0)),
+  d("RemoveLut", "M48-I3 — remove a LUT registry entry (refused while any clip references it). Reversible.", "color", "destructive",
+    "lutId", needClips(0)),
 ];
 
 /** Completeness invariant (asserted by the M43-B test suite): the table covers
