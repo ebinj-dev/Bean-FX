@@ -110,6 +110,20 @@ export function sourceSecondsAt(clip: Clip, timelineFrame: number, seqFps: Ratio
   return srcFrame / clip.sourceFps.num * clip.sourceFps.den;
 }
 
+/**
+ * M48-H1 — source-media seconds for the AUDIO stream at a timeline frame.
+ * Identical integer-frame mapping to sourceSecondsAt plus the independent
+ * audio-range offset; the preview mixer and the FFmpeg export path share
+ * this semantics (the export implements it in audioSrcStartSec).
+ */
+export function audioSourceSecondsAt(clip: Clip, timelineFrame: number, seqFps: Rational): number {
+  const offsetFrames = Math.max(0, timelineFrame - clip.timelineStartFrame);
+  const srcOffset = Math.round((offsetFrames * clip.playbackSpeed * clip.sourceFps.num * seqFps.den) / (clip.sourceFps.den * seqFps.num));
+  const aIn = clip.audioSourceInFrame ?? clip.sourceInFrame;
+  const srcFrame = aIn + srcOffset;
+  return (srcFrame / clip.sourceFps.num) * clip.sourceFps.den;
+}
+
 /** Fade multiplier (0..1) at a clip-relative frame — preview-only, matches
  *  what the renderer will apply via FFmpeg in M9. */
 export function fadeMultiplierAt(clip: Clip, timelineFrame: number): number {

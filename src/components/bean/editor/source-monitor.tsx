@@ -123,7 +123,10 @@ export function SourceMonitor({
       pan: 0,
       groupId: null,
       effects: [],
-      keyframes: [],
+      audioSourceInFrame: null,
+  audioSourceOutFrame: null,
+  avLinked: true,
+  keyframes: [],
     };
   }, [seq, asset, targetTrack, durationSource, inFrame, outFrame, assetFps, session]);
 

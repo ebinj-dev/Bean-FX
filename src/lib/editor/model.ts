@@ -160,6 +160,22 @@ export const ClipSchema = z.object({
   /** M26 P1 — editing group id (any set of clips sharing an id moves as one
    *  via the GroupClips/UngroupClips commands). Null = ungrouped. */
   groupId: z.string().max(64).nullable().default(null),
+  /** M48-H1 — independent AUDIO stream source range, in the asset's source
+   *  frame clock (same timebase as sourceIn/OutFrame; audio has no frames of
+   *  its own, so the asset's video fps clock timestamps the audio stream).
+   *  Null/null = the audio follows the video range exactly (legacy clips and
+   *  linked clips). When set, the AUDIO stream is trimmed/offset independently
+   *  (J/L cuts, manual A/V sync shifts) while the video range — and therefore
+   *  the clip's timeline window — is untouched. The audible audio is clamped
+   *  to the clip's timeline window by the renderer and preview alike. */
+  audioSourceInFrame: z.number().int().min(0).nullable().default(null),
+  audioSourceOutFrame: z.number().int().min(0).nullable().default(null),
+  /** M48-H1 — linked A/V behaviour. true (default): the two streams are one
+   *  range and TrimClip/MoveClip style edits move both. false: the streams are
+   *  independent (an audio-stream range may exist and differ from the video
+   *  range). Enforced by validation: linked clips carry NO distinct audio
+   *  range. */
+  avLinked: z.boolean().default(true),
   effects: z.array(EffectSchema).max(32).default([]),
   keyframes: z.array(KeyframeSchema).max(512).default([]),
 });
@@ -288,6 +304,24 @@ export function validateSequence(seq: Sequence): ValidationReport {
       assertValidRange(c.sourceInFrame, c.sourceOutFrame, `clip ${c.id} source range`);
     } catch (e) {
       errors.push(e instanceof Error ? e.message : String(e));
+    }
+    // M48-H1 — independent audio stream range: both endpoints or neither; the
+    // range itself must be valid; a LINKED clip must not carry a distinct
+    // audio range (linking resolves to the video range by contract).
+    const hasAudioRange = c.audioSourceInFrame !== null || c.audioSourceOutFrame !== null;
+    if (hasAudioRange) {
+      if (c.audioSourceInFrame === null || c.audioSourceOutFrame === null) {
+        errors.push(`clip ${c.id} audio stream range must set BOTH endpoints (or neither)`);
+      } else {
+        try {
+          assertValidRange(c.audioSourceInFrame, c.audioSourceOutFrame, `clip ${c.id} audio source range`);
+        } catch (e) {
+          errors.push(e instanceof Error ? e.message : String(e));
+        }
+        if (c.avLinked) {
+          errors.push(`clip ${c.id} is avLinked=true but carries a distinct audio stream range — unlink first`);
+        }
+      }
     }
     if (!Number.isInteger(c.timelineStartFrame) || c.timelineStartFrame < 0) {
       errors.push(`clip ${c.id} timeline start must be a non-negative integer frame`);

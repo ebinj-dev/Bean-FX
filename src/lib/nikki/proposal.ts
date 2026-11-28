@@ -211,6 +211,9 @@ function graphicClipCore(
     pan: 0,
     groupId: null,
     effects: [],
+    audioSourceInFrame: null,
+    audioSourceOutFrame: null,
+    avLinked: true,
     keyframes: [],
   };
 }

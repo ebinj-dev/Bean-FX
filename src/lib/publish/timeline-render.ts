@@ -147,6 +147,27 @@ function srcStartSec(plan: RenderClipPlan, seq: Sequence): number {
   return clipRelSrcSec(plan, seq, Math.max(0, plan.winStartFrame - plan.clip.timelineStartFrame));
 }
 
+/**
+ * M48-H1 — source seconds for the AUDIO stream of a plan window. The audio
+ * stream follows the clip's independent audio range when one exists (J/L
+ * cuts, manual A/V sync): the mapping is the video mapping plus the range
+ * offset (audioIn − videoIn)/sourceFps, so split windows, playback speed and
+ * rational timebases all behave exactly as the video path does.
+ */
+function audioSrcStartSec(plan: RenderClipPlan, seq: Sequence): number {
+  const { clip } = plan;
+  const aIn = clip.audioSourceInFrame ?? clip.sourceInFrame;
+  const offsetSec = (aIn - clip.sourceInFrame) / (clip.sourceFps.num / clip.sourceFps.den);
+  return clipRelSrcSec(plan, seq, Math.max(0, plan.winStartFrame - clip.timelineStartFrame)) + offsetSec;
+}
+
+/** M48-H1 — last audible source second of the clip's audio stream. */
+function audioSrcEndSec(plan: RenderClipPlan): number {
+  const { clip } = plan;
+  const aOut = clip.audioSourceOutFrame ?? clip.sourceOutFrame;
+  return aOut / (clip.sourceFps.num / clip.sourceFps.den);
+}
+
 /** Source seconds for a clip-relative TIMELINE frame (M27 keyframe splits). */
 function clipRelSrcSec(plan: RenderClipPlan, seq: Sequence, clipRelFrame: number): number {
   const { clip } = plan;
@@ -603,7 +624,21 @@ export function buildTimelineGraph(seq: Sequence, startFrame: number, endFrame: 
     const offsetSec = (plan.winStartFrame - startFrame) / fps;
     const durSec = (plan.winEndFrame - plan.winStartFrame) / fps;
     const gain = Math.min(4, Math.max(0, plan.clip.volume));
-    const seg: string[] = [`atrim=start=${q(srcStartSec(plan, seq))}:duration=${q(durSec * plan.clip.playbackSpeed)},asetpts=PTS-STARTPTS`];
+    // M48-H1 — the audio stream reads the clip's independent audio range.
+    // The audible length is the window duration (× speed) clamped to what the
+    // audio range actually covers from this window's start: a J/L-cut audio
+    // range that ends early simply goes silent for the remainder (the silence
+    // bed covers it) — the video window is never stretched or shifted.
+    const audioStartSec = audioSrcStartSec(plan, seq);
+    const audioRemainingSec = audioSrcEndSec(plan) - audioStartSec;
+    const wantedSec = durSec * plan.clip.playbackSpeed;
+    if (audioRemainingSec <= 0) {
+      // The audio range ended before this window — nothing to mix (real
+      // silence, not a fabricated tone).
+      continue;
+    }
+    const audioDurSec = Math.min(wantedSec, audioRemainingSec);
+    const seg: string[] = [`atrim=start=${q(audioStartSec)}:duration=${q(audioDurSec)},asetpts=PTS-STARTPTS`];
     if (plan.clip.playbackSpeed !== 1) {
       let speed = plan.clip.playbackSpeed;
       while (speed > 2) {
@@ -639,7 +674,7 @@ export function buildTimelineGraph(seq: Sequence, startFrame: number, endFrame: 
     }
     seg.push(`adelay=${Math.max(0, Math.round(offsetSec * 1000))}:all=1`);
     if (plan.clip.fadeInFrames > 0) seg.push(`afade=in:st=0:d=${q(plan.clip.fadeInFrames / fps)}`);
-    if (plan.clip.fadeOutFrames > 0) seg.push(`afade=out:st=${q(durSec - plan.clip.fadeOutFrames / fps)}:d=${q(plan.clip.fadeOutFrames / fps)}`);
+    if (plan.clip.fadeOutFrames > 0) seg.push(`afade=out:st=${q(audioDurSec - plan.clip.fadeOutFrames / fps)}:d=${q(plan.clip.fadeOutFrames / fps)}`);
     parts.push(`[${audioInLabel}]${seg.join(",")}[a${i}]`);
     audioLabels.push(`[a${i}]`);
   }
