@@ -93,7 +93,7 @@ export function ColorGradePanel({
         const fd = new FormData();
         fd.set("file", file);
         fd.set("name", file.name.replace(/\.cube$/i, ""));
-        const r = await fetch(`/api/projects/${projectId}/luts`, { method: "POST", body: fd });
+        const r = await fetch(`/api/editor/projects/${projectId}/luts`, { method: "POST", body: fd });
         const j = (await r.json().catch(() => null)) as { lut?: { id: string; name: string; size: number; bytes: number; createdAt: string; sourceName: string } } | null;
         if (!r.ok || !j?.lut) {
           onNotice?.(`LUT import refused: ${(j as { error?: string } | null)?.error ?? `HTTP ${r.status}`}`);

@@ -54,6 +54,14 @@ local-*
 # databases, backups, dumps (prisma migrations .sql stay tracked)
 *.db
 *.db-journal
+*.db-shm
+*.db-wal
+*.sqlite
+*.sqlite-shm
+*.sqlite-wal
+db/*.db
+db/*.db-shm
+db/*.db-wal
 *.sqlite
 *.sqlite3
 db/backups/
