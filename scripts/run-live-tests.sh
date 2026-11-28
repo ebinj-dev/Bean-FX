@@ -66,6 +66,27 @@ run_suite m19-security scripts/test-m19-security.test.ts
 run_suite m20-durable-render scripts/test-m20-durable-render.test.ts
 run_suite export-safety scripts/test-export-safety.test.ts
 
+# M47.2 live suites run on their own documented port (:3118, M472_BASE)
+M472_DB="/tmp/beanfx-legacy-m472-g-live.db"
+rm -f "$M472_DB"
+DATABASE_URL="file:$M472_DB" npx prisma db push --skip-generate > "$OUTDIR/dbpush-472.log" 2>&1 || { echo "db push 472 FAILED"; tail -5 "$OUTDIR/dbpush-472.log"; exit 1; }
+PORT=3118 RATE_LIMIT_SCALE=50 DATABASE_URL="file:$M472_DB" bash scripts/dev-server.sh start > "$OUTDIR/server-472.log" 2>&1 &
+UP2=0
+for i in $(seq 1 30); do
+  sleep 5
+  if curl -s -m 5 http://localhost:3118/api/health | grep -q ok; then UP2=1; break; fi
+done
+if [ "$UP2" != "1" ]; then echo "m472 server failed to boot"; tail -10 "$OUTDIR/server-472.log"; exit 1; fi
+echo "== m472 server up on :3118 (~$((i * 5))s)"
+export M472_BASE="http://localhost:3118"
+run_suite m472-registration scripts/test-m472-registration.test.ts
+run_suite m472-e2e-journey scripts/test-m472-e2e-journey.test.ts
+run_suite m472-render-matrix scripts/test-m472-render-matrix.test.ts
+for PID2 in $(ss -tlnp 2>/dev/null | grep ':3118 ' | grep -oE 'pid=[0-9]+' | cut -d= -f2 | sort -u); do
+  kill "$PID2" 2>/dev/null || true
+done
+rm -f "$M472_DB"
+
 # teardown: whatever is on :3117 (m20's respawn or the boot server) + scratch DB
 free_port
 kill "$BOOT_PID" 2>/dev/null || true
