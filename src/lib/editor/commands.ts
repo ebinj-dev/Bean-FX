@@ -26,6 +26,7 @@ import {
   type Clip,
   type Sequence,
   type Track,
+  AudioBusSchema,
 } from "./model";
 import { assertValidRange, makeRational, type Rational } from "./time";
 import { filterSpec } from "@/lib/editor/filters";
@@ -130,6 +131,31 @@ export const CommandSchema = z.discriminatedUnion("type", [
     type: z.literal("SetClipAvLink"),
     clipId: idSchema,
     linked: z.boolean(),
+  }),
+  z.object({
+    // M48-H2 — bus configuration. All four commands are reversible and the
+    // ONLY way bus state changes (no direct writes from AI or UI).
+    type: z.literal("AddBus"),
+    bus: AudioBusSchema,
+  }),
+  z.object({
+    type: z.literal("RemoveBus"),
+    busId: idSchema,
+  }),
+  z.object({
+    type: z.literal("UpdateBus"),
+    busId: idSchema,
+    name: z.string().min(1).max(40).optional(),
+    gain: z.number().min(0).max(4).optional(),
+    pan: z.number().min(-1).max(1).optional(),
+    muted: z.boolean().optional(),
+    solo: z.boolean().optional(),
+  }),
+  z.object({
+    type: z.literal("AssignTrackBus"),
+    trackId: idSchema,
+    /** Null = unassign (route straight to the master). */
+    busId: idSchema.nullable(),
   }),
   z.object({
     type: z.literal("MoveClip"),
@@ -521,6 +547,50 @@ function applySetClipAvLink(seq: Sequence, cmd: Extract<Command, { type: "SetCli
     clip.avLinked = false;
   }
   inverse.unshift({ type: "UpdateClipProperties", clipId: clip.id, audioSourceInFrame: before.audioSourceInFrame, audioSourceOutFrame: before.audioSourceOutFrame, avLinked: before.avLinked });
+}
+
+function applyAddBus(seq: Sequence, cmd: Extract<Command, { type: "AddBus" }>, inverse: Command[]): void {
+  if (seq.buses.some((b) => b.id === cmd.bus.id)) {
+    throw new EditorError("INVALID_COMMAND", `bus ${cmd.bus.id} already exists`);
+  }
+  seq.buses.push(clone(cmd.bus));
+  inverse.unshift({ type: "RemoveBus", busId: cmd.bus.id });
+}
+
+function applyRemoveBus(seq: Sequence, cmd: Extract<Command, { type: "RemoveBus" }>, inverse: Command[]): void {
+  const idx = seq.buses.findIndex((b) => b.id === cmd.busId);
+  if (idx === -1) throw new EditorError("INVALID_COMMAND", `bus ${cmd.busId} does not exist`);
+  // Safety: a bus with assigned tracks cannot be removed — routing must stay
+  // explicit (an accidental unassign would change the audible mix silently).
+  const assigned = seq.tracks.filter((t) => t.busId === cmd.busId);
+  if (assigned.length > 0) {
+    throw new EditorError("INVALID_TIMELINE", `bus ${cmd.busId} still has ${assigned.length} assigned track(s) — unassign first`);
+  }
+  const [bus] = seq.buses.splice(idx, 1);
+  inverse.unshift({ type: "AddBus", bus: clone(bus) });
+}
+
+function applyUpdateBus(seq: Sequence, cmd: Extract<Command, { type: "UpdateBus" }>, inverse: Command[]): void {
+  const bus = seq.buses.find((b) => b.id === cmd.busId);
+  if (!bus) throw new EditorError("INVALID_COMMAND", `bus ${cmd.busId} does not exist`);
+  const restore: Extract<Command, { type: "UpdateBus" }> = { type: "UpdateBus", busId: bus.id };
+  if (cmd.name !== undefined) { restore.name = bus.name; bus.name = cmd.name; }
+  if (cmd.gain !== undefined) { restore.gain = bus.gain; bus.gain = cmd.gain; }
+  if (cmd.pan !== undefined) { restore.pan = bus.pan; bus.pan = cmd.pan; }
+  if (cmd.muted !== undefined) { restore.muted = bus.muted; bus.muted = cmd.muted; }
+  if (cmd.solo !== undefined) { restore.solo = bus.solo; bus.solo = cmd.solo; }
+  inverse.unshift(restore);
+}
+
+function applyAssignTrackBus(seq: Sequence, cmd: Extract<Command, { type: "AssignTrackBus" }>, inverse: Command[]): void {
+  const track = findTrack(seq, cmd.trackId);
+  if (track.locked) throw new EditorError("INVALID_TIMELINE", `track ${track.id} is locked — edit refused`);
+  if (cmd.busId !== null && !seq.buses.some((b) => b.id === cmd.busId)) {
+    throw new EditorError("INVALID_COMMAND", `bus ${cmd.busId} does not exist`);
+  }
+  const before = track.busId;
+  track.busId = cmd.busId;
+  inverse.unshift({ type: "AssignTrackBus", trackId: track.id, busId: before });
 }
 
 function applyMoveClip(seq: Sequence, cmd: Extract<Command, { type: "MoveClip" }>, inverse: Command[]): void {
@@ -1104,6 +1174,18 @@ export function applyCommand(inputSeq: Sequence, input: unknown): ApplyResult {
       break;
     case "SetClipAvLink":
       applySetClipAvLink(seq, cmd, inverse);
+      break;
+    case "AddBus":
+      applyAddBus(seq, cmd, inverse);
+      break;
+    case "RemoveBus":
+      applyRemoveBus(seq, cmd, inverse);
+      break;
+    case "UpdateBus":
+      applyUpdateBus(seq, cmd, inverse);
+      break;
+    case "AssignTrackBus":
+      applyAssignTrackBus(seq, cmd, inverse);
       break;
     case "MoveClip":
       applyMoveClip(seq, cmd, inverse);

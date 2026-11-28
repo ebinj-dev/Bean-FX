@@ -62,7 +62,7 @@ const RULES: Rule[] = [
         explanation: `Adds a "${t.label}" graphic: text reveals word by word with a rise + fade.`,
         caveats: ["Edit the caption text in the NIIKI panel after applying."],
         commands: [
-          { type: "AddTrack", track: { id: trackId, kind: "GRAPHIC", name: "Graphics", visible: true, muted: false, solo: false, locked: false, volume: 1 } },
+          { type: "AddTrack", track: { id: trackId, kind: "GRAPHIC", name: "Graphics", visible: true, muted: false, solo: false, locked: false, volume: 1, busId: null } },
           { type: "AddGraphic", clip: graphicClipCore(clipId, trackId, t.id, t.style, ctx, Math.min(ctx.availableFrames, Math.round(fpsOf(ctx) * 5))) },
         ],
       };
@@ -80,7 +80,7 @@ const RULES: Rule[] = [
         explanation: `Adds a "${t.label}": name + designation on an accent bar, slide-in from the left.`,
         caveats: [],
         commands: [
-          { type: "AddTrack", track: { id: trackId, kind: "GRAPHIC", name: "Graphics", visible: true, muted: false, solo: false, locked: false, volume: 1 } },
+          { type: "AddTrack", track: { id: trackId, kind: "GRAPHIC", name: "Graphics", visible: true, muted: false, solo: false, locked: false, volume: 1, busId: null } },
           { type: "AddGraphic", clip: graphicClipCore(clipId, trackId, t.id, t.style, ctx, Math.min(ctx.availableFrames, Math.round(fpsOf(ctx) * 6))) },
         ],
       };
@@ -98,7 +98,7 @@ const RULES: Rule[] = [
         explanation: `Adds a "${t.label}": title slides up with tracking-in emphasis and fades out.`,
         caveats: [],
         commands: [
-          { type: "AddTrack", track: { id: trackId, kind: "GRAPHIC", name: "Graphics", visible: true, muted: false, solo: false, locked: false, volume: 1 } },
+          { type: "AddTrack", track: { id: trackId, kind: "GRAPHIC", name: "Graphics", visible: true, muted: false, solo: false, locked: false, volume: 1, busId: null } },
           { type: "AddGraphic", clip: graphicClipCore(clipId, trackId, t.id, t.style, ctx, Math.min(ctx.availableFrames, Math.round(fpsOf(ctx) * 5))) },
         ],
       };
@@ -115,7 +115,7 @@ const RULES: Rule[] = [
         const t = templateById("title-scale-in")!;
         const trackId = ctx.newId("track");
         commands.push(
-          { type: "AddTrack", track: { id: trackId, kind: "GRAPHIC", name: "Graphics", visible: true, muted: false, solo: false, locked: false, volume: 1 } },
+          { type: "AddTrack", track: { id: trackId, kind: "GRAPHIC", name: "Graphics", visible: true, muted: false, solo: false, locked: false, volume: 1, busId: null } },
           { type: "AddGraphic", clip: graphicClipCore(ctx.newId("clip"), trackId, t.id, t.style, ctx, Math.min(ctx.availableFrames, Math.round(fpsOf(ctx) * 5))) },
         );
       } else {

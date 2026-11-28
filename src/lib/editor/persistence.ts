@@ -37,12 +37,12 @@ const MAX_SEQUENCE_BYTES = 8 * 1024 * 1024; // 8 MB snapshot cap — corrupt/abs
 
 function defaultSequence(projectId: string, projectName: string, settings: ProjectSettings): Sequence {
   const tracks: Track[] = [
-    { id: `${projectId}-v1`, kind: "VIDEO", name: "Video 1", visible: true, muted: false, solo: false, locked: false, volume: 1 },
-    { id: `${projectId}-v2`, kind: "VIDEO", name: "Video 2", visible: true, muted: false, solo: false, locked: false, volume: 1 },
-    { id: `${projectId}-g1`, kind: "GRAPHIC", name: "Graphics", visible: true, muted: false, solo: false, locked: false, volume: 1 },
-    { id: `${projectId}-cap1`, kind: "CAPTION", name: "Captions", visible: true, muted: false, solo: false, locked: false, volume: 1 },
-    { id: `${projectId}-a1`, kind: "AUDIO", name: "Audio 1", visible: true, muted: false, solo: false, locked: false, volume: 1 },
-    { id: `${projectId}-a2`, kind: "AUDIO", name: "Audio 2", visible: true, muted: false, solo: false, locked: false, volume: 1 },
+    { id: `${projectId}-v1`, kind: "VIDEO", name: "Video 1", visible: true, muted: false, solo: false, locked: false, volume: 1, busId: null },
+    { id: `${projectId}-v2`, kind: "VIDEO", name: "Video 2", visible: true, muted: false, solo: false, locked: false, volume: 1, busId: null },
+    { id: `${projectId}-g1`, kind: "GRAPHIC", name: "Graphics", visible: true, muted: false, solo: false, locked: false, volume: 1, busId: null },
+    { id: `${projectId}-cap1`, kind: "CAPTION", name: "Captions", visible: true, muted: false, solo: false, locked: false, volume: 1, busId: null },
+    { id: `${projectId}-a1`, kind: "AUDIO", name: "Audio 1", visible: true, muted: false, solo: false, locked: false, volume: 1, busId: null },
+    { id: `${projectId}-a2`, kind: "AUDIO", name: "Audio 2", visible: true, muted: false, solo: false, locked: false, volume: 1, busId: null },
   ];
   return {
     id: `${projectId}-seq`,
@@ -53,6 +53,7 @@ function defaultSequence(projectId: string, projectName: string, settings: Proje
     sampleRate: settings.sampleRate,
     tracks,
     clips: [],
+    buses: [],
     transitions: [],
 		markers: [],
   };

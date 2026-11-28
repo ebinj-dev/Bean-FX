@@ -192,8 +192,33 @@ export const TrackSchema = z.object({
   /** M26 P2 — per-track fader (multiplicative with clip volume). Additive:
    *  legacy sequences parse with the default. */
   volume: z.number().min(0).max(4).default(1),
+  /** M48-H2 — the bus this track routes into. Null = straight to the master
+   *  bus (legacy behaviour). The bus object lives on Sequence.buses. */
+  busId: z.string().max(64).nullable().default(null),
 });
 export type Track = z.infer<typeof TrackSchema>;
+
+/**
+ * M48-H2 — professional audio buses. REAL routing: a bus sums its assigned
+ * tracks' stems, applies its own gain/pan/mute/solo, and feeds the master.
+ * The mixer UI's bus faders/pans/meters drive the SAME values the FFmpeg
+ * export mixes with — no decorative controls. Four bus kinds cover the
+ * standard dialogue/music/SFX/ambience routing; the master bus is implicit
+ * (the sequence output), not a listed object. DSP (EQ/compression/limiting/
+ * ducking) is NOT implemented here and must not be advertised.
+ */
+export const AudioBusKind = z.enum(["DIALOGUE", "MUSIC", "SFX", "AMBIENCE"]);
+export type AudioBusKindValue = z.infer<typeof AudioBusKind>;
+export const AudioBusSchema = z.object({
+  id: z.string().min(1).max(64),
+  kind: AudioBusKind,
+  name: z.string().min(1).max(40),
+  gain: z.number().min(0).max(4).default(1),
+  pan: z.number().min(-1).max(1).default(0),
+  muted: z.boolean().default(false),
+  solo: z.boolean().default(false),
+});
+export type AudioBus = z.infer<typeof AudioBusSchema>;
 
 // M6 NIIKI: added slide/push/zoom kinds (mapped 1:1 onto FFmpeg xfade in the
 // render path; the original six kinds are unchanged).
@@ -247,6 +272,10 @@ export const SequenceSchema = z.object({
   clips: z.array(ClipSchema).max(20000),
   transitions: z.array(TransitionSchema).max(4000),
   markers: z.array(MarkerSchema).max(200).default([]),
+  /** M48-H2 — bus configuration (persistent, edited only through reversible
+   *  commands). Legacy sequences parse with an empty list (all tracks route
+   *  straight to the master). */
+  buses: z.array(AudioBusSchema).max(8).default([]),
 });
 export type Sequence = z.infer<typeof SequenceSchema>;
 
@@ -292,6 +321,19 @@ export function validateSequence(seq: Sequence): ValidationReport {
   for (const c of seq.clips) {
     if (seenClips.has(c.id)) errors.push(`duplicate clip id ${c.id}`);
     seenClips.add(c.id);
+  }
+
+  // M48-H2 — bus integrity: unique bus ids; every track busId references an
+  // existing bus (a dangling assignment would silently route to nowhere).
+  const seenBuses = new Set<string>();
+  for (const b of seq.buses) {
+    if (seenBuses.has(b.id)) errors.push(`duplicate bus id ${b.id}`);
+    seenBuses.add(b.id);
+  }
+  for (const t of seq.tracks) {
+    if (t.busId && !seenBuses.has(t.busId)) {
+      errors.push(`track ${t.id} references unknown bus ${t.busId}`);
+    }
   }
 
   for (const c of seq.clips) {
