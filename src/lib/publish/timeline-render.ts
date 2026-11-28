@@ -693,7 +693,7 @@ export function buildTimelineGraph(seq: Sequence, startFrame: number, endFrame: 
   // guarantees ≥1 amix input even with zero audible clips (unchanged M38
   // behaviour), and anchors total duration.
   const finalInputs: string[] = ["[silence]"];
-  if (seq.buses.length === 0) {
+  if ((seq.buses ?? []).length === 0) {
     // No bus configuration: sum all stems straight to the master (legacy path).
     for (const [, labels] of stemsByTrack) {
       if (labels.length === 1) finalInputs.push(labels[0]);
@@ -707,7 +707,7 @@ export function buildTimelineGraph(seq: Sequence, startFrame: number, endFrame: 
   } else {
     const busOutputs: string[] = [];
     const busById = new Map(seq.buses.map((b) => [b.id, b]));
-    const anyBusSolo = seq.buses.some((b) => b.solo);
+    const anyBusSolo = (seq.buses ?? []).some((b) => b.solo);
     // Group stem labels per bus (track index → bus id).
     const stemsByBus = new Map<string, string[]>();
     const masterStems: string[] = [];

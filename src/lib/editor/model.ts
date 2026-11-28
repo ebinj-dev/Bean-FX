@@ -356,7 +356,7 @@ export function validateSequence(seq: Sequence): ValidationReport {
   // M48-H2 — bus integrity: unique bus ids; every track busId references an
   // existing bus (a dangling assignment would silently route to nowhere).
   const seenBuses = new Set<string>();
-  for (const b of seq.buses) {
+  for (const b of seq.buses ?? []) {
     if (seenBuses.has(b.id)) errors.push(`duplicate bus id ${b.id}`);
     seenBuses.add(b.id);
   }
@@ -370,7 +370,7 @@ export function validateSequence(seq: Sequence): ValidationReport {
   // must reference an existing group, and its angle tag must be one of that
   // group's angles.
   const angleIdsByGroup = new Map<string, Set<string>>();
-  for (const g of seq.multicamGroups) {
+  for (const g of seq.multicamGroups ?? []) {
     if (angleIdsByGroup.has(g.id)) errors.push(`duplicate multicam group id ${g.id}`);
     const angles = new Set<string>();
     for (const a of g.angles) {
@@ -401,17 +401,22 @@ export function validateSequence(seq: Sequence): ValidationReport {
     // M48-H1 — independent audio stream range: both endpoints or neither; the
     // range itself must be valid; a LINKED clip must not carry a distinct
     // audio range (linking resolves to the video range by contract).
-    const hasAudioRange = c.audioSourceInFrame !== null || c.audioSourceOutFrame !== null;
+    // Legacy plain-object sequences may omit the audio-stream fields entirely
+    // (undefined = not set — same as null).
+    const aIn = c.audioSourceInFrame ?? null;
+    const aOut = c.audioSourceOutFrame ?? null;
+    const linked = c.avLinked ?? true;
+    const hasAudioRange = aIn !== null || aOut !== null;
     if (hasAudioRange) {
-      if (c.audioSourceInFrame === null || c.audioSourceOutFrame === null) {
+      if (aIn === null || aOut === null) {
         errors.push(`clip ${c.id} audio stream range must set BOTH endpoints (or neither)`);
       } else {
         try {
-          assertValidRange(c.audioSourceInFrame, c.audioSourceOutFrame, `clip ${c.id} audio source range`);
+          assertValidRange(aIn, aOut, `clip ${c.id} audio source range`);
         } catch (e) {
           errors.push(e instanceof Error ? e.message : String(e));
         }
-        if (c.avLinked) {
+        if (linked) {
           errors.push(`clip ${c.id} is avLinked=true but carries a distinct audio stream range — unlink first`);
         }
       }

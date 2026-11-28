@@ -90,7 +90,7 @@ export class AudioPreviewMixer {
     // the SAME semantics the FFmpeg export mixes: bus gain × mute/solo pass
     // and equal-power bus pan. A track routes into its bus's gain node;
     // unassigned tracks connect straight to the master (legacy behaviour).
-    const anyBusSolo = seq.buses.some((b) => b.solo);
+    const anyBusSolo = (seq.buses ?? []).some((b) => b.solo);
     for (const bus of seq.buses) {
       let pair = this.busNodes.get(bus.id);
       if (!pair) {
@@ -106,7 +106,7 @@ export class AudioPreviewMixer {
       pair.pan.pan.value = Math.min(1, Math.max(-1, bus.pan));
     }
     for (const busId of [...this.busNodes.keys()]) {
-      if (!seq.buses.some((b) => b.id === busId)) {
+      if (!(seq.buses ?? []).some((b) => b.id === busId)) {
         this.busNodes.get(busId)?.gain.disconnect();
         this.busNodes.get(busId)?.pan.disconnect();
         this.busNodes.delete(busId);

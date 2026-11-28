@@ -585,15 +585,16 @@ function applySetClipAvLink(seq: Sequence, cmd: Extract<Command, { type: "SetCli
 }
 
 function applyAddBus(seq: Sequence, cmd: Extract<Command, { type: "AddBus" }>, inverse: Command[]): void {
-  if (seq.buses.some((b) => b.id === cmd.bus.id)) {
+  if ((seq.buses ?? []).some((b) => b.id === cmd.bus.id)) {
     throw new EditorError("INVALID_COMMAND", `bus ${cmd.bus.id} already exists`);
   }
+  if (!seq.buses) seq.buses = [];
   seq.buses.push(clone(cmd.bus));
   inverse.unshift({ type: "RemoveBus", busId: cmd.bus.id });
 }
 
 function applyRemoveBus(seq: Sequence, cmd: Extract<Command, { type: "RemoveBus" }>, inverse: Command[]): void {
-  const idx = seq.buses.findIndex((b) => b.id === cmd.busId);
+  const idx = (seq.buses ?? []).findIndex((b) => b.id === cmd.busId);
   if (idx === -1) throw new EditorError("INVALID_COMMAND", `bus ${cmd.busId} does not exist`);
   // Safety: a bus with assigned tracks cannot be removed — routing must stay
   // explicit (an accidental unassign would change the audible mix silently).
@@ -601,12 +602,12 @@ function applyRemoveBus(seq: Sequence, cmd: Extract<Command, { type: "RemoveBus"
   if (assigned.length > 0) {
     throw new EditorError("INVALID_TIMELINE", `bus ${cmd.busId} still has ${assigned.length} assigned track(s) — unassign first`);
   }
-  const [bus] = seq.buses.splice(idx, 1);
+  const [bus] = (seq.buses ?? []).splice(idx, 1);
   inverse.unshift({ type: "AddBus", bus: clone(bus) });
 }
 
 function applyUpdateBus(seq: Sequence, cmd: Extract<Command, { type: "UpdateBus" }>, inverse: Command[]): void {
-  const bus = seq.buses.find((b) => b.id === cmd.busId);
+  const bus = (seq.buses ?? []).find((b) => b.id === cmd.busId);
   if (!bus) throw new EditorError("INVALID_COMMAND", `bus ${cmd.busId} does not exist`);
   const restore: Extract<Command, { type: "UpdateBus" }> = { type: "UpdateBus", busId: bus.id };
   if (cmd.name !== undefined) { restore.name = bus.name; bus.name = cmd.name; }
@@ -620,7 +621,7 @@ function applyUpdateBus(seq: Sequence, cmd: Extract<Command, { type: "UpdateBus"
 function applyAssignTrackBus(seq: Sequence, cmd: Extract<Command, { type: "AssignTrackBus" }>, inverse: Command[]): void {
   const track = findTrack(seq, cmd.trackId);
   if (track.locked) throw new EditorError("INVALID_TIMELINE", `track ${track.id} is locked — edit refused`);
-  if (cmd.busId !== null && !seq.buses.some((b) => b.id === cmd.busId)) {
+  if (cmd.busId !== null && !(seq.buses ?? []).some((b) => b.id === cmd.busId)) {
     throw new EditorError("INVALID_COMMAND", `bus ${cmd.busId} does not exist`);
   }
   const before = track.busId;
@@ -629,15 +630,16 @@ function applyAssignTrackBus(seq: Sequence, cmd: Extract<Command, { type: "Assig
 }
 
 function applyCreateMulticamGroup(seq: Sequence, cmd: Extract<Command, { type: "CreateMulticamGroup" }>, inverse: Command[]): void {
-  if (seq.multicamGroups.some((g) => g.id === cmd.group.id)) {
+  if ((seq.multicamGroups ?? []).some((g) => g.id === cmd.group.id)) {
     throw new EditorError("INVALID_COMMAND", `multicam group ${cmd.group.id} already exists`);
   }
+  if (!seq.multicamGroups) seq.multicamGroups = [];
   seq.multicamGroups.push(clone(cmd.group));
   inverse.unshift({ type: "RemoveMulticamGroup", groupId: cmd.group.id });
 }
 
 function applyRemoveMulticamGroup(seq: Sequence, cmd: Extract<Command, { type: "RemoveMulticamGroup" }>, inverse: Command[]): void {
-  const idx = seq.multicamGroups.findIndex((g) => g.id === cmd.groupId);
+  const idx = (seq.multicamGroups ?? []).findIndex((g) => g.id === cmd.groupId);
   if (idx === -1) throw new EditorError("INVALID_COMMAND", `multicam group ${cmd.groupId} does not exist`);
   // Safety: clips tagged with this group must be untagged first — silent
   // untagging would change what the inspector shows without an explicit edit.
@@ -645,7 +647,7 @@ function applyRemoveMulticamGroup(seq: Sequence, cmd: Extract<Command, { type: "
   if (tagged.length > 0) {
     throw new EditorError("INVALID_TIMELINE", `multicam group ${cmd.groupId} is still referenced by ${tagged.length} clip(s) — unassign first`);
   }
-  const [group] = seq.multicamGroups.splice(idx, 1);
+  const [group] = (seq.multicamGroups ?? []).splice(idx, 1);
   inverse.unshift({ type: "CreateMulticamGroup", group: clone(group) });
 }
 
@@ -653,7 +655,7 @@ function applyAssignMulticamGroup(seq: Sequence, cmd: Extract<Command, { type: "
   const clip = findClip(seq, cmd.clipId);
   const before = { groupId: clip.multicamGroupId, angleId: clip.multicamAngleId };
   if (cmd.groupId !== null) {
-    const group = seq.multicamGroups.find((g) => g.id === cmd.groupId);
+    const group = (seq.multicamGroups ?? []).find((g) => g.id === cmd.groupId);
     if (!group) throw new EditorError("INVALID_COMMAND", `multicam group ${cmd.groupId} does not exist`);
     const angleId = cmd.angleId ?? group.angles[0].id;
     if (!group.angles.some((a) => a.id === angleId)) {
@@ -670,7 +672,7 @@ function applyAssignMulticamGroup(seq: Sequence, cmd: Extract<Command, { type: "
 
 function applySwitchMulticamAngle(seq: Sequence, cmd: Extract<Command, { type: "SwitchMulticamAngle" }>, inverse: Command[]): void {
   const clip = findClip(seq, cmd.clipId);
-  const group = clip.multicamGroupId ? seq.multicamGroups.find((g) => g.id === clip.multicamGroupId) : undefined;
+  const group = clip.multicamGroupId ? (seq.multicamGroups ?? []).find((g) => g.id === clip.multicamGroupId) : undefined;
   if (!group) throw new EditorError("INVALID_COMMAND", `clip ${cmd.clipId} is not part of a multicam group — assign one first`);
   const angle = group.angles.find((a) => a.id === cmd.angleId);
   if (!angle) throw new EditorError("INVALID_COMMAND", `angle ${cmd.angleId} is not in group ${group.id}`);

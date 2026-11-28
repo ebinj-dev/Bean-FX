@@ -67,6 +67,13 @@ function videoClip(id: string, timelineStartFrame: number, sourceInFrame: number
     groupId: null,
     effects: [],
     keyframes: [],
+    // M48-H1–H3 additive defaults — the undo-parity snapshots compare the
+    // canonical state, which now carries these fields on every clip.
+    audioSourceInFrame: null,
+    audioSourceOutFrame: null,
+    avLinked: true,
+    multicamGroupId: null,
+    multicamAngleId: null,
   };
 }
 
@@ -85,6 +92,9 @@ function baseSeq(clips: Clip[] = [videoClip("c1", 0, 0, 300), videoClip("c2", 30
       { id: "gfx1", kind: "GRAPHIC", name: "Graphics", visible: true, muted: false, solo: false, locked: false, volume: 1 },
     ],
     clips,
+    // M48-H2/H3 additive sequence fields (canonical state carries them)
+    buses: [],
+    multicamGroups: [],
     transitions: [],
     markers: [],
   };
@@ -93,10 +103,10 @@ function baseSeq(clips: Clip[] = [videoClip("c1", 0, 0, 300), videoClip("c2", 30
 describe("M43-B registry completeness", () => {
   test("one descriptor per canonical command type, ids unique and canonical", () => {
     const types = registryCommandTypes();
-    expect(types.length).toBe(36);
-    expect(COMMAND_DESCRIPTORS.length).toBe(36);
+    expect(types.length).toBe(46); // M48-H1–H3 added 10 canonical commands
+    expect(COMMAND_DESCRIPTORS.length).toBe(46);
     const ids = new Set(COMMAND_DESCRIPTORS.map((c) => c.id));
-    expect(ids.size).toBe(36);
+    expect(ids.size).toBe(46);
     for (const d of COMMAND_DESCRIPTORS) {
       expect(ids.has(d.id)).toBe(true);
       expect(d.id.startsWith("timeline.")).toBe(true);
