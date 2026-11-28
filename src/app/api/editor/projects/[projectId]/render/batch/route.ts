@@ -30,6 +30,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { db } from "@/lib/db";
 import { getCurrentUser } from "@/lib/auth";
+import { enforceRateLimit, RATE_LIMITS } from "@/lib/rate-limit";
 import { badRequest, unauthorized } from "@/lib/process-helpers";
 import { enqueueMediaJob, JOB_TYPE_RENDER_TIMELINE } from "@/lib/job-helpers";
 import { assertWithinLimit, PlanLimitError, planLimitResponse } from "@/lib/billing/entitlements";
@@ -79,6 +80,10 @@ function sameRange(a: RenderParams, b: { startFrame?: number; endFrame?: number 
 export async function POST(req: NextRequest, ctx: { params: Promise<{ projectId: string }> }) {
   const user = await getCurrentUser();
   if (!user) return unauthorized();
+  // M48-G2 — per-user rate limit (after authentication, so the limiter
+  // never reveals whether another user’s resource exists).
+  const limited = enforceRateLimit(req, "editorRenderBatch", user.id, RATE_LIMITS.batchRender);
+  if (limited) return limited;
   const { projectId } = await ctx.params;
   const project = await db.project.findFirst({ where: { id: projectId, userId: user.id } });
   if (!project) return badRequest("Project not found or not owned by the caller.");

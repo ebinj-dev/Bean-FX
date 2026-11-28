@@ -49,7 +49,7 @@ async function expectLoggedOut(res: Response) {
 }
 
 async function register(jar: Jar, email: string, password = "test-passw0rd") {
-  const res = await req("POST", "/api/auth/register", { body: { email, password, name: "M19 Sec" }, jar });
+  const res = await req("POST", "/api/auth/register", { body: { email, password, name: "M19 Sec", acceptedDraftTerms: true }, jar });
   expect(res.status).toBe(200);
   return (await res.json()) as { user: { id: string; email: string }; verification: { delivered: boolean; notice?: string; devToken?: string } };
 }
@@ -236,7 +236,7 @@ describe("M19 security — headers, cookies, bundle", () => {
     const reg = await fetch(`${BASE}/api/auth/register`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ email: `sec-cookie2-${STAMP}-${rand()}@test.local`, password: "test-passw0rd", name: "C" }),
+      body: JSON.stringify({ email: `sec-cookie2-${STAMP}-${rand()}@test.local`, password: "test-passw0rd", name: "C", acceptedDraftTerms: true }),
     });
     const cookies = reg.headers.getSetCookie?.() ?? [];
     const session = cookies.find((c) => c.startsWith("beanfx_session="));

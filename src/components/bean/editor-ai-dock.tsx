@@ -20,9 +20,14 @@ type DockMsg = { role: "user" | "assistant"; text: string; planId?: string; mode
 
 export function EditorAiDock({
   projectId,
+  conversationId,
   timelineContext,
 }: {
   projectId: string;
+  /** M48-G1 — conversation identity from the chat deep link (may be null:
+   *  the dock then attaches to the project's latest conversation, creating
+   *  one on first send). Turns persist in the canonical Conversation store. */
+  conversationId?: string | null;
   /** Live editor facts appended to every instruction so RIISHE resolves references. */
   timelineContext: () => { playheadSec?: number; selectedClipLabel?: string | null; clipCount?: number; durationSec?: number };
 }) {
@@ -33,6 +38,64 @@ export function EditorAiDock({
   const [plans, setPlans] = useState<PlanLite[]>([]);
   const [applyState, setApplyState] = useState<{ planId: string; state: string; error?: string } | null>(null);
   const listRef = useRef<HTMLDivElement | null>(null);
+  // M48-G1 — resolved durable conversation (canonical Conversation store).
+  const [convId, setConvId] = useState<string | null>(conversationId ?? null);
+  const convRef = useRef<string | null>(conversationId ?? null);
+  const historyLoadedRef = useRef(false);
+
+  /** Append one turn to the durable conversation. Idempotent per clientTurnId;
+   *  failures degrade gracefully — the dock still works without persistence. */
+  const persistTurn = useCallback(async (turn: { role: "user" | "assistant"; content: string; meta?: Record<string, unknown>; clientTurnId: string }) => {
+    const id = convRef.current;
+    if (!id) return;
+    try {
+      await fetch(`/api/my-ai/conversations/${id}/messages`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(turn),
+      });
+    } catch { /* persistence is best-effort; the plan pipeline is canonical */ }
+  }, []);
+
+  // Resolve the conversation identity: the chat deep link wins; otherwise the
+  // project's latest conversation; creation happens lazily on first send.
+  useEffect(() => {
+    let cancelled = false;
+    const resolve = async () => {
+      if (historyLoadedRef.current) return;
+      historyLoadedRef.current = true;
+      try {
+        let id = conversationId ?? null;
+        if (!id) {
+          const res = await fetch(`/api/my-ai/conversations${projectId ? `?projectId=${encodeURIComponent(projectId)}` : ""}`);
+          if (res.ok) {
+            const d = await res.json();
+            id = (d.conversations ?? [])[0]?.id ?? null;
+          }
+        }
+        if (cancelled) return;
+        if (id) {
+          convRef.current = id;
+          setConvId(id);
+          const hres = await fetch(`/api/my-ai/conversations/${id}/messages`);
+          if (hres.ok && !cancelled) {
+            const hd = await hres.json();
+            const history: DockMsg[] = (hd.messages ?? [])
+              .filter((m: { role: string }) => m.role === "user" || m.role === "assistant")
+              .map((m: { role: "user" | "assistant"; content: string; meta: { planId?: string; plannerMode?: string } | null }) => ({
+                role: m.role,
+                text: m.content,
+                planId: m.meta?.planId,
+                mode: m.meta?.plannerMode,
+              }));
+            if (history.length > 0) setMsgs(history);
+          }
+        }
+      } catch { /* the dock still works without history restore */ }
+    };
+    void resolve();
+    return () => { cancelled = true; };
+  }, [conversationId, projectId]);
 
   const loadPlans = useCallback(async () => {
     try {
@@ -50,6 +113,24 @@ export function EditorAiDock({
     if (!text || busy) return;
     setBusy(true);
     setError(null);
+    // M48-G1 — lazy durable-conversation attach: on the very first send, if no
+    // conversation is linked yet, create one for this project (canonical store).
+    if (!convRef.current) {
+      try {
+        const cres = await fetch("/api/my-ai/conversations", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ projectId, title: "RIISHE editor session" }),
+        });
+        if (cres.ok) {
+          const cd = await cres.json();
+          convRef.current = cd.conversation?.id ?? null;
+          setConvId(convRef.current);
+        }
+      } catch { /* degrade to in-memory only */ }
+    }
+    const userTurnId = `dock-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+    void persistTurn({ role: "user", content: text.slice(0, 8000), clientTurnId: userTurnId });
     const ctx = timelineContext();
     const contextLine = [
       ctx.clipCount !== undefined ? `timeline: ${ctx.clipCount} clips` : null,
@@ -80,21 +161,28 @@ export function EditorAiDock({
         return;
       }
       const plan: PlanLite | null = d.plan ?? null;
+      const replyText = plan
+        ? `Structured editing plan drafted (${plan.sceneCount ?? 0} step${plan.sceneCount === 1 ? "" : "s"}).${plan.plannerMode ? ` Planner mode: ${plan.plannerMode}.` : ""} Review and apply below — approval-gated as always.`
+        : String(d.reply ?? "The planner returned no structured plan — the instruction may need more detail.");
       setMsgs((m) => [...m, {
         role: "assistant",
-        text: plan
-          ? `Structured editing plan drafted (${plan.sceneCount ?? 0} step${plan.sceneCount === 1 ? "" : "s"}).${plan.plannerMode ? ` Planner mode: ${plan.plannerMode}.` : ""} Review and apply below — approval-gated as always.`
-          : String(d.reply ?? "The planner returned no structured plan — the instruction may need more detail."),
+        text: replyText,
         planId: plan?.planId,
         mode: plan?.plannerMode,
       }]);
+      void persistTurn({
+        role: "assistant",
+        content: replyText.slice(0, 8000),
+        meta: plan?.planId ? { planId: plan.planId, plannerMode: plan.plannerMode, kind: "riishe-proposal" } : undefined,
+        clientTurnId: `${userTurnId}-r`,
+      });
       void loadPlans();
     } catch (err) {
       setError(`Network error: ${err instanceof Error ? err.message : "connection failed"}`);
     } finally {
       setBusy(false);
     }
-  }, [busy, projectId, timelineContext, loadPlans]);
+  }, [busy, projectId, timelineContext, loadPlans, persistTurn]);
 
   const applyPlan = useCallback(async (planId: string) => {
     setBusy(true);

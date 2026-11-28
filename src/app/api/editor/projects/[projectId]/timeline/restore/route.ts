@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getCurrentUser } from "@/lib/auth";
+import { enforceRateLimit, RATE_LIMITS } from "@/lib/rate-limit";
 import {
   ProjectNotFoundError,
   restoreTimelineVersion,
@@ -13,6 +14,10 @@ export const dynamic = "force-dynamic";
 export async function POST(req: NextRequest, ctx: { params: Promise<{ projectId: string }> }) {
   const user = await getCurrentUser();
   if (!user) return NextResponse.json({ error: "Authentication required." }, { status: 401 });
+  // M48-G2 — per-user rate limit (after authentication, so the limiter
+  // never reveals whether another user’s resource exists).
+  const limited = enforceRateLimit(req, "editorRestore", user.id, RATE_LIMITS.restore);
+  if (limited) return limited;
   const { projectId } = await ctx.params;
   const body = await req.json().catch(() => null);
   const versionNumber = Number((body as { versionNumber?: unknown } | null)?.versionNumber);

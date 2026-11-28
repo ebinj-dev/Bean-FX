@@ -816,7 +816,16 @@ export function ProductionHome({ user, onLogout }: { user: { name: string | null
             ] as const).map(([key, label, Icon]) => (
               <button
                 key={key}
-                onClick={() => { setSection(key); setSidebarOpen(false); }}
+                onClick={() => {
+                  setSection(key);
+                  setSidebarOpen(false);
+                  // M48-G3 — the projects/assets lists are fetched on mount and
+                  // after panel-side creation; a project created elsewhere (API,
+                  // import flow) needs a refetch when its tab becomes active.
+                  // One bounded request per tab click — no polling, no loops.
+                  if (key === "projects") void loadProjects();
+                  if (key === "assets") void loadAssets();
+                }}
                 className={`flex items-center gap-2.5 rounded px-2 py-1.5 text-xs ${section === key ? "bg-[#111110] text-[#d4a017]" : "text-[#a8a8a0] hover:bg-[#111110] hover:text-white"}`}
               >
                 <Icon className="h-3.5 w-3.5" /> {label}
@@ -861,7 +870,7 @@ export function ProductionHome({ user, onLogout }: { user: { name: string | null
               {activeProjectId && (
                 <div className="flex items-center gap-2">
                   <a
-                    href={`#/editor?project=${activeProjectId}`}
+                    href={`#/editor?project=${activeProjectId}${activeConversationId ? `&conversation=${activeConversationId}` : ""}`}
                     className="rounded border border-[#2a2a2a] px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider text-[#d4a017] hover:border-[#d4a017]"
                     title="Open this production in the professional editor"
                   >
@@ -909,7 +918,7 @@ export function ProductionHome({ user, onLogout }: { user: { name: string | null
                           <p className="mt-1 text-xs text-[#c8c8c2]">{m.plan.requestSummary ?? "A structured editing plan was drafted."}</p>
                           <div className="mt-2 flex flex-wrap gap-2">
                             {activeProjectId && (
-                              <a href={`#/editor?project=${activeProjectId}${plan.planId ? `&plan=${encodeURIComponent(plan.planId)}` : ""}`} className="rounded border border-[#d4a017]/40 px-2 py-1 text-[10px] font-bold uppercase tracking-wider text-[#d4a017] hover:bg-[#d4a017]/10">
+                              <a href={`#/editor?project=${activeProjectId}${activeConversationId ? `&conversation=${activeConversationId}` : ""}${plan.planId ? `&plan=${encodeURIComponent(plan.planId)}` : ""}`} className="rounded border border-[#d4a017]/40 px-2 py-1 text-[10px] font-bold uppercase tracking-wider text-[#d4a017] hover:bg-[#d4a017]/10">
                                 Review in Editor
                               </a>
                             )}
@@ -995,7 +1004,7 @@ export function ProductionHome({ user, onLogout }: { user: { name: string | null
                     events={productionEvents}
                     busyAction={busyAction}
                     onAction={(k, a) => void stageAction(k, a)}
-                    onOpenEditor={() => { if (activeProjectId) window.location.hash = `#/editor?project=${activeProjectId}`; }}
+                    onOpenEditor={() => { if (activeProjectId) window.location.hash = `#/editor?project=${activeProjectId}${activeConversationId ? `&conversation=${activeConversationId}` : ""}`; }}
                   />
                 )}
                 {/* M45-C — honest model availability from the live registry */}
@@ -1118,10 +1127,10 @@ export function ProductionHome({ user, onLogout }: { user: { name: string | null
                             </a>
                             {activeProjectId && (
                               <>
-                                <a href={`#/editor?project=${activeProjectId}`} className="rounded border border-[#2a2a2a] px-2 py-1 text-[10px] text-[#d8d8d2] hover:border-[#d4a017] hover:text-[#d4a017]">
+                                <a href={`#/editor?project=${activeProjectId}${activeConversationId ? `&conversation=${activeConversationId}` : ""}`} className="rounded border border-[#2a2a2a] px-2 py-1 text-[10px] text-[#d8d8d2] hover:border-[#d4a017] hover:text-[#d4a017]">
                                   Open Editor
                                 </a>
-                                <a href={`#/editor?project=${activeProjectId}`} className="rounded border border-[#2a2a2a] px-2 py-1 text-[10px] text-[#d8d8d2] hover:border-[#d4a017] hover:text-[#d4a017]" title="Edit in the editor and render a new version — versions are never overwritten">
+                                <a href={`#/editor?project=${activeProjectId}${activeConversationId ? `&conversation=${activeConversationId}` : ""}`} className="rounded border border-[#2a2a2a] px-2 py-1 text-[10px] text-[#d8d8d2] hover:border-[#d4a017] hover:text-[#d4a017]" title="Edit in the editor and render a new version — versions are never overwritten">
                                   Create New Version
                                 </a>
                               </>
@@ -1245,7 +1254,25 @@ export function ProductionHome({ user, onLogout }: { user: { name: string | null
               {projects.map((p) => (
                 <li key={p.id}>
                   <button
-                    onClick={() => { setActiveProjectId(p.id); setSection("chat"); void restoreProduction(""); }}
+                    onClick={() => {
+                      setActiveProjectId(p.id);
+                      setSection("chat");
+                      void restoreProduction("");
+                      // M48-G1 — selecting a project re-attaches its latest
+                      // durable conversation so the editor link and the return
+                      // trip carry the same identity. Read-only fetch; creation
+                      // stays lazy (first message), so no empty rows pile up.
+                      void (async () => {
+                        try {
+                          const res = await fetch(`/api/my-ai/conversations?projectId=${p.id}`);
+                          if (res.ok) {
+                            const d = await res.json();
+                            const latest = (d.conversations ?? [])[0]?.id ?? null;
+                            if (latest) setActiveConversationId(latest);
+                          }
+                        } catch { /* context attach is best-effort */ }
+                      })();
+                    }}
                     className={`flex w-full items-center justify-between rounded-lg border px-3.5 py-2.5 text-left ${activeProjectId === p.id ? "border-[#d4a017]/50 bg-[#d4a017]/5" : "border-[#1c1c1a] bg-[#0d0d0c] hover:border-[#2e2e2c]"}`}
                   >
                     <span className="truncate text-sm text-[#e6e6e0]">{p.name}</span>

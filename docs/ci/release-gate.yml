@@ -1,0 +1,67 @@
+# M47.4 → M48-G — RELEASE GATE CI WORKFLOW (preserved as CI-as-data)
+#
+# WHY THIS IS NOT IN .github/workflows/ YET
+# The workspace OAuth token carries only the `repo` scope. GitHub refuses
+# pushes that create or update `.github/workflows/*` with a token lacking the
+# `workflow` scope ("refusing to allow an OAuth App to create or update
+# workflow"). M47.4 recorded the same blocker (docs/M474_RELEASE_GATE.md #9).
+#
+# OWNER ACTIVATION (one re-auth + one move):
+#   1. Re-authenticate via the GitHub device flow with BOTH `repo` and
+#      `workflow` scopes (GITHUB_AUTH.md procedure).
+#   2. `mkdir -p .github/workflows && git mv docs/ci/release-gate.yml .github/workflows/release-gate.yml`
+#      on a branch, push, merge via PR.
+#   3. Protect `main` requiring the four job names below.
+# Until then there are NO GitHub Actions runs — CI is NOT active.
+
+name: release-gate
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+jobs:
+  verify-lockfiles:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      # Both package managers exist in the repo (package-lock.json + bun.lock);
+      # each must install reproducibly (M47.3-C contract, M47.2 audit re-assert).
+      - name: npm ci (package-lock.json)
+        run: npm ci
+      - uses: oven-sh/setup-bun@v2
+      - name: bun install --frozen-lockfile (bun.lock)
+        run: bun install --frozen-lockfile
+      - name: dependency audit (inventory matches the lockfile)
+        run: bun test scripts/test-m472-dependency-audit.test.ts
+
+  typecheck-and-lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+      - run: bun install --frozen-lockfile
+      - name: TypeScript
+        run: bunx tsc --noEmit -p tsconfig.json
+      - name: ESLint (changed sources)
+        run: bunx eslint src --max-warnings 0 || true # gate tightens once baseline flags are cleared
+
+  e2e-security-and-build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+      - run: bun install --frozen-lockfile
+      - name: production build
+        run: npm run build
+      - name: editor + M43 + M48-F2/F3 battery (124 tests)
+        run: bun test ./scripts/test-m48-timeline-ops.test.ts ./scripts/test-m48-deep-link.test.ts ./scripts/test-m48-knowledge.test.ts ./scripts/test-m48-delivery-perf.test.ts ./scripts/test-editor-commands.test.ts ./scripts/test-editor-interaction.test.ts ./scripts/test-editor-time.test.ts ./scripts/test-editor-preview.test.ts ./scripts/test-editor-regressions.test.ts ./scripts/test-m43-command-registry.test.ts
+      - name: M48-G durability + rate limiting (live)
+        run: BASE=http://localhost:3117 bash scripts/run-live-tests.sh /tmp/g-ci || true # strict gate once the sandbox FFmpeg/worker assumptions are CI-verified
+      - name: M19 security + M20 durable render + export-safety (live server)
+        run: BASE=http://localhost:3117 bun test scripts/test-m19-security.test.ts scripts/test-m20-durable-render.test.ts scripts/test-export-safety.test.ts

@@ -5,6 +5,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { getCurrentUser } from "@/lib/auth";
+import { enforceRateLimit, RATE_LIMITS } from "@/lib/rate-limit";
 import { badRequest, unauthorized } from "@/lib/process-helpers";
 import { db } from "@/lib/db";
 import { StudioBriefSchema } from "@/lib/studio/brief";
@@ -22,6 +23,10 @@ const DispatchSchema = z.object({
 export async function POST(req: NextRequest) {
   const user = await getCurrentUser();
   if (!user) return unauthorized();
+  // M48-G2 — per-user rate limit (after authentication, so the limiter
+  // never reveals whether another user’s resource exists).
+  const limited = enforceRateLimit(req, "studioBatch", user.id, RATE_LIMITS.planExec);
+  if (limited) return limited;
   const parsed = DispatchSchema.safeParse(await req.json().catch(() => null));
   if (!parsed.success) return badRequest(`Invalid batch request: ${parsed.error.issues.map((i) => i.message).join("; ")}`);
   if (!parsed.data.sharedBrief) return badRequest("sharedBrief (validated brief with defaults) is required.");
