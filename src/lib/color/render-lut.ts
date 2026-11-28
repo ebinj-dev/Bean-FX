@@ -39,7 +39,7 @@ export async function prepareLut3dFilters(
       if (parsed.kind !== "3d") continue; // 1D LUTs are never mis-applied
       userCube = parsed;
     }
-    const baked = bakeGradeCube(grade, userCube);
+    const baked = bakeGradeCube(grade, userCube, 129); // 129³: clamped-saturation corners stay within ~3/255 of the exact model
     const filePath = path.join(workDir, `lut3d_${clip.id}.cube`);
     await fs.writeFile(filePath, serializeCube(baked), "utf8");
     out.push({ clipId: clip.id, filter: `lut3d=file=${filePath}:interp=trilinear`, filePath });
