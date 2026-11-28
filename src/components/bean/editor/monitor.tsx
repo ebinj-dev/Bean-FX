@@ -30,6 +30,8 @@ import type { Rational } from "@/lib/editor/time";
 import { PlaybackController, publishFrame, subscribeFrame } from "@/lib/editor/playback";
 import { AudioPreviewMixer, setActiveMixer } from "@/lib/editor/audio-mixer";
 import { cssEffectFilter, cssEffectFilterAt, CANVAS_VFX_TYPES, animatedEffectAt } from "@/lib/editor/filters";
+import { GradeRenderer, fetchPreviewLut } from "@/lib/color/grade-gl";
+import { gradeIsNeutral, DEFAULT_GRADE } from "@/lib/color/grade-model";
 import { applyCanvasVfx, blendFrameRing } from "@/lib/editor/vfx-canvas";
 import { cssTransformStyle, transformAt, transformIsIdentity, type ResolvedTransform } from "@/lib/editor/transform";
 import { volumeAutomationAt } from "@/lib/editor/audio";
@@ -231,7 +233,10 @@ export function ProgramMonitor({
   guides = false,
   snapEnabled = true,
   onDecodeError,
+  projectId,
 }: {
+  /** M48-I3 — project id for the LUT preview fetch (grade canvas). */
+  projectId?: string;
   sequence: Sequence | null;
   playhead: number;
   playing: boolean;
@@ -249,6 +254,15 @@ export function ProgramMonitor({
   // ---- element refs --------------------------------------------------------
   const videoARef = useRef<HTMLVideoElement | null>(null);
   const videoBRef = useRef<HTMLVideoElement | null>(null);
+  // M48-I — WebGL2 grading pass: when the active clip carries a grade or a
+  // user LUT the canvas OWNS the picture (same ownership pattern as the
+  // canvas VFX layer). The shader + the export's lut3d cube derive from the
+  // same grade-model math, so preview and export agree.
+  const gradeCanvasRef = useRef<HTMLCanvasElement | null>(null);
+  const graderRef = useRef<GradeRenderer | null>(null);
+  const gradeRafRef = useRef<number>(0);
+  const gradeLutLoadedRef = useRef<string>("");
+  let gradeSrcCanvas: HTMLCanvasElement | null = null;
   const audioRefs = useRef<Array<HTMLAudioElement | null>>([]);
   const containerRef = useRef<HTMLDivElement | null>(null); // M48-C fullscreen preview
   const seqRef = useRef(sequence);
@@ -492,6 +506,83 @@ export function ProgramMonitor({
       displayScaleRef.current = Math.min(rect.width / sequence.width, rect.height / sequence.height);
     }
   }, [sequence]);
+  // M48-I — grade state for the active clip. When it is active the WebGL
+  // canvas owns the picture; comparing (M17 before/after) bypasses it.
+  const rawGrade = activeVideo?.clip.grade ?? null;
+  const activeLutId = activeVideo?.clip.lutId ?? null;
+  const gradeActive = !!activeVideo && !comparing && (!!activeLutId || (!!rawGrade && !rawGrade.bypass && !gradeIsNeutral(rawGrade)));
+  const gradeSignature = rawGrade ? JSON.stringify(rawGrade) : "";
+
+  useEffect(() => {
+    if (!gradeActive || !activeVideo || !sequence) {
+      cancelAnimationFrame(gradeRafRef.current);
+      gradeLutLoadedRef.current = "";
+      return;
+    }
+    const canvas = gradeCanvasRef.current;
+    if (!canvas) return;
+    if (canvas.width !== sequence.width || canvas.height !== sequence.height) {
+      canvas.width = sequence.width;
+      canvas.height = sequence.height;
+    }
+    if (!graderRef.current) graderRef.current = new GradeRenderer();
+    const grader = graderRef.current;
+    if (!grader.available) return; // WebGL2 missing — honest CPU fallback path
+    let stop = false;
+    // Composition order mirrors the EXPORT exactly: the baked cube (user LUT
+    // ∘ grade) applies FIRST, then the registry effect chain — the chain is
+    // the same CSS filter string the export chain mirrors, applied via
+    // ctx.filter over the graded frame (lib/editor/filters.ts).
+    const drawLoop = () => {
+      if (stop) return;
+      const el = [videoARef.current, videoBRef.current].find((v) => v && !v.className.includes("hidden"));
+      if (el && el.readyState >= 2) {
+        const vw = el.videoWidth, vh = el.videoHeight;
+        if (vw && vh) {
+          if (!gradeSrcCanvas) gradeSrcCanvas = document.createElement("canvas");
+          if (gradeSrcCanvas.width !== vw || gradeSrcCanvas.height !== vh) {
+            gradeSrcCanvas.width = vw;
+            gradeSrcCanvas.height = vh;
+          }
+          const sctx = gradeSrcCanvas.getContext("2d");
+          if (sctx) {
+            sctx.filter = "none";
+            sctx.drawImage(el, 0, 0);
+            grader.render(gradeSrcCanvas);
+            const bctx = canvas.getContext("2d");
+            if (bctx) {
+              bctx.filter = previewFilter ?? "none";
+              bctx.drawImage(grader.canvas, 0, 0, canvas.width, canvas.height);
+            }
+          }
+        }
+      }
+      gradeRafRef.current = requestAnimationFrame(drawLoop);
+    };
+    grader.setGrade({ ...DEFAULT_GRADE, ...(rawGrade ?? {}) });
+    const lutKey = `${projectId ?? ""}:${activeLutId ?? ""}`;
+    if (activeLutId && projectId && gradeLutLoadedRef.current !== lutKey) {
+      cancelAnimationFrame(gradeRafRef.current);
+      void fetchPreviewLut(projectId, activeLutId).then((cube) => {
+        if (stop) return;
+        if (cube) grader.setLut(cube);
+        else grader.clearLut();
+        gradeLutLoadedRef.current = lutKey;
+        gradeRafRef.current = requestAnimationFrame(drawLoop);
+      });
+    } else {
+      if (!activeLutId) {
+        grader.clearLut();
+        gradeLutLoadedRef.current = "";
+      }
+      gradeRafRef.current = requestAnimationFrame(drawLoop);
+    }
+    return () => {
+      stop = true;
+      cancelAnimationFrame(gradeRafRef.current);
+    };
+  }, [gradeActive, gradeSignature, activeLutId, projectId, sequence, activeVideo, rawGrade, previewFilter]);
+
   // Visibility + filter + transform for the ACTIVE pool element (imperative,
   // but driven by real state changes — asset swaps and effect/transform edits
   // — not per-frame; per-frame animation rides the frame bus below).
@@ -508,7 +599,7 @@ export function ProgramMonitor({
       // rotate → scale → translate, so preview and export agree).
       // M45: when the canvas VFX layer owns the picture, the element stays
       // decoded but invisible — its processed frame is drawn on the canvas.
-      const hideForVfx = isActive && (activeVideo ? clipHasCanvasVfx(activeVideo.clip) : false);
+      const hideForVfx = isActive && (activeVideo ? clipHasCanvasVfx(activeVideo.clip) || gradeActive : false);
       // M48-D — picture fades are now VISIBLE in preview (parity with the
       // export path, which already applies fadeMultiplierAt).
       const fade = isActive && activeVideo && !hideForVfx ? fadeMultiplierAt(activeVideo.clip, playhead) : 1;
@@ -523,7 +614,7 @@ export function ProgramMonitor({
         el.style.opacity = "";
       }
     }
-  }, [activeAssetId, isImageAsset, previewFilter, comparing, previewTransform, measureDisplayScale, activeVideo, playhead]);
+  }, [activeAssetId, isImageAsset, previewFilter, comparing, previewTransform, measureDisplayScale, activeVideo, playhead, gradeActive]);
   // M37: display size changes (window resize) re-measure the composition→
   // display factor; settled transforms re-apply on the next React pass.
   useEffect(() => {
@@ -771,6 +862,16 @@ export function ProgramMonitor({
               transform: imageTransformStyle?.transform ?? undefined,
               opacity: imageTransformStyle?.opacity ?? undefined,
             }}
+          />
+        )}
+        {/* M48-I — grading canvas: owns the picture when a grade/LUT is active. */}
+        {sequence && (
+          <canvas
+            ref={gradeCanvasRef}
+            width={sequence.width}
+            height={sequence.height}
+            className={gradeActive ? "max-h-full max-w-full object-contain" : "hidden"}
+            data-testid="grade-canvas"
           />
         )}
         {/* NIIKI motion graphics canvas (per-frame bus painting above). */}

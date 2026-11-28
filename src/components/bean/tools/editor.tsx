@@ -603,8 +603,8 @@ export function EditorTool({ user }: { user: { id: string }; onLogout: () => voi
             {sourceOpen && sequence && (
               <SourceMonitor key={sourceAssetId ?? "none"} session={session} assets={media ?? []} onNotice={setNotice} initialAssetId={sourceAssetId} />
             )}
-            <ProgramMonitor sequence={sequence} playhead={session.playheadFrame} playing={playing} onPlayhead={session.setPlayhead} onPlayingChange={setPlaying} session={session} activeTool={activeTool} guides={guides} snapEnabled={snap} onDecodeError={setNotice} />
-            {scopesOpen && sequence && <ScopesPanel sequence={sequence} playhead={session.playheadFrame} />}
+            <ProgramMonitor sequence={sequence} playhead={session.playheadFrame} playing={playing} onPlayhead={session.setPlayhead} onPlayingChange={setPlaying} session={session} activeTool={activeTool} guides={guides} snapEnabled={snap} onDecodeError={setNotice} projectId={projectId ?? undefined} />
+            {scopesOpen && sequence && <ScopesPanel sequence={sequence} playhead={session.playheadFrame} projectId={projectId ?? undefined} />}
           </div>
           {/* Transport bar */}
           <div className="flex items-center gap-2 border-y border-[#2a2a2a] bg-[#0d0d0c] px-3 py-1">
