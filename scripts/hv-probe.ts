@@ -1,0 +1,10 @@
+import { chromium } from "playwright-core";
+const browser = await chromium.launch({ executablePath: "/home/z/.cache/ms-playwright/chromium-1200/chrome-linux64/chrome", args: ["--no-sandbox"] });
+const page = await browser.newPage({ viewport: { width: 1440, height: 900 } });
+await page.goto("http://localhost:3130/#/", { waitUntil: "domcontentloaded" });
+await page.waitForTimeout(3000);
+const buttons = await page.evaluate(() => Array.from(document.querySelectorAll("button")).map((b) => b.textContent?.trim().slice(0, 30)).filter(Boolean).slice(0, 15));
+console.log("buttons:", JSON.stringify(buttons));
+console.log("url:", page.url());
+await page.screenshot({ path: "/tmp/hv-landing.png" });
+await browser.close();

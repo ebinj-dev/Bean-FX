@@ -54,6 +54,7 @@ function defaultSequence(projectId: string, projectName: string, settings: Proje
     tracks,
     clips: [],
     buses: [],
+    multicamGroups: [],
     transitions: [],
 		markers: [],
   };

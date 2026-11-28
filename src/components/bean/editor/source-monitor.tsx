@@ -126,6 +126,8 @@ export function SourceMonitor({
       audioSourceInFrame: null,
   audioSourceOutFrame: null,
   avLinked: true,
+  multicamGroupId: null,
+  multicamAngleId: null,
   keyframes: [],
     };
   }, [seq, asset, targetTrack, durationSource, inFrame, outFrame, assetFps, session]);
