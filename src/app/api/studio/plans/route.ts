@@ -8,6 +8,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { db } from "@/lib/db";
 import { getCurrentUser } from "@/lib/auth";
+import { enforceRateLimit, RATE_LIMITS } from "@/lib/rate-limit";
 import { badRequest, unauthorized } from "@/lib/process-helpers";
 import { StudioBriefSchema, validateBriefForProfile, profileSequenceSettings } from "@/lib/studio/brief";
 import { createStudioPlan } from "@/lib/studio/planner";
@@ -25,6 +26,10 @@ const CreateSchema = z.object({
 export async function POST(req: NextRequest) {
   const user = await getCurrentUser();
   if (!user) return unauthorized();
+  // M48-G2 — per-user rate limit (after authentication, so the limiter
+  // never reveals whether another user’s resource exists).
+  const limited = enforceRateLimit(req, "studioPlans", user.id, RATE_LIMITS.ai);
+  if (limited) return limited;
   const parsed = CreateSchema.safeParse(await req.json().catch(() => null));
   if (!parsed.success) return badRequest(`Invalid brief: ${parsed.error.issues.map((i) => i.message).join("; ")}`);
   const brief = parsed.data.brief;

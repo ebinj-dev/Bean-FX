@@ -38,6 +38,16 @@ export const RATE_LIMITS = {
   ai: { limit: 40, windowSec: 3600 } as RateLimitRule, // generation endpoints
   render: { limit: 10, windowSec: 3600 } as RateLimitRule, // durable renders
   api: { limit: 600, windowSec: 300 } as RateLimitRule, // general authenticated API
+  // M48-G2 — editor-surface rules. Generous enough that ordinary editing
+  // (bursty small mutations) is never blocked; tight enough to make runaway
+  // loops, scripted abuse and resource-exhaustion expensive. Per-route buckets
+  // keep counters independent (a burst of one op never starves another).
+  timeline: { limit: 120, windowSec: 300 } as RateLimitRule, // timeline mutations
+  restore: { limit: 20, windowSec: 3600 } as RateLimitRule, // timeline restore points
+  planExec: { limit: 20, windowSec: 3600 } as RateLimitRule, // plan assemble / batch ops
+  batchRender: { limit: 5, windowSec: 3600 } as RateLimitRule, // batch render initiation
+  batchExport: { limit: 10, windowSec: 3600 } as RateLimitRule, // batch export initiation
+  convCreate: { limit: 30, windowSec: 3600 } as RateLimitRule, // conversation creation
 } as const;
 
 export function clientIp(req: Request): string {

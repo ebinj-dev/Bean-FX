@@ -14,6 +14,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { db } from "@/lib/db";
 import { getCurrentUser } from "@/lib/auth";
+import { enforceRateLimit, RATE_LIMITS } from "@/lib/rate-limit";
 import { badRequest, notFound, unauthorized } from "@/lib/process-helpers";
 import { riisheChat } from "@/lib/ai/riishe";
 import { playbookInfo } from "@/lib/ai/riishe";
@@ -29,6 +30,10 @@ const ChatSchema = z.object({
 export async function POST(req: NextRequest, ctx: { params: Promise<{ projectId: string }> }) {
   const user = await getCurrentUser();
   if (!user) return unauthorized();
+  // M48-G2 — per-user rate limit (after authentication, so the limiter
+  // never reveals whether another user’s resource exists).
+  const limited = enforceRateLimit(req, "editorRiisheChat", user.id, RATE_LIMITS.ai);
+  if (limited) return limited;
   const { projectId } = await ctx.params;
   const parsed = ChatSchema.safeParse(await req.json().catch(() => null));
   if (!parsed.success) return badRequest("Invalid chat message.");
