@@ -73,7 +73,7 @@ function videoClip(id: string, timelineStartFrame: number, sourceInFrame: number
     audioSourceOutFrame: null,
     avLinked: true,
     multicamGroupId: null,
-    multicamAngleId: null,
+    multicamAngleId: null, grade: null, lutId: null,
   };
 }
 
@@ -103,10 +103,10 @@ function baseSeq(clips: Clip[] = [videoClip("c1", 0, 0, 300), videoClip("c2", 30
 describe("M43-B registry completeness", () => {
   test("one descriptor per canonical command type, ids unique and canonical", () => {
     const types = registryCommandTypes();
-    expect(types.length).toBe(46); // M48-H1–H3 added 10 canonical commands
-    expect(COMMAND_DESCRIPTORS.length).toBe(46);
+    expect(types.length).toBe(50); // M48-H1–H3 added 10, M48-I added 4 (SetClipGrade/SetClipLut/AddLut/RemoveLut)
+    expect(COMMAND_DESCRIPTORS.length).toBe(50);
     const ids = new Set(COMMAND_DESCRIPTORS.map((c) => c.id));
-    expect(ids.size).toBe(46);
+    expect(ids.size).toBe(50);
     for (const d of COMMAND_DESCRIPTORS) {
       expect(ids.has(d.id)).toBe(true);
       expect(d.id.startsWith("timeline.")).toBe(true);
