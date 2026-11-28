@@ -214,6 +214,8 @@ function graphicClipCore(
     audioSourceInFrame: null,
     audioSourceOutFrame: null,
     avLinked: true,
+    multicamGroupId: null,
+    multicamAngleId: null,
     keyframes: [],
   };
 }
