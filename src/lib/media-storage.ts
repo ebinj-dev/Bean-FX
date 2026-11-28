@@ -113,6 +113,14 @@ export interface FfprobeResult {
   channels: number | null;
   hasVideo: boolean;
   hasAudio: boolean;
+  /** M48-I4 — source color metadata as probed (null = unspecified/missing). */
+  color: {
+    space: string | null; // matrix coefficients, e.g. bt709 / bt470bg
+    transfer: string | null; // e.g. bt709 / smpte170m
+    primaries: string | null; // e.g. bt709
+    range: string | null; // tv (limited) / pc (full)
+    pixFmt: string | null; // e.g. yuv420p
+  };
 }
 
 interface FfprobeStream {
@@ -125,6 +133,12 @@ interface FfprobeStream {
   avg_frame_rate?: string;
   r_frame_rate?: string;
   duration?: string;
+  /* M48-I4 — SDR color metadata (ffprobe stream tags; null = unspecified). */
+  color_space?: string;
+  color_transfer?: string;
+  color_primaries?: string;
+  color_range?: string;
+  pix_fmt?: string;
 }
 
 interface FfprobeJson {
@@ -171,6 +185,13 @@ export function ffprobe(filePath: string): Promise<FfprobeResult> {
           channels: audio?.channels ?? null,
           hasVideo: Boolean(video),
           hasAudio: Boolean(audio),
+          color: {
+            space: video?.color_space ?? null,
+            transfer: video?.color_transfer ?? null,
+            primaries: video?.color_primaries ?? null,
+            range: video?.color_range ?? null,
+            pixFmt: video?.pix_fmt ?? null,
+          },
         });
       }
     );

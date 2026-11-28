@@ -19,6 +19,7 @@ const Schema = z.object({
   sequence: z.unknown(),
   instruction: z.string().min(1).max(500),
   selectedClipId: z.string().max(64).nullable().default(null),
+  projectId: z.string().max(64).nullable().default(null),
   atFrame: z.number().int().min(0).default(0),
 });
 
@@ -61,6 +62,12 @@ export async function POST(req: NextRequest) {
       ) - parsed.data.atFrame,
     ),
     selectedGraphicClipId: selected?.graphicStyle ? selected.id : null,
+    // M48-I7 — color intents target the selected clip; the project id gates
+    // LUT-aware proposals (none of the current intents import LUTs — that
+    // stays a manual, approval-gated workflow).
+    selectedClipId: selected?.id ?? null,
+    selectedGrade: selected?.grade ?? null,
+    projectId: parsed.data.projectId,
     selectedGraphicStyle: selected?.graphicStyle ?? null,
   };
 

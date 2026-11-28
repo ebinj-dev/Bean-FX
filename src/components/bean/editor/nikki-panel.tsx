@@ -36,7 +36,7 @@ async function jfetch<T>(url: string, init?: RequestInit): Promise<T> {
 let idCounter = 0;
 const newId = (kind: "clip" | "track" | "graphic"): string => `nikki-${kind}-${Date.now().toString(36)}-${(idCounter++).toString(36)}`;
 
-export function NikkiPanel({ sequence, session }: { sequence: Sequence; session: EditorSession }) {
+export function NikkiPanel({ sequence, session, projectId }: { sequence: Sequence; session: EditorSession; projectId?: string | null }) {
   const clip = useMemo(
     () => sequence.clips.find((c) => c.id === session.selectedClipId) ?? null,
     [sequence, session.selectedClipId],
@@ -157,7 +157,9 @@ export function NikkiPanel({ sequence, session }: { sequence: Sequence; session:
           body: JSON.stringify({
             sequence,
             instruction,
-            selectedClipId: selectedGraphic?.id ?? null,
+            selectedClipId: clip?.id ?? null,
+            selectedGrade: clip?.grade ?? null,
+            projectId: projectId ?? null,
             atFrame: playhead,
           }),
         },
