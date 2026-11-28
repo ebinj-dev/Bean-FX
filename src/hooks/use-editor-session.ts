@@ -99,7 +99,10 @@ export function useEditorSession(projectId: string | null): EditorSession {
       const res = await fetch(`/api/editor/projects/${projectId}/timeline`);
       const data = await res.json().catch(() => null);
       if (!res.ok) {
-        publish({ saveState: "error", error: data?.error ?? `Failed to load timeline (${res.status})` });
+        // Drop any previously loaded project's sequence/selection: after a
+        // failed load the inspector must not keep showing a stale project's
+        // clip (commands would target a clip id the server no longer knows).
+        publish({ saveState: "error", error: data?.error ?? `Failed to load timeline (${res.status})`, sequence: null, selectedClipId: null, playheadFrame: 0 });
         return;
       }
       const sequence: Sequence = data.sequence;
@@ -118,7 +121,7 @@ export function useEditorSession(projectId: string | null): EditorSession {
         playheadFrame: 0,
       });
     } catch (err) {
-      publish({ saveState: "error", error: err instanceof Error ? err.message : "Failed to load timeline." });
+      publish({ saveState: "error", error: err instanceof Error ? err.message : "Failed to load timeline.", sequence: null, selectedClipId: null, playheadFrame: 0 });
     }
   }, [projectId, publish]);
 
