@@ -13,6 +13,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { activeVideoClipAt, sourceSecondsAt } from "@/lib/editor/preview";
 import { cssEffectFilterAt } from "@/lib/editor/filters";
+import { DEFAULT_GRADE, gradePixel, type GradeParams } from "@/lib/color/grade-model";
+import { cubeEvaluator, type CubeLut } from "@/lib/color/lut3d";
+import { fetchPreviewLut } from "@/lib/color/grade-gl";
 import type { Sequence } from "@/lib/editor/model";
 
 const W = 256;
@@ -21,7 +24,7 @@ const H = 144;
 type Mode = "waveform" | "parade" | "vectorscope" | "histogram";
 const MODES: Mode[] = ["waveform", "parade", "vectorscope", "histogram"];
 
-export function ScopesPanel({ sequence, playhead }: { sequence: Sequence; playhead: number }) {
+export function ScopesPanel({ sequence, playhead, projectId }: { sequence: Sequence; playhead: number; projectId?: string }) {
   const [mode, setMode] = useState<Mode>("waveform");
   const [active, setActive] = useState(false);
   const videoRef = useRef<HTMLVideoElement | null>(null);
@@ -38,6 +41,26 @@ export function ScopesPanel({ sequence, playhead }: { sequence: Sequence; playhe
     [activeClip, playhead],
   );
 
+  // M48-I6 — scopes analyse the GRADED image: the primary grade is applied
+  // per-pixel with the SAME model the export's lut3d cube bakes, and the
+  // clip's user LUT rides along (fetched once per lutId; until it arrives
+  // the scopes honestly show the grade without it — the label says so).
+  const gradeParams = (activeClip?.clip.grade ?? null) as GradeParams | null;
+  const lutId = activeClip?.clip.lutId ?? null;
+  const gradeSignature = gradeParams ? JSON.stringify(gradeParams) : "";
+  const [lutEval, setLutEval] = useState<((r: number, g: number, b: number) => [number, number, number]) | null>(null);
+  useEffect(() => {
+    setLutEval(null);
+    if (!lutId || !projectId) return;
+    let alive = true;
+    void fetchPreviewLut(projectId, lutId).then((cube) => {
+      if (alive && cube) setLutEval(() => cubeEvaluator(cube));
+    });
+    return () => {
+      alive = false;
+    };
+  }, [lutId, projectId]);
+
   const compute = useCallback(() => {
     const video = videoRef.current;
     const canvas = canvasRef.current;
@@ -52,7 +75,18 @@ export function ScopesPanel({ sequence, playhead }: { sequence: Sequence; playhe
     if (!octx) return;
     octx.filter = filter || "none";
     octx.drawImage(video, 0, 0, W, H);
-    const data = octx.getImageData(0, 0, W, H).data;
+    let data = octx.getImageData(0, 0, W, H).data;
+    if (gradeParams && (!gradeParams.bypass || lutEval)) {
+      const img = octx.getImageData(0, 0, W, H);
+      const p = { ...DEFAULT_GRADE, ...gradeParams };
+      const d = img.data;
+      for (let i = 0; i < d.length; i += 4) {
+        const [r, g, b] = gradePixel(d[i] / 255, d[i + 1] / 255, d[i + 2] / 255, p, lutEval ?? undefined);
+        d[i] = r * 255; d[i + 1] = g * 255; d[i + 2] = b * 255;
+      }
+      octx.putImageData(img, 0, 0);
+      data = octx.getImageData(0, 0, W, H).data;
+    }
 
     // Paint the scope canvas.
     ctx2d.fillStyle = "#070706";

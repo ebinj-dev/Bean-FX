@@ -16,6 +16,11 @@ import { pathInsideMediaRoot } from "@/lib/media-storage";
 import { CUBE_MAX_BYTES, parseCube, type CubeLut } from "@/lib/color/lut3d";
 import type { Lut } from "@/lib/editor/model";
 
+/** Storage path for a cube (path-only; callers MUST have verified ownership). */
+export function lutCubePath(projectId: string, lutId: string): string {
+  return lutFilePath(projectId, lutId);
+}
+
 function lutFilePath(projectId: string, lutId: string): string {
   if (!/^[a-z0-9]{8,40}$/.test(projectId) || !/^[a-z0-9-]{6,64}$/.test(lutId)) {
     throw new ProjectNotFoundError(); // same "not found" answer — no existence leak

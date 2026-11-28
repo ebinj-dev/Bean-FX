@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { getCurrentUser } from "@/lib/auth";
 import { deleteMediaFileIfLastReference } from "@/lib/media-storage";
+import { interpretSourceColor } from "@/lib/color/color-management";
 
 async function getOwnedAsset(id: string, userId: string) {
   const asset = await db.mediaAsset.findUnique({ where: { id } });
@@ -38,6 +39,17 @@ export async function GET(_req: NextRequest, ctx: { params: Promise<{ id: string
       probeStatus: asset.probeStatus,
       probeError: asset.probeError,
       probeMetaJson: asset.probeMetaJson,
+      // M48-I4 — honest SDR color interpretation of the PROBED metadata
+      // (missing fields are defaulted and flagged, never silently assumed).
+      colorInterpretation: (() => {
+        try {
+          const meta = asset.probeMetaJson ? (JSON.parse(asset.probeMetaJson) as { streams?: Array<{ color_space?: string; color_transfer?: string; color_primaries?: string; color_range?: string; pix_fmt?: string }> }) : null;
+          const v = meta?.streams?.find((st) => st.color_range !== undefined || st.color_space !== undefined || st.pix_fmt?.startsWith("yuv"));
+          return interpretSourceColor({ color: { space: v?.color_space ?? null, transfer: v?.color_transfer ?? null, primaries: v?.color_primaries ?? null, range: v?.color_range ?? null, pixFmt: v?.pix_fmt ?? null } });
+        } catch {
+          return null;
+        }
+      })(),
       isVfr: asset.isVfr,
       rotation: asset.rotation,
       aspectRatio: asset.aspectRatio,

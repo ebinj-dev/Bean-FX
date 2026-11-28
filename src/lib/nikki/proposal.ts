@@ -11,6 +11,7 @@
  */
 import type { Command } from "@/lib/editor/commands";
 import { templateById, NIKKI_TEMPLATES } from "./templates";
+import { DEFAULT_GRADE as DEFAULT_NIKKI_GRADE } from "@/lib/color/grade-model";
 
 export interface NikkiProposal {
   engine: "NIIKI";
@@ -43,6 +44,12 @@ export interface ProposalContext {
   selectedGraphicClipId?: string | null;
   /** The selected graphic clip's CURRENT style (for merge-on-apply updates). */
   selectedGraphicStyle?: import("./types").NikkiGraphicStyle | null;
+  /** M48-I7 — the selected clip (any kind) for color proposals. */
+  selectedClipId?: string | null;
+  /** M48-I7 — the selected clip's current grade, so corrections are relative. */
+  selectedGrade?: import("@/lib/color/grade-model").GradeParams | null;
+  /** M48-I7 — project id for LUT-capable proposals (null = LUT requests refused honestly). */
+  projectId?: string | null;
 }
 
 function fpsOf(ctx: ProposalContext): number {
@@ -50,6 +57,85 @@ function fpsOf(ctx: ProposalContext): number {
 }
 
 const RULES: Rule[] = [
+  // ── M48-I7 — color intents (I7: correction vs creative, honest refusals) ──
+  {
+    intent: "color-white-balance-correction",
+    patterns: [/white balance/i, /fix the (colou?r|cast)/i, /too (orange|blue|warm|cool|green|magenta)/i],
+    confidence: 0.85,
+    build: (ins, ctx) => {
+      const caveats = ["Color CORRECTION (white balance), not creative grading. Applied as a canonical SetClipGrade — undoable and approval-gated like any manual edit."];
+      if (!ctx.selectedClipId) return { explanation: "Select a clip to correct its white balance.", caveats, commands: [] };
+      let temperature = 0, tint = 0;
+      if (/too (orange|warm)/i.test(ins)) temperature = -0.3; // cool it
+      if (/too (blue|cool)/i.test(ins)) temperature = 0.3; // warm it
+      if (/too green/i.test(ins)) tint = -0.3; // magenta pull
+      if (/too magenta/i.test(ins)) tint = 0.3; // green pull
+      if (temperature === 0 && tint === 0) temperature = -0.2; // generic cast: cool slightly
+      const base = ctx.selectedGrade ?? { ...DEFAULT_NIKKI_GRADE };
+      const grade = { ...base, temperature, tint };
+      return {
+        explanation: `White-balance correction: temperature ${temperature > 0 ? "+" : ""}${temperature.toFixed(2)}, tint ${tint > 0 ? "+" : ""}${tint.toFixed(2)} on the selected clip. Skin tones are protected by the model's white-preserving balance (no blind channel rotation).`,
+        caveats,
+        commands: [{ type: "SetClipGrade", clipId: ctx.selectedClipId, grade } as Command],
+      };
+    },
+  },
+  {
+    intent: "color-exposure-correction",
+    patterns: [/too (dark|bright)/i, /(exposure|brighten|darken) (correction|fix)/i, /fix (the )?exposure/i],
+    confidence: 0.85,
+    build: (ins, ctx) => {
+      const caveats = ["Exposure CORRECTION via the canonical SetClipGrade. Creative looks (contrast/wheels) remain manual by design."];
+      if (!ctx.selectedClipId) return { explanation: "Select a clip to correct its exposure.", caveats, commands: [] };
+      const delta = /too bright/i.test(ins) ? -0.5 : 0.5;
+      const base = ctx.selectedGrade ?? { ...DEFAULT_NIKKI_GRADE };
+      return {
+        explanation: `Exposure correction: ${delta > 0 ? "+" : ""}${delta} stop on the selected clip (multiplicative 2^stops, highlight-safe windows untouched).`,
+        caveats,
+        commands: [{ type: "SetClipGrade", clipId: ctx.selectedClipId, grade: { ...base, exposure: Math.max(-4, Math.min(4, (base.exposure ?? 0) + delta)) } } as Command],
+      };
+    },
+  },
+  {
+    intent: "color-saturation-boost",
+    patterns: [/more (colou?rful|vibrant|saturat)/i, /punch (up|the) colou?rs/i],
+    confidence: 0.8,
+    build: (_ins, ctx) => {
+      const caveats = ["CREATIVE grading intent: vibrance-weighted so already-saturated pixels (and skin tones) stay near their chroma."];
+      if (!ctx.selectedClipId) return { explanation: "Select a clip to boost saturation.", caveats, commands: [] };
+      const base = ctx.selectedGrade ?? { ...DEFAULT_NIKKI_GRADE };
+      return {
+        explanation: "Saturation 1.2 + vibrance 0.3 on the selected clip (vibrance protects saturated regions).",
+        caveats,
+        commands: [{ type: "SetClipGrade", clipId: ctx.selectedClipId, grade: { ...base, saturation: Math.min(3, (base.saturation ?? 1) * 1.2), vibrance: 0.3 } } as Command],
+      };
+    },
+  },
+  {
+    intent: "color-grade-reset",
+    patterns: [/reset (the )?(grade|colou?rs?)$/i, /clear (the )?grade/i],
+    confidence: 0.9,
+    build: (_ins, ctx) => {
+      const caveats = ["Reset sets the neutral grade through SetClipGrade — the LUT assignment is untouched (remove it separately)."];
+      if (!ctx.selectedClipId) return { explanation: "Select a clip to reset its grade.", caveats, commands: [] };
+      return {
+        explanation: "Grade reset to neutral on the selected clip (canonical, reversible).",
+        caveats,
+        commands: [{ type: "SetClipGrade", clipId: ctx.selectedClipId, grade: { ...DEFAULT_NIKKI_GRADE } } as Command],
+      };
+    },
+  },
+  {
+    intent: "color-unsupported-refusal",
+    patterns: [/(hdr10?|hlg|dolby ?vision|ACES|ICC profile|convert to hdr)/i],
+    confidence: 0.95,
+    build: () => ({
+      explanation: "Not applied: HDR10/HLG/Dolby Vision/ACES/ICC color management is NOT implemented in this pipeline (SDR Rec.709 only — see the color-management compatibility matrix). Requesting it would hallucinate success.",
+      caveats: ["No command was produced. The editor's supported spaces are documented in docs/M48-I_COLOR_MANAGEMENT.md."],
+      commands: [],
+    }),
+  },
+
   {
     intent: "caption-word-reveal",
     patterns: [/word by word/i, /word-by-word/i, /captions? (appear|reveal)/i, /kinetic caption/i],

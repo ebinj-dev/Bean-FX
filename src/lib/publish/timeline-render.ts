@@ -213,6 +213,8 @@ function emitVisualSegment(
   forceAlphaFormat = false,
   /** M46H — actual input pad to read from (asplit output when shared). */
   inputPad?: string,
+  /** M48-I — the baked grade/LUT cube filter for THIS clip (applied FIRST). */
+  lut3dFilter?: string,
 ): void {
   const fps = seq.fps.num / seq.fps.den;
   const fpsR = { num: seq.fps.num, den: seq.fps.den };
@@ -227,6 +229,7 @@ function emitVisualSegment(
   if (splits.length === 0) {
     // Static OR expr-only animation: one segment, exact t-expressions.
     const seg = buildSegmentBase(plan, seq, isImage);
+    if (lut3dFilter) seg.push(lut3dFilter); // M48-I — grade cube BEFORE the registry chain
     const chain = animated
       ? ffmpegEffectChainAnimated(plan.clip.effects, clipRelWinStart, fpsR, fit)
       : ffmpegEffectChain(plan.clip.effects, fit);
@@ -273,6 +276,7 @@ function emitVisualSegment(
     } else {
       sub.push(`scale=${seq.width}:${seq.height}:force_original_aspect_ratio=decrease,pad=${seq.width}:${seq.height}:(ow-iw)/2:(oh-ih)/2,setsar=1`);
     }
+    if (lut3dFilter) sub.push(lut3dFilter); // M48-I — grade cube BEFORE the registry chain
     const chain = ffmpegEffectChainAnimated(plan.clip.effects, b0, fpsR, fit);
     if (chain) sub.push(chain);
     // M37: transform constants sampled at this segment's boundary (stepped
@@ -421,7 +425,7 @@ function planTrackTransitions(seq: Sequence, trackId: string, plans: RenderClipP
   return pairs;
 }
 
-export function buildTimelineGraph(seq: Sequence, startFrame: number, endFrame: number, assetInputs: Map<string, RenderInputEntry>, report?: TransitionPlanReport, opts?: { audioOnly?: boolean }, planInputs?: Map<string, RenderInputEntry>) {
+export function buildTimelineGraph(seq: Sequence, startFrame: number, endFrame: number, assetInputs: Map<string, RenderInputEntry>, report?: TransitionPlanReport, opts?: { audioOnly?: boolean; lut3dByClip?: Map<string, string> }, planInputs?: Map<string, RenderInputEntry>) {
   // M47.2-A (M46.1 hotfix) — resolve an input by STABLE plan-occurrence key
   // first (the caller allocates one input per occurrence), then by asset id
   // (the legacy per-asset map). An unresolved input is an INVARIANT violation:
@@ -517,7 +521,7 @@ export function buildTimelineGraph(seq: Sequence, startFrame: number, endFrame: 
           vSplitCursor.set(input.index, vk + 1);
           const vInLabel = (vSplitCounts.get(input.index) ?? 1) > 1 ? `vin${input.index}_${vk}` : `${input.index}:v`;
           const label = `[tseg${segCounter}]`;
-          emitVisualSegment(parts, plan, seq, input.index, input.isImage, label, `s${segCounter}`, startFrame, runTransformed, vInLabel);
+          emitVisualSegment(parts, plan, seq, input.index, input.isImage, label, `s${segCounter}`, startFrame, runTransformed, vInLabel, opts?.lut3dByClip?.get(plan.clip.id));
           segCounter += 1;
           let streamLabel = label;
           if (runTransformed) {
@@ -879,6 +883,25 @@ export async function runTimelineRenderJob(job: { id: string; userId: string; pa
   // each window passes ONLY the assets its own plans reference (bounded
   // demuxers → bounded RSS), and window segments are removed after the
   // concat settles (success or failure) — no temp-file leak.
+  // M48-I — bake grade/LUT cubes for graded clips (preview-identical math).
+  let lut3dByClip: Map<string, string> | undefined;
+  const lutCubeFiles: string[] = [];
+  if (!spec.audioOnly && (seq.clips.some((c) => c.grade || c.lutId))) {
+    try {
+      const { prepareLut3dFilters } = await import("@/lib/color/render-lut");
+      const cubeDir = pathInsideMediaRoot("timeline-renders", `u_${job.userId}`, `cubes_${Date.now().toString(36)}`);
+      await mkdir(cubeDir, { recursive: true });
+      const prepared = await prepareLut3dFilters(seq, projectId, cubeDir);
+      if (prepared.length > 0) {
+        lut3dByClip = new Map(prepared.map((p) => [p.clipId, p.filter]));
+        lutCubeFiles.push(...prepared.map((p) => p.filePath));
+      }
+    } catch (err) {
+      // A missing/unreadable cube must not silently export an UNGRADED file.
+      throw new Error(`grade/LUT cube preparation failed: ${err instanceof Error ? err.message : String(err)}`);
+    }
+  }
+
   const LONG_FORM_THRESHOLD_SEC = 240;
   const WINDOW_SEC = 60;
   const totalWindows = Math.ceil(totalSec / WINDOW_SEC);
@@ -911,7 +934,7 @@ export async function runTimelineRenderJob(job: { id: string; userId: string; pa
       const wPlans = [...collectVisualPlans(seq, windowStartFrame, windowEndFrame), ...collectAudioPlans(seq, windowStartFrame, windowEndFrame)];
       const { inputArgs: winInputArgs, inputByPlanKey: wInputByPlanKey, usedByAsset: wUsed } = allocateRenderInputs(wPlans, assetById, hasAudioById, fps);
       const wReport = w === 0 ? transitionReport : { applied: [], skipped: [] };
-      const wGraph = buildTimelineGraph(seq, windowStartFrame, windowEndFrame, wUsed, wReport, undefined, wInputByPlanKey);
+      const wGraph = buildTimelineGraph(seq, windowStartFrame, windowEndFrame, wUsed, wReport, { lut3dByClip }, wInputByPlanKey);
       const segPath = pathInsideMediaRoot("timeline-renders", `u_${job.userId}`, `seg_${projectId}_${w}_${Date.now().toString(36)}.${spec.extension}`);
       segPaths.push(segPath);
       const winArgs = [
@@ -1001,7 +1024,7 @@ export async function runTimelineRenderJob(job: { id: string; userId: string; pa
     return;
   }
 
-  const graph = buildTimelineGraph(seq, startFrame, endFrame, used, transitionReport, { audioOnly: spec.audioOnly }, inputByPlanKey);
+  const graph = buildTimelineGraph(seq, startFrame, endFrame, used, transitionReport, { audioOnly: spec.audioOnly, lut3dByClip }, inputByPlanKey);
   // M47.2-A — INVARIANT 3 (defense in depth): if any intended visual plan
   // still resolves to no input, abort BEFORE ffmpeg runs. The pre-flight
   // checks above should make this unreachable; if it ever fires, the render
@@ -1085,6 +1108,8 @@ export async function runTimelineRenderJob(job: { id: string; userId: string; pa
     }
       // M20 §3 idempotent completion (same rationale as the windowed path).
       await jobManager.complete(job.id, exportRow.id, "Timeline render complete.");
+      // M48-I — the baked grade/LUT cubes have served their purpose.
+      for (const f of lutCubeFiles) await unlink(f).catch(() => undefined);
     },
   });
 }

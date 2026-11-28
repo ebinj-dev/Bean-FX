@@ -117,7 +117,7 @@ export function AiStudio({
             </div>
           )}
           {tab === "gangzii" && <GangziiPanel sequence={sequence} session={session} />}
-          {tab === "nikki" && <NikkiPanel sequence={sequence} session={session} />}
+          {tab === "nikki" && <NikkiPanel sequence={sequence} session={session} projectId={projectId ?? null} />}
           {tab === "jazmii" && <JazmiiPanel sequence={sequence} session={session} />}
           {tab === "laxii" && <LaxiiPanel sequence={sequence} session={session} />}
           {tab === "compose" && <CreativeDirectorPanel projectId={projectId} onSeekSec={onSeekSec} initialTab="compose" />}
