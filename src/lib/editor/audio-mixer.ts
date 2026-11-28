@@ -19,7 +19,7 @@
  */
 import type { Sequence, Clip } from "@/lib/editor/model";
 import { clipEndFrame } from "@/lib/editor/model";
-import { sourceSecondsAt, fadeMultiplierAt } from "@/lib/editor/preview";
+import { sourceSecondsAt, audioSourceSecondsAt, fadeMultiplierAt } from "@/lib/editor/preview";
 import { volumeKeyframes } from "@/lib/editor/audio";
 
 interface ClipWindow {
@@ -222,7 +222,9 @@ export class AudioPreviewMixer {
         }
       }
       // Source media offset + speed.
-      const srcSec = sourceSecondsAt(w.clip, w.startFrame, seq.fps);
+      // M48-H1 — the audio stream follows the clip's independent audio range
+      // (J/L cuts), never the video range.
+      const srcSec = audioSourceSecondsAt(w.clip, w.startFrame, seq.fps);
       const speed = Math.min(4, Math.max(0.25, w.clip.playbackSpeed));
       const when = this.anchorCtxTime + Math.max(0, this.timelineSec(w.startFrame, seq) - this.anchorTimelineSec);
       const durationSec = Math.max(0.01, this.timelineSec(w.endFrame, seq) - this.timelineSec(w.startFrame, seq));

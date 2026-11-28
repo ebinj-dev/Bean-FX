@@ -57,6 +57,12 @@ const ClipCore = z.object({
   sourceAssetId: z.string().max(64).default(""),
   sourceInFrame: z.number().int().min(0),
   sourceOutFrame: z.number().int().min(0),
+  // M48-H1 — optional independent audio stream range (see model.ts). Omitted
+  // = the audio follows the video range; a clip may also arrive already
+  // unlinked with a distinct audio range.
+  audioSourceInFrame: z.number().int().min(0).nullable().default(null),
+  audioSourceOutFrame: z.number().int().min(0).nullable().default(null),
+  avLinked: z.boolean().default(true),
   sourceFps: z.object({ num: z.number().int().positive(), den: z.number().int().positive() }),
   timelineStartFrame: z.number().int().min(0),
   playbackSpeed: z.number().positive().max(16).default(1),
@@ -105,6 +111,25 @@ export const CommandSchema = z.discriminatedUnion("type", [
     newSourceInFrame: z.number().int().min(0).optional(),
     newSourceOutFrame: z.number().int().min(0).optional(),
     newTimelineStartFrame: z.number().int().min(0).optional(),
+  }),
+  z.object({
+    // M48-H1 — trim the AUDIO stream only (J/L cuts, manual A/V sync). The
+    // video range and the clip's timeline window are untouched; the command
+    // auto-unlinks (avLinked=false) because a distinct audio range IS the
+    // unlinked state. Reversible: the inverse restores the previous audio
+    // range and the previous link flag.
+    type: z.literal("TrimClipAudioStream"),
+    clipId: idSchema,
+    newAudioSourceInFrame: z.number().int().min(0).nullable().optional(),
+    newAudioSourceOutFrame: z.number().int().min(0).nullable().optional(),
+  }),
+  z.object({
+    // M48-H1 — linked/unlinked A/V control. Linking resolves to the VIDEO
+    // range (the timeline window is video-authoritative): the audio range is
+    // reset to null and the audio follows the video again.
+    type: z.literal("SetClipAvLink"),
+    clipId: idSchema,
+    linked: z.boolean(),
   }),
   z.object({
     type: z.literal("MoveClip"),
@@ -164,6 +189,11 @@ export const CommandSchema = z.discriminatedUnion("type", [
     muted: z.boolean().optional(),
     label: z.string().max(120).nullable().optional(),
     pan: z.number().min(-1).max(1).optional(),
+    // M48-H1 — independent audio stream range + link flag (also the inverse
+    // payload of TrimClipAudioStream / SetClipAvLink).
+    audioSourceInFrame: z.number().int().min(0).nullable().optional(),
+    audioSourceOutFrame: z.number().int().min(0).nullable().optional(),
+    avLinked: z.boolean().optional(),
     fadeInFrames: z.number().int().min(0).optional(),
     fadeOutFrames: z.number().int().min(0).optional(),
     captionText: z.string().max(2000).nullable().optional(),
@@ -453,6 +483,46 @@ function applyTrimClip(seq: Sequence, cmd: Extract<Command, { type: "TrimClip" }
   }, { type: "MoveClip", clipId: clip.id, newTimelineStartFrame: before.timelineStartFrame });
 }
 
+function applyTrimClipAudioStream(seq: Sequence, cmd: Extract<Command, { type: "TrimClipAudioStream" }>, inverse: Command[]): void {
+  const clip = findClip(seq, cmd.clipId);
+  const track = findTrack(seq, clip.trackId);
+  if (track.locked) throw new EditorError("INVALID_TIMELINE", `track ${track.id} is locked — edit refused`);
+  const before = { audioSourceInFrame: clip.audioSourceInFrame, audioSourceOutFrame: clip.audioSourceOutFrame, avLinked: clip.avLinked };
+  const inFrame = cmd.newAudioSourceInFrame ?? (clip.audioSourceInFrame ?? clip.sourceInFrame);
+  const outFrame = cmd.newAudioSourceOutFrame ?? (clip.audioSourceOutFrame ?? clip.sourceOutFrame);
+  if (inFrame >= outFrame) {
+    throw new EditorError("INVALID_RANGES", `audio stream range ${inFrame}..${outFrame} is empty or inverted`);
+  }
+  clip.audioSourceInFrame = inFrame;
+  clip.audioSourceOutFrame = outFrame;
+  // A distinct audio range IS the unlinked state — the command unlinks by
+  // construction; the inverse restores the previous range AND link flag.
+  clip.avLinked = false;
+  inverse.unshift({ type: "UpdateClipProperties", clipId: clip.id, audioSourceInFrame: before.audioSourceInFrame, audioSourceOutFrame: before.audioSourceOutFrame, avLinked: before.avLinked });
+}
+
+function applySetClipAvLink(seq: Sequence, cmd: Extract<Command, { type: "SetClipAvLink" }>, inverse: Command[]): void {
+  const clip = findClip(seq, cmd.clipId);
+  const track = findTrack(seq, clip.trackId);
+  if (track.locked) throw new EditorError("INVALID_TIMELINE", `track ${track.id} is locked — edit refused`);
+  const before = { audioSourceInFrame: clip.audioSourceInFrame, audioSourceOutFrame: clip.audioSourceOutFrame, avLinked: clip.avLinked };
+  if (cmd.linked === clip.avLinked) return; // idempotent
+  if (cmd.linked) {
+    // Linking resolves to the VIDEO range: the timeline window is
+    // video-authoritative, so the audio stream re-follows the video range.
+    clip.audioSourceInFrame = null;
+    clip.audioSourceOutFrame = null;
+    clip.avLinked = true;
+  } else {
+    // Unlinking pins the audio range to the current effective range — the
+    // streams may now diverge without moving either.
+    clip.audioSourceInFrame = clip.audioSourceInFrame ?? clip.sourceInFrame;
+    clip.audioSourceOutFrame = clip.audioSourceOutFrame ?? clip.sourceOutFrame;
+    clip.avLinked = false;
+  }
+  inverse.unshift({ type: "UpdateClipProperties", clipId: clip.id, audioSourceInFrame: before.audioSourceInFrame, audioSourceOutFrame: before.audioSourceOutFrame, avLinked: before.avLinked });
+}
+
 function applyMoveClip(seq: Sequence, cmd: Extract<Command, { type: "MoveClip" }>, inverse: Command[]): void {
   const clip = findClip(seq, cmd.clipId);
   const before = { start: clip.timelineStartFrame, trackId: clip.trackId };
@@ -707,6 +777,18 @@ function applyUpdateClipProperties(seq: Sequence, cmd: Extract<Command, { type: 
   if (cmd.label !== undefined) {
     restore.label = clip.label;
     clip.label = cmd.label;
+  }
+  if (cmd.audioSourceInFrame !== undefined) {
+    restore.audioSourceInFrame = clip.audioSourceInFrame;
+    clip.audioSourceInFrame = cmd.audioSourceInFrame;
+  }
+  if (cmd.audioSourceOutFrame !== undefined) {
+    restore.audioSourceOutFrame = clip.audioSourceOutFrame;
+    clip.audioSourceOutFrame = cmd.audioSourceOutFrame;
+  }
+  if (cmd.avLinked !== undefined) {
+    restore.avLinked = clip.avLinked;
+    clip.avLinked = cmd.avLinked;
   }
   if (cmd.pan !== undefined) {
     restore.pan = clip.pan;
@@ -1016,6 +1098,12 @@ export function applyCommand(inputSeq: Sequence, input: unknown): ApplyResult {
       break;
     case "TrimClip":
       applyTrimClip(seq, cmd, inverse);
+      break;
+    case "TrimClipAudioStream":
+      applyTrimClipAudioStream(seq, cmd, inverse);
+      break;
+    case "SetClipAvLink":
+      applySetClipAvLink(seq, cmd, inverse);
       break;
     case "MoveClip":
       applyMoveClip(seq, cmd, inverse);
