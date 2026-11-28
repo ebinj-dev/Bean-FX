@@ -639,6 +639,7 @@ export function EditorTool({ user }: { user: { id: string }; onLogout: () => voi
             <div className="flex h-[340px] flex-shrink-0 flex-col border-b border-[#2a2a2a]">
               <EditorAiDock
                 projectId={projectId}
+                conversationId={linkContext.conversationId}
                 timelineContext={() => ({
                   playheadSec: sequence ? session.playheadFrame / (fpsRational.num / fpsRational.den) : undefined,
                   selectedClipLabel: selectedClip ? selectedClip.id.slice(-6) : null,

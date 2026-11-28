@@ -420,9 +420,14 @@ model ConversationMessage {
   content        String
   /// Bounded structured attachments (tool summaries, plan refs) — never media.
   metaJson       String?
+  /// M48-G1 — optional caller-supplied idempotency key for a turn append.
+  /// A retry with the same (conversationId, clientTurnId) returns the existing
+  /// message instead of writing a duplicate. Null for chat-service turns.
+  clientTurnId   String?
   createdAt      DateTime @default(now())
 
   @@index([conversationId, createdAt])
+  @@unique([conversationId, clientTurnId])
 }
 
 /// A versioned editing plan (§6). status: DRAFT | VALIDATING | AWAITING_APPROVAL
