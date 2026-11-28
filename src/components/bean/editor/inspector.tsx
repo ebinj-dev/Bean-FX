@@ -30,12 +30,15 @@ export function ClipInspector({
   session,
   notice,
   playhead,
+  mediaFpsById,
 }: {
   sequence: Sequence;
   session: EditorSession;
   notice?: (message: string | null) => void;
   /** M27 P2 — playhead for keyframe add/navigate (absolute frame). */
   playhead?: number;
+  /** M48-H3 — asset fps lookup for multicam angle switches. */
+  mediaFpsById?: Map<string, { num: number; den: number }>;
 }) {
   const clip = useMemo(
     () => sequence.clips.find((c) => c.id === session.selectedClipId) ?? null,
@@ -270,8 +273,64 @@ export function ClipInspector({
       <EffectsSection clip={clip} session={session} notice={notice} playhead={playhead ?? 0} />
       {(clip.missingMedia || !clip.sourceAssetId) && <MissingMediaRelink session={session} clipId={clip.id} sequence={sequence} />}
       {clip.sourceAssetId && !clip.missingMedia && <MediaSourcePanel session={session} clipId={clip.id} sequence={sequence} sourceAssetId={clip.sourceAssetId} />}
-    </div>
+      {/* M48-H3 — multicam angle switching at the playhead. REAL edits: each
+          switch splits the clip (when the playhead is strictly inside) and
+          retargets the right segment through the canonical command pathway. */}
+      {(() => {
+        const mc = clip;
+        if (!mc) return null;
+        const gid: string | null = mc.multicamGroupId;
+        const group = gid ? sequence.multicamGroups.find((g) => g.id === gid) ?? null : null;
+        if (!group) return null;
+        const angles = group.angles;
+        const activeAngleId: string | null = mc.multicamAngleId;
+        const clipId: string = mc.id;
+        const startF: number = mc.timelineStartFrame;
+        const durF: number = mc.timelineDurationFrames;
+        return (
+          <div className="rounded border border-[#3a2f1a] bg-[#141210] px-2.5 py-2">
+            <div className="flex items-center justify-between">
+              <span className="bean-label text-[9px] text-[#d4a017]">MULTICAM — {group.name}</span>
+              <span className="text-[9px] text-[#8f8f8a]">
+                angle: {angles.find((a) => a.id === activeAngleId)?.label ?? "?"}
+              </span>
+            </div>
+            <div className="mt-1.5 flex flex-wrap gap-1.5">
+              {angles.map((a) => {
+                const active = a.id === activeAngleId;
+                const fps = mediaFpsById?.get(a.assetId);
+                return (
+                  <button
+                    key={a.id}
+                    disabled={active || !fps}
+                    title={!fps ? "Asset fps unavailable — switch disabled" : `Switch to ${a.label} at the playhead (real split + retarget)`}
+                    onClick={() => {
+                      const at = playhead ?? startF;
+                      session.apply([{
+                        type: "SwitchMulticamAngle",
+                        clipId,
+                        angleId: a.id,
+                        atTimelineFrame: Math.max(startF + 1, Math.min(at, startF + durF - 1)),
+                        newSourceFps: fps!,
+                        newRightId: `mc-${Math.random().toString(36).slice(2, 9)}`,
+                      }]);
+                    }}
+                    className={`rounded border px-2 py-1 text-[10px] font-bold ${active ? "border-[#d4a017]/60 bg-[#d4a017]/10 text-[#d4a017]" : "border-[#2a2a2a] text-[#b8b8b2] hover:border-[#d4a017]/50 hover:text-[#d4a017]"}`}
+                  >
+                    {a.label}
+                  </button>
+                );
+              })}
+            </div>
+            <p className="mt-1 text-[9px] leading-relaxed text-[#6a6a64]">
+              Switching creates real timeline segments (undo/redo applies). Sync offsets are MANUAL per angle — automatic waveform sync is not implemented.
+            </p>
+          </div>
+        );
+      })()}
+        </div>
   );
+
 }
 
 /**
@@ -751,6 +810,7 @@ function MediaSourcePanel({ session, clipId, sequence, sourceAssetId }: { sessio
           </button>
         </span>
       </div>
-    </div>
+    
+</div>
   );
 }

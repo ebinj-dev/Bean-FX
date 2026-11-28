@@ -614,6 +614,7 @@ export function buildTimelineGraph(seq: Sequence, startFrame: number, endFrame: 
       parts.push(`[${idx}:a]asplit=${n}[${outs}]`);
     }
   }
+  const stemsByTrack = new Map<number, string[]>();
   for (let i = 0; i < audioPlans.length; i++) {
     const plan = audioPlans[i];
     const inIdx = inputIndexOf(plan);
@@ -676,9 +677,67 @@ export function buildTimelineGraph(seq: Sequence, startFrame: number, endFrame: 
     if (plan.clip.fadeInFrames > 0) seg.push(`afade=in:st=0:d=${q(plan.clip.fadeInFrames / fps)}`);
     if (plan.clip.fadeOutFrames > 0) seg.push(`afade=out:st=${q(audioDurSec - plan.clip.fadeOutFrames / fps)}:d=${q(plan.clip.fadeOutFrames / fps)}`);
     parts.push(`[${audioInLabel}]${seg.join(",")}[a${i}]`);
-    audioLabels.push(`[a${i}]`);
+    // M48-H2 — remember which TRACK this clip stem belongs to (bus routing).
+    const tIdx = seq.tracks.findIndex((t) => t.id === plan.clip.trackId);
+    if (!stemsByTrack.has(tIdx)) stemsByTrack.set(tIdx, []);
+    stemsByTrack.get(tIdx)!.push(`[a${i}]`);
   }
-  parts.push(`${audioLabels.join("")}amix=inputs=${audioLabels.length}:normalize=0:duration=longest[mixout]`);
+
+  // M48-H2 — REAL bus routing. Per-track stems (sum of the track's clips,
+  // track fader/mute/solo already folded into the clip chains) → per-BUS
+  // sum with the bus's gain/pan/mute/solo → master amix of every bus output
+  // and every unassigned stem. With no buses configured this collapses to
+  // the same audible sum as before (amix is linear) — legacy sequences mix
+  // identically up to float associativity.
+  // The silence bed stays the first input of the final sum: stable base,
+  // guarantees ≥1 amix input even with zero audible clips (unchanged M38
+  // behaviour), and anchors total duration.
+  const finalInputs: string[] = ["[silence]"];
+  if ((seq.buses ?? []).length === 0) {
+    // No bus configuration: sum all stems straight to the master (legacy path).
+    for (const [, labels] of stemsByTrack) {
+      if (labels.length === 1) finalInputs.push(labels[0]);
+      else {
+        const stemLabel = `[st${finalInputs.length}]`;
+        parts.push(`${labels.join("")}amix=inputs=${labels.length}:normalize=0:duration=longest${stemLabel}`);
+        finalInputs.push(stemLabel);
+      }
+    }
+    parts.push(`${finalInputs.join("")}amix=inputs=${Math.max(1, finalInputs.length)}:normalize=0:duration=longest[mixout]`);
+  } else {
+    const busOutputs: string[] = [];
+    const busById = new Map(seq.buses.map((b) => [b.id, b]));
+    const anyBusSolo = (seq.buses ?? []).some((b) => b.solo);
+    // Group stem labels per bus (track index → bus id).
+    const stemsByBus = new Map<string, string[]>();
+    const masterStems: string[] = [];
+    for (const [tIdx, labels] of stemsByTrack) {
+      const track = seq.tracks[tIdx];
+      const bus = track?.busId ? busById.get(track.busId) : undefined;
+      if (!bus) { masterStems.push(...labels); continue; }
+      if (!stemsByBus.has(bus.id)) stemsByBus.set(bus.id, []);
+      stemsByBus.get(bus.id)!.push(...labels);
+    }
+    for (const [busId, labels] of stemsByBus) {
+      const bus = busById.get(busId)!;
+      const sumLabel = `[bs${busOutputs.length}]`;
+      parts.push(`${labels.join("")}amix=inputs=${labels.length}:normalize=0:duration=longest${sumLabel}`);
+      // Bus pass: mute + solo semantics (any solo bus silences the others).
+      const busPass = !bus.muted && (!anyBusSolo || bus.solo);
+      const chain: string[] = [`volume=${q(busPass ? Math.min(4, Math.max(0, bus.gain)) : 0)}`];
+      const busPan = Math.min(1, Math.max(-1, bus.pan));
+      if (busPan !== 0) {
+        const l = Math.cos(((busPan + 1) * Math.PI) / 4);
+        const r = Math.sin(((busPan + 1) * Math.PI) / 4);
+        chain.push(`pan=stereo|c0=c0*${q(l)}+c1*0|c1=c1*${q(r)}+c0*0`);
+      }
+      const outLabel = `[bo${busOutputs.length}]`;
+      parts.push(`${sumLabel}${chain.join(",")}${outLabel}`);
+      busOutputs.push(outLabel);
+    }
+    finalInputs.push(...busOutputs, ...masterStems);
+    parts.push(`${finalInputs.join("")}amix=inputs=${Math.max(1, finalInputs.length)}:normalize=0:duration=longest[mixout]`);
+  }
 
   return {
     filterComplex: parts.join(";"),

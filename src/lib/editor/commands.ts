@@ -26,6 +26,8 @@ import {
   type Clip,
   type Sequence,
   type Track,
+  AudioBusSchema,
+  MulticamGroupSchema,
 } from "./model";
 import { assertValidRange, makeRational, type Rational } from "./time";
 import { filterSpec } from "@/lib/editor/filters";
@@ -63,6 +65,8 @@ const ClipCore = z.object({
   audioSourceInFrame: z.number().int().min(0).nullable().default(null),
   audioSourceOutFrame: z.number().int().min(0).nullable().default(null),
   avLinked: z.boolean().default(true),
+  multicamGroupId: z.string().max(64).nullable().default(null),
+  multicamAngleId: z.string().max(64).nullable().default(null),
   sourceFps: z.object({ num: z.number().int().positive(), den: z.number().int().positive() }),
   timelineStartFrame: z.number().int().min(0),
   playbackSpeed: z.number().positive().max(16).default(1),
@@ -130,6 +134,63 @@ export const CommandSchema = z.discriminatedUnion("type", [
     type: z.literal("SetClipAvLink"),
     clipId: idSchema,
     linked: z.boolean(),
+  }),
+  z.object({
+    // M48-H2 — bus configuration. All four commands are reversible and the
+    // ONLY way bus state changes (no direct writes from AI or UI).
+    type: z.literal("AddBus"),
+    bus: AudioBusSchema,
+  }),
+  z.object({
+    type: z.literal("RemoveBus"),
+    busId: idSchema,
+  }),
+  z.object({
+    type: z.literal("UpdateBus"),
+    busId: idSchema,
+    name: z.string().min(1).max(40).optional(),
+    gain: z.number().min(0).max(4).optional(),
+    pan: z.number().min(-1).max(1).optional(),
+    muted: z.boolean().optional(),
+    solo: z.boolean().optional(),
+  }),
+  z.object({
+    type: z.literal("AssignTrackBus"),
+    trackId: idSchema,
+    /** Null = unassign (route straight to the master). */
+    busId: idSchema.nullable(),
+  }),
+  z.object({
+    // M48-H3 — multicam groups. Synchronization is MANUAL (per-angle source
+    // frame offsets); automatic waveform sync is not implemented and is not
+    // claimed anywhere.
+    type: z.literal("CreateMulticamGroup"),
+    group: MulticamGroupSchema,
+  }),
+  z.object({
+    type: z.literal("RemoveMulticamGroup"),
+    groupId: idSchema,
+  }),
+  z.object({
+    type: z.literal("AssignMulticamGroup"),
+    clipId: idSchema,
+    groupId: idSchema.nullable(),
+    angleId: idSchema.nullable().optional(),
+  }),
+  z.object({
+    // M48-H3 — THE REAL EDIT: switch the active camera angle at the playhead.
+    // Splits the clip at atTimelineFrame (when strictly inside), then retargets
+    // the right-hand segment (or the whole clip when atTimelineFrame is the
+    // clip start) to the chosen angle's asset with the group's sync offset —
+    // an actual timeline edit through the canonical pathway, fully reversible.
+    type: z.literal("SwitchMulticamAngle"),
+    clipId: idSchema,
+    angleId: idSchema,
+    atTimelineFrame: z.number().int().min(0),
+    /** The new angle's asset fps (rational) — validated against the duration invariant. */
+    newSourceFps: z.object({ num: z.number().int().positive(), den: z.number().int().positive() }),
+    /** Required when the switch splits: id for the right-hand segment. */
+    newRightId: idSchema.optional(),
   }),
   z.object({
     type: z.literal("MoveClip"),
@@ -521,6 +582,185 @@ function applySetClipAvLink(seq: Sequence, cmd: Extract<Command, { type: "SetCli
     clip.avLinked = false;
   }
   inverse.unshift({ type: "UpdateClipProperties", clipId: clip.id, audioSourceInFrame: before.audioSourceInFrame, audioSourceOutFrame: before.audioSourceOutFrame, avLinked: before.avLinked });
+}
+
+function applyAddBus(seq: Sequence, cmd: Extract<Command, { type: "AddBus" }>, inverse: Command[]): void {
+  if ((seq.buses ?? []).some((b) => b.id === cmd.bus.id)) {
+    throw new EditorError("INVALID_COMMAND", `bus ${cmd.bus.id} already exists`);
+  }
+  if (!seq.buses) seq.buses = [];
+  seq.buses.push(clone(cmd.bus));
+  inverse.unshift({ type: "RemoveBus", busId: cmd.bus.id });
+}
+
+function applyRemoveBus(seq: Sequence, cmd: Extract<Command, { type: "RemoveBus" }>, inverse: Command[]): void {
+  const idx = (seq.buses ?? []).findIndex((b) => b.id === cmd.busId);
+  if (idx === -1) throw new EditorError("INVALID_COMMAND", `bus ${cmd.busId} does not exist`);
+  // Safety: a bus with assigned tracks cannot be removed — routing must stay
+  // explicit (an accidental unassign would change the audible mix silently).
+  const assigned = seq.tracks.filter((t) => t.busId === cmd.busId);
+  if (assigned.length > 0) {
+    throw new EditorError("INVALID_TIMELINE", `bus ${cmd.busId} still has ${assigned.length} assigned track(s) — unassign first`);
+  }
+  const [bus] = (seq.buses ?? []).splice(idx, 1);
+  inverse.unshift({ type: "AddBus", bus: clone(bus) });
+}
+
+function applyUpdateBus(seq: Sequence, cmd: Extract<Command, { type: "UpdateBus" }>, inverse: Command[]): void {
+  const bus = (seq.buses ?? []).find((b) => b.id === cmd.busId);
+  if (!bus) throw new EditorError("INVALID_COMMAND", `bus ${cmd.busId} does not exist`);
+  const restore: Extract<Command, { type: "UpdateBus" }> = { type: "UpdateBus", busId: bus.id };
+  if (cmd.name !== undefined) { restore.name = bus.name; bus.name = cmd.name; }
+  if (cmd.gain !== undefined) { restore.gain = bus.gain; bus.gain = cmd.gain; }
+  if (cmd.pan !== undefined) { restore.pan = bus.pan; bus.pan = cmd.pan; }
+  if (cmd.muted !== undefined) { restore.muted = bus.muted; bus.muted = cmd.muted; }
+  if (cmd.solo !== undefined) { restore.solo = bus.solo; bus.solo = cmd.solo; }
+  inverse.unshift(restore);
+}
+
+function applyAssignTrackBus(seq: Sequence, cmd: Extract<Command, { type: "AssignTrackBus" }>, inverse: Command[]): void {
+  const track = findTrack(seq, cmd.trackId);
+  if (track.locked) throw new EditorError("INVALID_TIMELINE", `track ${track.id} is locked — edit refused`);
+  if (cmd.busId !== null && !(seq.buses ?? []).some((b) => b.id === cmd.busId)) {
+    throw new EditorError("INVALID_COMMAND", `bus ${cmd.busId} does not exist`);
+  }
+  const before = track.busId;
+  track.busId = cmd.busId;
+  inverse.unshift({ type: "AssignTrackBus", trackId: track.id, busId: before });
+}
+
+function applyCreateMulticamGroup(seq: Sequence, cmd: Extract<Command, { type: "CreateMulticamGroup" }>, inverse: Command[]): void {
+  if ((seq.multicamGroups ?? []).some((g) => g.id === cmd.group.id)) {
+    throw new EditorError("INVALID_COMMAND", `multicam group ${cmd.group.id} already exists`);
+  }
+  if (!seq.multicamGroups) seq.multicamGroups = [];
+  seq.multicamGroups.push(clone(cmd.group));
+  inverse.unshift({ type: "RemoveMulticamGroup", groupId: cmd.group.id });
+}
+
+function applyRemoveMulticamGroup(seq: Sequence, cmd: Extract<Command, { type: "RemoveMulticamGroup" }>, inverse: Command[]): void {
+  const idx = (seq.multicamGroups ?? []).findIndex((g) => g.id === cmd.groupId);
+  if (idx === -1) throw new EditorError("INVALID_COMMAND", `multicam group ${cmd.groupId} does not exist`);
+  // Safety: clips tagged with this group must be untagged first — silent
+  // untagging would change what the inspector shows without an explicit edit.
+  const tagged = seq.clips.filter((c) => c.multicamGroupId === cmd.groupId);
+  if (tagged.length > 0) {
+    throw new EditorError("INVALID_TIMELINE", `multicam group ${cmd.groupId} is still referenced by ${tagged.length} clip(s) — unassign first`);
+  }
+  const [group] = (seq.multicamGroups ?? []).splice(idx, 1);
+  inverse.unshift({ type: "CreateMulticamGroup", group: clone(group) });
+}
+
+function applyAssignMulticamGroup(seq: Sequence, cmd: Extract<Command, { type: "AssignMulticamGroup" }>, inverse: Command[]): void {
+  const clip = findClip(seq, cmd.clipId);
+  const before = { groupId: clip.multicamGroupId, angleId: clip.multicamAngleId };
+  if (cmd.groupId !== null) {
+    const group = (seq.multicamGroups ?? []).find((g) => g.id === cmd.groupId);
+    if (!group) throw new EditorError("INVALID_COMMAND", `multicam group ${cmd.groupId} does not exist`);
+    const angleId = cmd.angleId ?? group.angles[0].id;
+    if (!group.angles.some((a) => a.id === angleId)) {
+      throw new EditorError("INVALID_COMMAND", `angle ${angleId} is not in group ${cmd.groupId}`);
+    }
+    clip.multicamGroupId = group.id;
+    clip.multicamAngleId = angleId;
+  } else {
+    clip.multicamGroupId = null;
+    clip.multicamAngleId = null;
+  }
+  inverse.unshift({ type: "AssignMulticamGroup", clipId: clip.id, groupId: before.groupId, angleId: before.angleId ?? undefined });
+}
+
+function applySwitchMulticamAngle(seq: Sequence, cmd: Extract<Command, { type: "SwitchMulticamAngle" }>, inverse: Command[]): void {
+  const clip = findClip(seq, cmd.clipId);
+  const group = clip.multicamGroupId ? (seq.multicamGroups ?? []).find((g) => g.id === clip.multicamGroupId) : undefined;
+  if (!group) throw new EditorError("INVALID_COMMAND", `clip ${cmd.clipId} is not part of a multicam group — assign one first`);
+  const angle = group.angles.find((a) => a.id === cmd.angleId);
+  if (!angle) throw new EditorError("INVALID_COMMAND", `angle ${cmd.angleId} is not in group ${group.id}`);
+  const track = findTrack(seq, clip.trackId);
+  if (track.locked) throw new EditorError("INVALID_TIMELINE", `track ${track.id} is locked — edit refused`);
+  const start = clip.timelineStartFrame;
+  const end = start + clip.timelineDurationFrames;
+  if (cmd.atTimelineFrame < start || cmd.atTimelineFrame > end) {
+    throw new EditorError("INVALID_RANGES", `switch frame ${cmd.atTimelineFrame} is outside clip ${cmd.clipId} [${start}, ${end}]`);
+  }
+
+  // Map timeline frames into the NEW angle's source-frame clock (the same
+  // integer conversion chain the split path uses), with the angle's manual
+  // sync offset. newXIn covers the moment at the switch point; the segment
+  // length is derived by round-tripping through clipTimelineDuration so the
+  // duration invariant holds EXACTLY (snap ±2 like SplitClip).
+  const fpsN = cmd.newSourceFps.num;
+  const fpsD = cmd.newSourceFps.den;
+  const mapToSrc = (timelineFrames: number): number =>
+    Math.round((timelineFrames * clip.playbackSpeed * fpsN * seq.fps.den) / (fpsD * seq.fps.num));
+
+  if (cmd.atTimelineFrame === start) {
+    // Whole-clip retarget — no split needed.
+    const original = clone(clip);
+    const wantSrc = mapToSrc(clip.timelineDurationFrames);
+    let newIn = angle.offsetFrames;
+    let newOut = newIn + wantSrc;
+    let ok = false;
+    for (const adj of [0, 1, -1, 2, -2]) {
+      newOut = newIn + wantSrc + adj;
+      if (clipTimelineDuration(newOut, newIn, makeRational(fpsN, fpsD), rational(seq.fps), clip.playbackSpeed) === clip.timelineDurationFrames) { ok = true; break; }
+    }
+    if (!ok) throw new EditorError("INVALID_RANGES", `cannot retarget to angle ${angle.id} with these timebases`);
+    clip.sourceAssetId = angle.assetId;
+    clip.sourceInFrame = newIn;
+    clip.sourceOutFrame = newOut;
+    clip.sourceFps = { num: fpsN, den: fpsD };
+    clip.multicamGroupId = group.id;
+    clip.multicamAngleId = angle.id;
+    // The audio comes from the NEW angle's asset too: remap the independent
+    // audio range into the new asset's frame clock, preserving the sync
+    // offset from clip start (offsetFrames + mapped offset) and matching the
+    // new video range length.
+    if (original.audioSourceInFrame !== null && original.audioSourceOutFrame !== null) {
+      const oldFps = original.sourceFps.num / original.sourceFps.den;
+      const audioOffsetFrames = original.audioSourceInFrame - original.sourceInFrame; // old asset's clock
+      const audioOffsetSec = audioOffsetFrames / oldFps;
+      const newFpsVal = fpsN / fpsD;
+      const newAudioIn = angle.offsetFrames + Math.round(audioOffsetSec * newFpsVal);
+      clip.audioSourceInFrame = newAudioIn;
+      clip.audioSourceOutFrame = newAudioIn + (newOut - newIn);
+    }
+    inverse.unshift({
+      type: "ReplaceClip", clipId: clip.id,
+      newSourceAssetId: original.sourceAssetId, newSourceInFrame: original.sourceInFrame,
+      newSourceOutFrame: original.sourceOutFrame, newSourceFps: original.sourceFps,
+    });
+    return;
+  }
+  if (cmd.atTimelineFrame >= end) {
+    throw new EditorError("INVALID_RANGES", `switch frame ${cmd.atTimelineFrame} is at/after the clip end`);
+  }
+
+  // Split first (reusing the canonical split applier — its composite inverse
+  // lands in the SAME inverse list), then retarget the right segment.
+  const original = clone(clip);
+  const rightId = cmd.newRightId ?? `mc-${Math.random().toString(36).slice(2, 9)}`;
+  applySplitClip(seq, { type: "SplitClip", clipId: cmd.clipId, atTimelineFrame: cmd.atTimelineFrame, newLeftId: cmd.clipId, newRightId: rightId }, inverse);
+  const right = findClip(seq, rightId);
+  const wantSrc = mapToSrc(right.timelineDurationFrames);
+  const leftPartSrc = mapToSrc(cmd.atTimelineFrame - start);
+  let newIn = angle.offsetFrames + leftPartSrc;
+  let newOut = newIn + wantSrc;
+  let ok = false;
+  for (const adj of [0, 1, -1, 2, -2]) {
+    newOut = newIn + wantSrc + adj;
+    if (clipTimelineDuration(newOut, newIn, makeRational(fpsN, fpsD), rational(seq.fps), right.playbackSpeed) === right.timelineDurationFrames) { ok = true; break; }
+  }
+  if (!ok) throw new EditorError("INVALID_RANGES", `cannot retarget to angle ${angle.id} with these timebases`);
+  right.sourceAssetId = angle.assetId;
+  right.sourceInFrame = newIn;
+  right.sourceOutFrame = newOut;
+  right.sourceFps = { num: fpsN, den: fpsD };
+  right.multicamGroupId = group.id;
+  right.multicamAngleId = angle.id;
+  // The split's composite inverse (AddClip original + RemoveClip left + RemoveClip right)
+  // already restores everything — the retarget only touched the right segment,
+  // which the undo removes.
 }
 
 function applyMoveClip(seq: Sequence, cmd: Extract<Command, { type: "MoveClip" }>, inverse: Command[]): void {
@@ -1104,6 +1344,30 @@ export function applyCommand(inputSeq: Sequence, input: unknown): ApplyResult {
       break;
     case "SetClipAvLink":
       applySetClipAvLink(seq, cmd, inverse);
+      break;
+    case "AddBus":
+      applyAddBus(seq, cmd, inverse);
+      break;
+    case "RemoveBus":
+      applyRemoveBus(seq, cmd, inverse);
+      break;
+    case "UpdateBus":
+      applyUpdateBus(seq, cmd, inverse);
+      break;
+    case "AssignTrackBus":
+      applyAssignTrackBus(seq, cmd, inverse);
+      break;
+    case "CreateMulticamGroup":
+      applyCreateMulticamGroup(seq, cmd, inverse);
+      break;
+    case "RemoveMulticamGroup":
+      applyRemoveMulticamGroup(seq, cmd, inverse);
+      break;
+    case "AssignMulticamGroup":
+      applyAssignMulticamGroup(seq, cmd, inverse);
+      break;
+    case "SwitchMulticamAngle":
+      applySwitchMulticamAngle(seq, cmd, inverse);
       break;
     case "MoveClip":
       applyMoveClip(seq, cmd, inverse);

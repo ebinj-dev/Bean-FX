@@ -38,6 +38,9 @@ export class AudioPreviewMixer {
   private ctx: AudioContext | null = null;
   private master: GainNode | null = null;
   private trackGains = new Map<string, GainNode>();
+  /** M48-H2 — per-bus gain+pan pair, fed by member tracks, feeding the master. */
+  private busNodes = new Map<string, { gain: GainNode; pan: StereoPannerNode }>();
+  private trackTargets = new Map<string, AudioNode>();
   private buffers = new Map<string, AudioBuffer>(); // insertion-ordered LRU
   private sources: AudioBufferSourceNode[] = [];
   private scheduledWindow: { startFrame: number; endFrame: number } | null = null;
@@ -83,12 +86,46 @@ export class AudioPreviewMixer {
     }
     // Track gain nodes follow the sequence's tracks (mute/solo/track volume).
     const solo = seq.tracks.some((t) => t.solo);
+    // M48-H2 — the bus layer sits between track gains and the master, with
+    // the SAME semantics the FFmpeg export mixes: bus gain × mute/solo pass
+    // and equal-power bus pan. A track routes into its bus's gain node;
+    // unassigned tracks connect straight to the master (legacy behaviour).
+    const anyBusSolo = (seq.buses ?? []).some((b) => b.solo);
+    for (const bus of seq.buses) {
+      let pair = this.busNodes.get(bus.id);
+      if (!pair) {
+        const gainNode = this.ctx.createGain();
+        const panner = this.ctx.createStereoPanner();
+        gainNode.connect(panner);
+        panner.connect(this.master!);
+        pair = { gain: gainNode, pan: panner };
+        this.busNodes.set(bus.id, pair);
+      }
+      const busPass = !bus.muted && (!anyBusSolo || bus.solo);
+      pair.gain.gain.value = busPass ? Math.min(4, Math.max(0, bus.gain)) : 0;
+      pair.pan.pan.value = Math.min(1, Math.max(-1, bus.pan));
+    }
+    for (const busId of [...this.busNodes.keys()]) {
+      if (!(seq.buses ?? []).some((b) => b.id === busId)) {
+        this.busNodes.get(busId)?.gain.disconnect();
+        this.busNodes.get(busId)?.pan.disconnect();
+        this.busNodes.delete(busId);
+      }
+    }
     for (const track of seq.tracks) {
       let node = this.trackGains.get(track.id);
+      const busPair = track.busId ? this.busNodes.get(track.busId) : undefined;
       if (!node) {
         node = this.ctx.createGain();
-        node.connect(this.master!);
+        // (Re)connect to the CURRENT bus target each time the graph updates —
+        // a node created while unassigned connects to the master directly.
         this.trackGains.set(track.id, node);
+      }
+      const target = busPair ? busPair.gain : this.master!;
+      if (this.trackTargets.get(track.id) !== target) {
+        node.disconnect();
+        node.connect(target);
+        this.trackTargets.set(track.id, target);
       }
       const audible = !track.muted && (!solo || track.solo);
       // M26 P2 — the track fader is real in preview too (matches the export).
@@ -99,6 +136,7 @@ export class AudioPreviewMixer {
       if (!seq.tracks.some((t) => t.id === id)) {
         this.trackGains.get(id)?.disconnect();
         this.trackGains.delete(id);
+        this.trackTargets.delete(id);
       }
     }
     return true;
@@ -300,6 +338,38 @@ export class AudioPreviewMixer {
       this.trackMeters.set(trackId, meter);
     }
     return meter;
+  }
+
+  // ── M48-H2 — real bus metering: an AnalyserNode taps each bus gain node
+  // (post-bus-fader, pre-pan) — the same tap point the export sums from.
+  private busMeters = new Map<string, AnalyserNode>();
+
+  meterForBus(busId: string): AnalyserNode | null {
+    if (!this.ctx) return null;
+    const pair = this.busNodes.get(busId);
+    if (!pair) return null;
+    let meter = this.busMeters.get(busId);
+    if (!meter) {
+      meter = this.ctx.createAnalyser();
+      meter.fftSize = 512;
+      pair.gain.connect(meter);
+      this.busMeters.set(busId, meter);
+    }
+    return meter;
+  }
+
+  /** Peak level 0..1 for a bus (live analyser; 0 when idle). */
+  busLevel(busId: string): number {
+    const meter = this.busMeters.get(busId);
+    if (!meter || !this.playing) return 0;
+    const buf = new Float32Array(meter.fftSize);
+    meter.getFloatTimeDomainData(buf);
+    let peak = 0;
+    for (let i = 0; i < buf.length; i++) {
+      const v = Math.abs(buf[i]);
+      if (v > peak) peak = v;
+    }
+    return Math.min(1, peak);
   }
 
   /** Peak level 0..1 for a track (read from the live analyser; 0 when idle). */

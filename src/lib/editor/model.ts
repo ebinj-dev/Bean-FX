@@ -176,6 +176,11 @@ export const ClipSchema = z.object({
    *  range). Enforced by validation: linked clips carry NO distinct audio
    *  range. */
   avLinked: z.boolean().default(true),
+  /** M48-H3 — multicam membership metadata (which group and angle this clip
+   *  segment currently shows). Switching an angle produces REAL timeline
+   *  segments tagged with these; they are descriptive, not a second engine. */
+  multicamGroupId: z.string().max(64).nullable().default(null),
+  multicamAngleId: z.string().max(64).nullable().default(null),
   effects: z.array(EffectSchema).max(32).default([]),
   keyframes: z.array(KeyframeSchema).max(512).default([]),
 });
@@ -192,8 +197,33 @@ export const TrackSchema = z.object({
   /** M26 P2 — per-track fader (multiplicative with clip volume). Additive:
    *  legacy sequences parse with the default. */
   volume: z.number().min(0).max(4).default(1),
+  /** M48-H2 — the bus this track routes into. Null = straight to the master
+   *  bus (legacy behaviour). The bus object lives on Sequence.buses. */
+  busId: z.string().max(64).nullable().default(null),
 });
 export type Track = z.infer<typeof TrackSchema>;
+
+/**
+ * M48-H2 — professional audio buses. REAL routing: a bus sums its assigned
+ * tracks' stems, applies its own gain/pan/mute/solo, and feeds the master.
+ * The mixer UI's bus faders/pans/meters drive the SAME values the FFmpeg
+ * export mixes with — no decorative controls. Four bus kinds cover the
+ * standard dialogue/music/SFX/ambience routing; the master bus is implicit
+ * (the sequence output), not a listed object. DSP (EQ/compression/limiting/
+ * ducking) is NOT implemented here and must not be advertised.
+ */
+export const AudioBusKind = z.enum(["DIALOGUE", "MUSIC", "SFX", "AMBIENCE"]);
+export type AudioBusKindValue = z.infer<typeof AudioBusKind>;
+export const AudioBusSchema = z.object({
+  id: z.string().min(1).max(64),
+  kind: AudioBusKind,
+  name: z.string().min(1).max(40),
+  gain: z.number().min(0).max(4).default(1),
+  pan: z.number().min(-1).max(1).default(0),
+  muted: z.boolean().default(false),
+  solo: z.boolean().default(false),
+});
+export type AudioBus = z.infer<typeof AudioBusSchema>;
 
 // M6 NIIKI: added slide/push/zoom kinds (mapped 1:1 onto FFmpeg xfade in the
 // render path; the original six kinds are unchanged).
@@ -236,6 +266,24 @@ export const MarkerSchema = z.object({
 });
 export type Marker = z.infer<typeof MarkerSchema>;
 
+/** M48-H3 — one camera angle of a multicam group. offsetFrames is in the
+ *  angle's OWN source-frame clock: the source frame this angle shows at the
+ *  group's sync point (0 = starts exactly at the sync point). */
+export const MulticamAngleSchema = z.object({
+  id: z.string().min(1).max(64),
+  assetId: z.string().min(1).max(64),
+  label: z.string().min(1).max(24),
+  offsetFrames: z.number().int().min(0).default(0),
+});
+export type MulticamAngle = z.infer<typeof MulticamAngleSchema>;
+
+export const MulticamGroupSchema = z.object({
+  id: z.string().min(1).max(64),
+  name: z.string().min(1).max(80),
+  angles: z.array(MulticamAngleSchema).min(1).max(8),
+});
+export type MulticamGroup = z.infer<typeof MulticamGroupSchema>;
+
 export const SequenceSchema = z.object({
   id: z.string().min(1).max(64),
   name: z.string().min(1).max(120),
@@ -247,8 +295,19 @@ export const SequenceSchema = z.object({
   clips: z.array(ClipSchema).max(20000),
   transitions: z.array(TransitionSchema).max(4000),
   markers: z.array(MarkerSchema).max(200).default([]),
+  /** M48-H2 — bus configuration (persistent, edited only through reversible
+   *  commands). Legacy sequences parse with an empty list (all tracks route
+   *  straight to the master). */
+  buses: z.array(AudioBusSchema).max(8).default([]),
+  /** M48-H3 — multicamera source groups: several camera angles covering the
+   *  same scene, each with a MANUAL sync offset (source frames of that
+   *  angle's own clock) relative to the shared sync point. Synchronization
+   *  is manual by contract — automatic waveform sync is NOT implemented and
+   *  must not be claimed. */
+  multicamGroups: z.array(MulticamGroupSchema).max(4).default([]),
 });
 export type Sequence = z.infer<typeof SequenceSchema>;
+
 
 /** Clip end on the timeline (exclusive). */
 export function clipEndFrame(seq: Sequence, clip: Clip): number {
@@ -294,6 +353,40 @@ export function validateSequence(seq: Sequence): ValidationReport {
     seenClips.add(c.id);
   }
 
+  // M48-H2 — bus integrity: unique bus ids; every track busId references an
+  // existing bus (a dangling assignment would silently route to nowhere).
+  const seenBuses = new Set<string>();
+  for (const b of seq.buses ?? []) {
+    if (seenBuses.has(b.id)) errors.push(`duplicate bus id ${b.id}`);
+    seenBuses.add(b.id);
+  }
+  for (const t of seq.tracks) {
+    if (t.busId && !seenBuses.has(t.busId)) {
+      errors.push(`track ${t.id} references unknown bus ${t.busId}`);
+    }
+  }
+
+  // M48-H3 — multicam integrity: unique group/angle ids; a clip's group tag
+  // must reference an existing group, and its angle tag must be one of that
+  // group's angles.
+  const angleIdsByGroup = new Map<string, Set<string>>();
+  for (const g of seq.multicamGroups ?? []) {
+    if (angleIdsByGroup.has(g.id)) errors.push(`duplicate multicam group id ${g.id}`);
+    const angles = new Set<string>();
+    for (const a of g.angles) {
+      if (angles.has(a.id)) errors.push(`duplicate angle id ${a.id} in multicam group ${g.id}`);
+      angles.add(a.id);
+    }
+    angleIdsByGroup.set(g.id, angles);
+  }
+  for (const c of seq.clips) {
+    if (c.multicamGroupId && !angleIdsByGroup.has(c.multicamGroupId)) {
+      errors.push(`clip ${c.id} references unknown multicam group ${c.multicamGroupId}`);
+    } else if (c.multicamGroupId && c.multicamAngleId && !angleIdsByGroup.get(c.multicamGroupId)!.has(c.multicamAngleId)) {
+      errors.push(`clip ${c.id} references angle ${c.multicamAngleId} which is not in group ${c.multicamGroupId}`);
+    }
+  }
+
   for (const c of seq.clips) {
     const track = trackById.get(c.trackId);
     if (!track) {
@@ -308,17 +401,22 @@ export function validateSequence(seq: Sequence): ValidationReport {
     // M48-H1 — independent audio stream range: both endpoints or neither; the
     // range itself must be valid; a LINKED clip must not carry a distinct
     // audio range (linking resolves to the video range by contract).
-    const hasAudioRange = c.audioSourceInFrame !== null || c.audioSourceOutFrame !== null;
+    // Legacy plain-object sequences may omit the audio-stream fields entirely
+    // (undefined = not set — same as null).
+    const aIn = c.audioSourceInFrame ?? null;
+    const aOut = c.audioSourceOutFrame ?? null;
+    const linked = c.avLinked ?? true;
+    const hasAudioRange = aIn !== null || aOut !== null;
     if (hasAudioRange) {
-      if (c.audioSourceInFrame === null || c.audioSourceOutFrame === null) {
+      if (aIn === null || aOut === null) {
         errors.push(`clip ${c.id} audio stream range must set BOTH endpoints (or neither)`);
       } else {
         try {
-          assertValidRange(c.audioSourceInFrame, c.audioSourceOutFrame, `clip ${c.id} audio source range`);
+          assertValidRange(aIn, aOut, `clip ${c.id} audio source range`);
         } catch (e) {
           errors.push(e instanceof Error ? e.message : String(e));
         }
-        if (c.avLinked) {
+        if (linked) {
           errors.push(`clip ${c.id} is avLinked=true but carries a distinct audio stream range — unlink first`);
         }
       }

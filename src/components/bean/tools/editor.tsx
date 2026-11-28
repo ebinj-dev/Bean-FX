@@ -61,6 +61,15 @@ export function EditorTool({ user }: { user: { id: string }; onLogout: () => voi
   const [projectId, setProjectId] = useState<string | null>(null);
   const [newProjectName, setNewProjectName] = useState("");
   const [media, setMedia] = useState<MediaMeta[] | null>(null);
+  // M48-H3 — asset fps lookup for multicam angle switches (the switch command
+  // needs the NEW angle asset's rational fps for the duration invariant).
+  const mediaFpsById = useMemo(() => {
+    const map = new Map<string, { num: number; den: number }>();
+    for (const m of media ?? []) {
+      if (m.id && m.fps && m.fps > 0) map.set(m.id, { num: Math.round(m.fps * 1000), den: 1000 });
+    }
+    return map;
+  }, [media]);
   const [playing, setPlaying] = useState(false);
   const [zoom, setZoom] = useState(1.5);
   const [notice, setNotice] = useState<string | null>(null);
@@ -650,7 +659,7 @@ export function EditorTool({ user }: { user: { id: string }; onLogout: () => voi
             </div>
           )}
           <div className="border-b border-[#2a2a2a] px-3 py-1.5 bean-label text-[10px] text-[#8f8f8a]">PROPERTIES INSPECTOR</div>
-          {sequence && <ClipInspector sequence={sequence} session={session} notice={setNotice} playhead={session.playheadFrame} />}
+          {sequence && <ClipInspector sequence={sequence} session={session} notice={setNotice} playhead={session.playheadFrame} mediaFpsById={mediaFpsById} />}
           {sequence && selectedClip && selectedClip.keyframes.length > 0 && (
             <div className="border-t border-[#2a2a2a] px-3 py-2 text-[10px] text-[#8f8f8a]">
               {selectedClip.keyframes.length} keyframe(s) — diamonds on the timeline block; edit via NIIKI (AI STUDIO) or effect parameters.
